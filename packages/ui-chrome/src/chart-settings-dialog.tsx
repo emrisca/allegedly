@@ -181,21 +181,19 @@ export function ChartSettingsDialog({
       <DialogTrigger
         aria-label="Settings"
         title="Chart & Terminal Settings"
-        className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa1b2] hover:bg-[#1c202b] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+        className="flex h-7 w-7 items-center justify-center rounded-md text-[#959baa] hover:bg-[#1c1f28] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
       >
         <svg
           aria-hidden="true"
           viewBox="0 0 18 18"
-          className="h-4 w-4"
+          className="h-[17px] w-[17px]"
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.4"
+          strokeWidth="1.35"
+          strokeLinejoin="round"
         >
-          <circle cx="9" cy="9" r="2.5" />
-          <path
-            d="M9 2.2v1.6M9 14.2v1.6M2.2 9h1.6M14.2 9h1.6M4.2 4.2l1.1 1.1M12.7 12.7l1.1 1.1M13.8 4.2l-1.1 1.1M5.3 12.7l-1.1 1.1"
-            strokeLinecap="round"
-          />
+          <path d="M9 2.3 14.6 5.55v6.9L9 15.7 3.4 12.45v-6.9L9 2.3Z" />
+          <circle cx="9" cy="9" r="2.25" />
         </svg>
       </DialogTrigger>
 

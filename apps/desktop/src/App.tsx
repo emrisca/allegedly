@@ -29,6 +29,7 @@ import {
   WorkspaceHost,
   type CandleVisualStyle,
   type ChartSettings,
+  type ChartTabItem,
   type ChartSettingsTemplate,
   type QuickRangePreset,
   type WorkspaceLayoutMode,
@@ -36,7 +37,7 @@ import {
 import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { ReplayBar } from "./components/replay-bar";
 import { RightIconRail, type RightDrawerTab } from "./components/right-icon-rail";
-import { getSymbolMeta } from "./data/symbols";
+import { getSymbolMeta, WATCHLIST_SYMBOLS } from "./data/symbols";
 import type { DrawingToolKind } from "./drawings/drawing-engine";
 import {
   ChartPanel,
@@ -163,6 +164,11 @@ export function App({ transport: providedTransport }: AppProps) {
   const [bootConfig, setBootConfig] = useState<BootConfig>(DEFAULT_BOOT_CONFIG);
   const [symbol, setSymbol] = useState<string>("NQ1!");
   const [timeframe, setTimeframe] = useState<string>("D");
+  const [tabs, setTabs] = useState<Array<{ id: string; symbol: string; timeframe: string }>>([
+    { id: "tab-1", symbol: "NQ1!", timeframe: "D" },
+  ]);
+  const [activeTabId, setActiveTabId] = useState<string>("tab-1");
+  const [alertsCount, setAlertsCount] = useState<number>(0);
   const [stateRev, setStateRev] = useState<number>(0);
   const [bookState, setBookState] = useState<number>(BookState.Live);
   const [provenanceTier, setProvenanceTier] = useState<number>(ProvenanceTier.ExactTickAggr);
@@ -283,6 +289,9 @@ export function App({ transport: providedTransport }: AppProps) {
   const handleSymbolChange = useCallback(
     (nextSymbol: string) => {
       setSymbol(nextSymbol);
+      setTabs((prev) =>
+        prev.map((t) => (t.id === activeTabId ? { ...t, symbol: nextSymbol } : t)),
+      );
       void transport
         .invokeJson<unknown, WorkspacePatchResult>("apply_workspace_patch", {
           observed_rev: stateRev,
@@ -293,7 +302,58 @@ export function App({ transport: providedTransport }: AppProps) {
         })
         .catch(() => {});
     },
-    [transport, stateRev],
+    [transport, stateRev, activeTabId],
+  );
+
+  const handleTimeframeChange = useCallback(
+    (nextTf: string) => {
+      setTimeframe(nextTf);
+      setTabs((prev) =>
+        prev.map((t) => (t.id === activeTabId ? { ...t, timeframe: nextTf } : t)),
+      );
+    },
+    [activeTabId],
+  );
+
+  const handleSelectTab = useCallback(
+    (tabId: string) => {
+      const target = tabs.find((t) => t.id === tabId);
+      if (!target) return;
+      setActiveTabId(tabId);
+      setSymbol(target.symbol);
+      setTimeframe(target.timeframe);
+    },
+    [tabs],
+  );
+
+  const handleAddTab = useCallback(() => {
+    const used = new Set(tabs.map((t) => t.symbol));
+    const candidate =
+      WATCHLIST_SYMBOLS.find((m) => !used.has(m.symbol))?.symbol ??
+      WATCHLIST_SYMBOLS[tabs.length % WATCHLIST_SYMBOLS.length]?.symbol ??
+      "ES1!";
+    const nextId = `tab-${Date.now()}`;
+    setTabs((prev) => [...prev, { id: nextId, symbol: candidate, timeframe }]);
+    setActiveTabId(nextId);
+    setSymbol(candidate);
+  }, [tabs, timeframe]);
+
+  const handleCloseTab = useCallback(
+    (tabId: string) => {
+      if (tabs.length <= 1) return;
+      const idx = tabs.findIndex((t) => t.id === tabId);
+      const nextTabs = tabs.filter((t) => t.id !== tabId);
+      setTabs(nextTabs);
+      if (tabId === activeTabId) {
+        const fallback = nextTabs[Math.max(0, idx - 1)] ?? nextTabs[0];
+        if (fallback) {
+          setActiveTabId(fallback.id);
+          setSymbol(fallback.symbol);
+          setTimeframe(fallback.timeframe);
+        }
+      }
+    },
+    [tabs, activeTabId],
   );
 
   const handleLivePriceSample = useCallback((sym: string, last: number) => {
@@ -558,6 +618,30 @@ export function App({ transport: providedTransport }: AppProps) {
     [activeStudies],
   );
 
+  const resolvedChartTabs = useMemo<ChartTabItem[]>(
+    () =>
+      tabs.map((t) => {
+        const meta = getSymbolMeta(t.symbol);
+        const live = livePrices[t.symbol];
+        const last = live?.last ?? meta.basePrice;
+        const changePct = live?.changePct ?? meta.seedChangePct;
+        return {
+          id: t.id,
+          symbol: t.symbol,
+          timeframe: t.timeframe,
+          shortLabel: meta.shortLabel,
+          badgeColor: meta.badgeColor,
+          badgeText: meta.badgeText,
+          priceText: last.toLocaleString("en-US", {
+            minimumFractionDigits: meta.decimals,
+            maximumFractionDigits: meta.decimals,
+          }),
+          changePct,
+        };
+      }),
+    [tabs, livePrices],
+  );
+
   const symbolMeta = getSymbolMeta(symbol);
   const tickSizeE9 = symbolMeta.tickSizeE9;
 
@@ -568,8 +652,21 @@ export function App({ transport: providedTransport }: AppProps) {
         timeframe={timeframe}
         bootConfig={bootConfig}
         stateRev={stateRev}
+        workspaceName="DESK"
+        chartTabs={resolvedChartTabs}
+        activeTabId={activeTabId}
+        onSelectTab={handleSelectTab}
+        onAddTab={handleAddTab}
+        onCloseTab={handleCloseTab}
+        alertsCount={alertsCount}
+        onAddAlert={() => chartHistoryActionsRef.current?.addAlert?.()}
+        onTakeSnapshot={() => chartHistoryActionsRef.current?.takeSnapshot?.()}
+        onOpenProvenance={() => {
+          setLayoutMode("focus");
+          setRightTab((curr) => (curr === "provenance" ? null : "provenance"));
+        }}
         onSymbolChange={handleSymbolChange}
-        onTimeframeChange={setTimeframe}
+        onTimeframeChange={handleTimeframeChange}
         onKillSwitch={handleKillSwitch}
         onResetLayout={handleResetLayout}
         compactDensity={compactDensity}
@@ -666,6 +763,7 @@ export function App({ transport: providedTransport }: AppProps) {
                   setRightTab("studies");
                 }}
                 activeOrders={account.orders}
+                onAlertsCountChange={setAlertsCount}
               />
             </div>
 
@@ -774,6 +872,7 @@ export function App({ transport: providedTransport }: AppProps) {
                     setRightTab("studies");
                   }}
                   activeOrders={account.orders}
+                  onAlertsCountChange={setAlertsCount}
                 />
               ),
             }}

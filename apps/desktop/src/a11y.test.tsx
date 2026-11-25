@@ -241,4 +241,81 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
 
     await expectZeroCriticalOrSeriousAxe(container);
   });
+
+  it("renders two-tier obsidian top bar with chart tabs, timeframes, alert, snapshot, and provenance triggers", async () => {
+    const onSelectTab = vi.fn();
+    const onAddTab = vi.fn();
+    const onCloseTab = vi.fn();
+    const onTimeframeChange = vi.fn();
+    const onAddAlert = vi.fn();
+    const onTakeSnapshot = vi.fn();
+    const onOpenProvenance = vi.fn();
+
+    const { container } = render(
+      <ChromeToolbar
+        symbol="NQ1!"
+        timeframe="D"
+        bootConfig={BOOT_CONFIG}
+        stateRev={2}
+        workspaceName="DESK"
+        alertsCount={3}
+        chartTabs={[
+          {
+            id: "tab-1",
+            symbol: "NQ1!",
+            timeframe: "D",
+            shortLabel: "100",
+            badgeColor: "#0284c7",
+            badgeText: "#ffffff",
+            priceText: "25,756.00",
+            changePct: -1.98,
+          },
+          {
+            id: "tab-2",
+            symbol: "ES1!",
+            timeframe: "4h",
+            shortLabel: "500",
+            badgeColor: "#dc2626",
+            badgeText: "#ffffff",
+            priceText: "7,142.50",
+            changePct: -0.96,
+          },
+        ]}
+        activeTabId="tab-1"
+        onSelectTab={onSelectTab}
+        onAddTab={onAddTab}
+        onCloseTab={onCloseTab}
+        onSymbolChange={() => {}}
+        onTimeframeChange={onTimeframeChange}
+        onKillSwitch={() => {}}
+        onResetLayout={() => {}}
+        onAddAlert={onAddAlert}
+        onTakeSnapshot={onTakeSnapshot}
+        onOpenProvenance={onOpenProvenance}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Chart tab ES1!" }));
+    expect(onSelectTab).toHaveBeenCalledWith("tab-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "New chart tab" }));
+    expect(onAddTab).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close ES1! tab" }));
+    expect(onCloseTab).toHaveBeenCalledWith("tab-2");
+
+    fireEvent.click(screen.getByRole("button", { name: "Timeframe 4h" }));
+    expect(onTimeframeChange).toHaveBeenCalledWith("4h");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add price alert" }));
+    expect(onAddAlert).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Take chart snapshot" }));
+    expect(onTakeSnapshot).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Provenance and TOML configuration" }));
+    expect(onOpenProvenance).toHaveBeenCalledTimes(1);
+
+    await expectZeroCriticalOrSeriousAxe(container);
+  });
 });

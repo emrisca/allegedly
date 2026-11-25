@@ -86,6 +86,8 @@ export interface ChartHistoryActions {
   undo: () => void;
   redo: () => void;
   clear: () => void;
+  addAlert?: () => void;
+  takeSnapshot?: () => void;
 }
 
 export interface ChartOrderOverlay {
@@ -137,6 +139,7 @@ export interface ChartPanelProps {
   onClearAllStudies?: () => void;
   onOpenObjectTree?: () => void;
   activeOrders?: readonly ChartOrderOverlay[];
+  onAlertsCountChange?: (count: number) => void;
   /** Render legacy inline toolbar when used standalone */
   showInlineToolbar?: boolean;
 }
@@ -730,6 +733,7 @@ export function ChartPanel({
   onClearAllStudies,
   onOpenObjectTree,
   activeOrders = [],
+  onAlertsCountChange,
   showInlineToolbar = false,
 }: ChartPanelProps) {
   const effectiveSettings = chartSettings ?? DEFAULT_CHART_SETTINGS;
@@ -855,13 +859,48 @@ export function ChartPanel({
     syncHistoryMeta();
   };
 
+  const handleAddAlert = () => {
+    const fallback = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close;
+    const price = lastCrosshairPriceRef.current ?? fallback;
+    if (price !== undefined && Number.isFinite(price)) {
+      setAlerts((prev) => [...prev, { id: `al-${Date.now()}`, symbol, price }]);
+      showToast(`Alert added on ${symbol} at ${price.toFixed(getSymbolMeta(symbol).decimals)}`);
+    }
+  };
+
+  const handleTakeSnapshot = () => {
+    const chart = chartApiRef.current;
+    if (!chart) return;
+    try {
+      const canvas = chart.takeScreenshot(true, false);
+      const dataUrl = canvas.toDataURL("image/png");
+      const safeSym = symbol.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `allegedly-${safeSym}-${timeframe}.png`;
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast(`Snapshot saved: ${filename}`);
+    } catch {
+      showToast("Chart snapshot unavailable in current renderer");
+    }
+  };
+
   if (historyActionsRef) {
     historyActionsRef.current = {
       undo: handleUndo,
       redo: handleRedo,
       clear: handleClear,
+      addAlert: handleAddAlert,
+      takeSnapshot: handleTakeSnapshot,
     };
   }
+
+  useEffect(() => {
+    onAlertsCountChange?.(alerts.length);
+  }, [alerts.length, onAlertsCountChange]);
 
   useEffect(() => {
     syncHistoryMeta();
