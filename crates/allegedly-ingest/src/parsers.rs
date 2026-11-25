@@ -82,13 +82,13 @@ pub fn parse_coinbase_trade(
     qty_str: &str,
     maker_side: &str,
 ) -> Result<NormalizedTick, ParseError> {
-    if let Some(exp) = expected_seq {
-        if seq != exp {
-            return Err(ParseError::SequenceGap {
-                expected: exp,
-                actual: seq,
-            });
-        }
+    if let Some(exp) = expected_seq
+        && seq != exp
+    {
+        return Err(ParseError::SequenceGap {
+            expected: exp,
+            actual: seq,
+        });
     }
     let taker_side = match maker_side {
         "BUY" | "buy" => AggressorSide::Sell,

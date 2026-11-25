@@ -48,10 +48,10 @@ impl FootprintSlabArena {
 
     pub fn ingest_tick(&mut self, tick: &NormalizedTick) {
         let bucket = tick.ts_exchange_ns.div_euclid(self.bar_interval_ns) * self.bar_interval_ns;
-        if let Some(cur) = self.active_bar_ts_ns {
-            if bucket > cur {
-                self.seal_active_bar();
-            }
+        if let Some(cur) = self.active_bar_ts_ns
+            && bucket > cur
+        {
+            self.seal_active_bar();
         }
         self.active_bar_ts_ns = Some(bucket);
         let price_tick = PriceE9(tick.price_e9)

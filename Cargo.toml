@@ -19,6 +19,7 @@ exclude = [
     "spikes/S06-oms-paper-execution",
     "spikes/S07-scripting-sandbox",
     "spikes/S08-storage-100m-replay",
+    "apps/desktop/src-tauri",
 ]
 
 [workspace.package]

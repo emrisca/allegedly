@@ -44,3 +44,32 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run workspace unit & integration tests
         run: cargo test --workspace --release
+
+  frontend-workspace:
+    name: Frontend & UV-01 A11y (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+      - name: Static npm policy guard
+        run: pnpm policy:check
+      - name: TypeScript strict typecheck
+        run: pnpm typecheck
+      - name: Unit tests & Rust golden binary fixture parity (T07)
+        run: pnpm test
+      - name: WCAG AA axe-core a11y gate (UV-01)
+        run: pnpm test:a11y
+      - name: Production Vite bundle build (apps/desktop)
+        run: pnpm build

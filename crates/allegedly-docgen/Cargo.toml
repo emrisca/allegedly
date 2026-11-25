@@ -10,6 +10,7 @@ description = "Dev-only schema and IPC contract generator for Allegedly (not shi
 workspace = true
 
 [dependencies]
+allegedly-core.workspace = true
 allegedly-ipc.workspace = true
 serde.workspace = true
 serde_json.workspace = true

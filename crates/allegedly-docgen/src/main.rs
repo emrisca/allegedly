@@ -1,7 +1,9 @@
+use allegedly_core::{BookState, ProvenanceModifiers, ProvenanceTier};
 use allegedly_ipc::{
-    FootprintCell, FrameHeader, FrameType, LiveBarUpdate, LiveL2BookHeader, LiveL2BookLevel,
-    LiveTradeRecord, MAGIC_ALG2, PROTOCOL_VERSION_V1, StreamStatusFrame, TpoHeader, TpoRow128,
-    VolumeProfileBin, VolumeProfileSummary,
+    BIT_BUY_IMBAL, BIT_POC, FootprintCell, FrameHeader, FrameType, LiveBarUpdate, LiveL2BookHeader,
+    LiveL2BookLevel, LiveTradeRecord, MAGIC_ALG2, PROTOCOL_VERSION_V1, StreamStatusFrame,
+    TpoHeader, TpoRow128, VolumeProfileBin, VolumeProfileSummary, encode_footprint_delta,
+    encode_live_trade_batch, encode_stream_status, encode_volume_profile, pack_trade_flags,
 };
 use serde::Serialize;
 use std::mem::size_of;
@@ -13,6 +15,15 @@ struct IpcContractSchema {
     header_bytes: usize,
     record_sizes: RecordSizes,
     frame_types: Vec<(&'static str, u16)>,
+    golden_fixtures_hex: GoldenFixturesHex,
+}
+
+#[derive(Serialize)]
+struct GoldenFixturesHex {
+    live_trade_batch: String,
+    footprint_delta: String,
+    volume_profile: String,
+    stream_status: String,
 }
 
 #[derive(Serialize)]
@@ -29,7 +40,65 @@ struct RecordSizes {
     stream_status_frame: usize,
 }
 
+fn to_hex(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        use std::fmt::Write;
+        let _ = write!(&mut out, "{b:02x}");
+    }
+    out
+}
+
 fn main() {
+    let trade_bytes = encode_live_trade_batch(
+        7,
+        999,
+        &[LiveTradeRecord {
+            seq: 42,
+            ts_ns: 1_732_500_000_000_000_000,
+            price_e9: 95_123_500_000_000,
+            qty_e9: 50_000_000_000,
+            flags: pack_trade_flags(
+                1,
+                ProvenanceTier::ExactTickAggr,
+                ProvenanceModifiers::NONE,
+                false,
+            ),
+            _pad: 0,
+        }],
+    );
+    let footprint_bytes = encode_footprint_delta(
+        2,
+        555,
+        &[FootprintCell {
+            price_tick: 190_000,
+            bid_vol_e9: 12_500_000_000,
+            ask_vol_e9: 45_000_000_000,
+            trade_count: 37,
+            imbalance_flags: BIT_BUY_IMBAL | BIT_POC,
+            _pad: [0; 3],
+        }],
+    );
+    let vp_bytes = encode_volume_profile(
+        5,
+        777,
+        VolumeProfileSummary {
+            poc_price: 190_000,
+            vah_price: 190_100,
+            val_price: 189_900,
+        },
+        &[VolumeProfileBin {
+            price_tick: 190_000,
+            bid_vol_e9: 3_000_000_000,
+            ask_vol_e9: 4_000_000_000,
+        }],
+    );
+    let status_bytes = encode_stream_status(
+        3,
+        123_456,
+        StreamStatusFrame::new(100, 5, 1, BookState::Stale, ProvenanceTier::ExactTickAggr),
+    );
+
     let schema = IpcContractSchema {
         magic_hex: format!("0x{MAGIC_ALG2:08X}"),
         version: PROTOCOL_VERSION_V1,
@@ -60,6 +129,12 @@ fn main() {
             ("LIVE_FOOTPRINT_DELTA", FrameType::LiveFootprintDelta as u16),
             ("STREAM_STATUS_FRAME", FrameType::StreamStatusFrame as u16),
         ],
+        golden_fixtures_hex: GoldenFixturesHex {
+            live_trade_batch: to_hex(&trade_bytes),
+            footprint_delta: to_hex(&footprint_bytes),
+            volume_profile: to_hex(&vp_bytes),
+            stream_status: to_hex(&status_bytes),
+        },
     };
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }

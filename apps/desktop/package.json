@@ -8,7 +8,8 @@
     "dev": "vite",
     "typecheck": "tsc -p tsconfig.json",
     "build": "vite build",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:a11y": "vitest run src/a11y.test.tsx"
   },
   "dependencies": {
     "@allegedly/ipc-client": "workspace:*",
@@ -17,7 +18,8 @@
     "dockview": "8.9.1",
     "lightweight-charts": "5.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@allegedly/ui-chrome": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
@@ -27,6 +29,9 @@
     "tailwindcss": "^4.0.0",
     "typescript": "^5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^3.0.9"
+    "vitest": "^3.0.9",
+    "@testing-library/react": "^16.2.0",
+    "axe-core": "^4.10.2",
+    "jsdom": "^26.0.0"
   }
 }

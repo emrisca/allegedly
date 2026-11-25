@@ -9,6 +9,7 @@ spikes/*/target/
 spikes/*/dist/
 *.tsbuildinfo
 spikes/*/gen/schemas/
+apps/desktop/src-tauri/gen/
 
 # OS & editor noise
 .DS_Store

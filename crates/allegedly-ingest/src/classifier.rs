@@ -14,19 +14,19 @@ impl SideClassifier {
         bid: Option<PriceE9>,
         ask: Option<PriceE9>,
     ) -> (AggressorSide, ProvenanceTier) {
-        if let (Some(b), Some(a)) = (bid, ask) {
-            if a.0 > b.0 {
-                let mid_x2 = i128::from(b.0) + i128::from(a.0);
-                let p_x2 = i128::from(price.0) * 2;
-                if p_x2 > mid_x2 {
-                    self.last_price = Some(price);
-                    self.last_side = AggressorSide::Buy;
-                    return (AggressorSide::Buy, ProvenanceTier::EstimatedL1Quote);
-                } else if p_x2 < mid_x2 {
-                    self.last_price = Some(price);
-                    self.last_side = AggressorSide::Sell;
-                    return (AggressorSide::Sell, ProvenanceTier::EstimatedL1Quote);
-                }
+        if let (Some(b), Some(a)) = (bid, ask)
+            && a.0 > b.0
+        {
+            let mid_x2 = i128::from(b.0) + i128::from(a.0);
+            let p_x2 = i128::from(price.0) * 2;
+            if p_x2 > mid_x2 {
+                self.last_price = Some(price);
+                self.last_side = AggressorSide::Buy;
+                return (AggressorSide::Buy, ProvenanceTier::EstimatedL1Quote);
+            } else if p_x2 < mid_x2 {
+                self.last_price = Some(price);
+                self.last_side = AggressorSide::Sell;
+                return (AggressorSide::Sell, ProvenanceTier::EstimatedL1Quote);
             }
         }
         // Tick rule fallback

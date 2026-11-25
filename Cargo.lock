@@ -52,6 +52,7 @@ dependencies = [
 name = "allegedly-docgen"
 version = "0.1.0"
 dependencies = [
+ "allegedly-core",
  "allegedly-ipc",
  "serde",
  "serde_json",

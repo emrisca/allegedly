@@ -110,7 +110,9 @@ mod tests {
         assert!(is_forbidden_adapter("Apex Trader Funding"));
         assert!(is_forbidden_adapter("Take-Profit-Trader"));
         assert!(!is_forbidden_adapter("alpaca_paper"));
-        assert!(!LIVE_TRADING_COMPILED_IN);
+        const {
+            assert!(!LIVE_TRADING_COMPILED_IN);
+        }
     }
 
     #[test]

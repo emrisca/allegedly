@@ -7,7 +7,8 @@
     "policy:check": "node scripts/ci/check-npm-policy.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "build": "pnpm --filter @allegedly/desktop build"
+    "build": "pnpm --filter @allegedly/desktop build",
+    "test:a11y": "pnpm --filter @allegedly/desktop test:a11y"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

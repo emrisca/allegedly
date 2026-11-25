@@ -53,11 +53,11 @@ impl DyadicVrvpTree {
         let mut agg: BTreeMap<i64, (i64, i64)> = BTreeMap::new();
         let mut idx = start;
         while idx < end {
-            let slice: &[(i64, i64, i64)] = if idx % 256 == 0 && idx + 256 <= end {
+            let slice: &[(i64, i64, i64)] = if idx.is_multiple_of(256) && idx + 256 <= end {
                 let s = &self.level2[idx / 256];
                 idx += 256;
                 s
-            } else if idx % 16 == 0 && idx + 16 <= end {
+            } else if idx.is_multiple_of(16) && idx + 16 <= end {
                 let s = &self.level1[idx / 16];
                 idx += 16;
                 s

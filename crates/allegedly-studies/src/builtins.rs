@@ -1,4 +1,4 @@
-/// Clean-room public textbook built-in Study calculations (ADR-0005, Compliance-Notes §2).
+//! Clean-room public textbook built-in Study calculations (ADR-0005, Compliance-Notes §2).
 
 pub fn sma(values: &[f64], period: usize) -> Vec<f64> {
     let mut out = vec![f64::NAN; values.len()];
