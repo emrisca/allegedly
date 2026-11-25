@@ -1,9 +1,9 @@
 ---
-title: "MotiveView Legal, IP, ToS, Security & Trademark Compliance Notes"
+title: "Allegedly Legal, IP, ToS, Security & Trademark Compliance Notes"
 type: compliance-guide
 status: verified
 owner: legal-licensing
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 
@@ -12,7 +12,7 @@ code_refs: []
 > **Brand Decision Resolved (`2026-11-24`):** Abel officially retired the working title `"MotiveView"` and named the project **Allegedly** — *"Allegedly a trading terminal."* (vault/repo moved to `/Users/abelmora/Documents/Obsidian/Allegedly`). Preliminary `2026-11-24` screening of **ALLEGEDLY**: 0 USPTO active registrations/applications in Classes `009` or `042` found in public indexes and 0 real trading terminals; two existing software/adjacent uses logged for future attorney review: `allegedly.market` (iOS parody meme-maker styled as fake prediction-market cards, explicitly disclaims being a trading platform) and `allegedlyapp.com` (workplace feedback), plus `kyscott18/allegedly` (GitHub Solidity compiler). Formal USPTO TSDR / EUIPO / common-law clearance remains `[ATTORNEY REVIEW REQUIRED]` before public release. Historical analysis of the retired `"MotiveView"` working title is preserved below for audit trail.
 
 > [!CAUTION]
-> **NOT LEGAL ADVICE:** This compliance playbook documents verified primary-source contract restrictions, license obligations, clean-room engineering hygiene, security practices, and trademark risks for MotiveView (`Apache-2.0` per [[R09-Legal-Licensing]]). It is **not** legal advice. Every topic flagged **`[ATTORNEY REVIEW REQUIRED]`** MUST be reviewed by qualified legal counsel before public launch or commercial/partner activity.
+> **NOT LEGAL ADVICE:** This compliance playbook documents verified primary-source contract restrictions, license obligations, clean-room engineering hygiene, security practices, and trademark risks for Allegedly (`Apache-2.0` per [[R09-Legal-Licensing]]). It is **not** legal advice. Every topic flagged **`[ATTORNEY REVIEW REQUIRED]`** MUST be reviewed by qualified legal counsel before public launch or commercial/partner activity.
 
 ---
 
@@ -22,7 +22,7 @@ code_refs: []
 |---|---|---|---|
 | **1** | **Trademark Clearance** | Run full USPTO TSDR, EUIPO, WIPO, and common-law clearance across Classes `009`, `036`, and `042` on the selected clean-room name replacing `"MotiveView"` / `"MotiveScript"` (`Ordlith`, `Rungcraft`, `Cairntape`, `Tallyrung`, or `Tickkiln`). | **Before public `v0.1` repo/domain/release** |
 | **2** | **Pine-Inspired DSL & Nominative Fair Use** | Review clean-room specification wall, non-affiliation notices, and standard-library function-name compatibility (`ta.*`) for the staged v0.4+ Pine-inspired DSL. | **Before Stage 4 (`v0.4`) implementation** |
-| **3** | **`LGPL-3.0-only` Sidecar Boundary** | Confirm that MotiveView's out-of-process Parquet + JSON-RPC/Arrow IPC bridge to user-installed `nautilus_trader` does not create a combined/derivative work under LGPLv3. | **Before shipping `v0.4` Nautilus sidecar bridge** |
+| **3** | **`LGPL-3.0-only` Sidecar Boundary** | Confirm that Allegedly's out-of-process Parquet + JSON-RPC/Arrow IPC bridge to user-installed `nautilus_trader` does not create a combined/derivative work under LGPLv3. | **Before shipping `v0.4` Nautilus sidecar bridge** |
 | **4** | **Financial / CFTC Rule 4.41 & Execution Disclaimers** | Draft final wording for "Not Investment Advice", "AS IS" execution liability waiver, and CFTC Rule 4.41 hypothetical backtest disclaimers. | **Before public `v0.1` release & `v0.2` broker execution** |
 | **5** | **Prop-Firm Partner Agreements** | Review non-public live account agreements (MFFU live API addendum, Lucid Plan Agreement) and any future official broker/gateway partner contracts (Tradovate, Topstep, Tradeify). | **Before building any post-MVP prop/partner connector** |
 
@@ -52,10 +52,10 @@ code_refs: []
 - **MPL-2.0 Default vs. House Rules Preemption:**
   - Open-source scripts published on TradingView without an explicit alternate license default to **`MPL-2.0`** (`R09-S05`).
   - However, TradingView's **House Rules / Script Publishing Rules** explicitly **preempt** open-source licenses *for republishing on TradingView* (requiring credit, meaningful modification, and prohibiting reuse inside closed/invite-only scripts).
-  - **Off-Platform Boundary for MotiveView:**
-    1. MotiveView MUST **never** scrape, mirror, bundle, or ship third-party TradingView community scripts inside the repository or installer.
-    2. If an individual user runs their own lawfully obtained `MPL-2.0` script locally on their own machine, MPL-2.0 does not restrict private execution — and MotiveView itself remains strictly `Apache-2.0` (never copying MPL-2.0 script source into core).
-    3. MotiveView's built-in v0.1 studies (`mv-studies`) MUST be written 100% from public textbook/mathematical definitions (Wilder RSI, Appel MACD, Bollinger Bands, standard VWAP) and validated numerically against `TA-Lib` (`BSD-3-Clause`), **never** by copying TradingView built-in Pine code or docs.
+  - **Off-Platform Boundary for Allegedly:**
+    1. Allegedly MUST **never** scrape, mirror, bundle, or ship third-party TradingView community scripts inside the repository or installer.
+    2. If an individual user runs their own lawfully obtained `MPL-2.0` script locally on their own machine, MPL-2.0 does not restrict private execution — and Allegedly itself remains strictly `Apache-2.0` (never copying MPL-2.0 script source into core).
+    3. Allegedly's built-in v0.1 studies (`allegedly-studies`) MUST be written 100% from public textbook/mathematical definitions (Wilder RSI, Appel MACD, Bollinger Bands, standard VWAP) and validated numerically against `TA-Lib` (`BSD-3-Clause`), **never** by copying TradingView built-in Pine code or docs.
 - **Clean-Room DSL Naming & Disclaimers (v0.4+):**
   - **Do NOT name the language `"Pine"`, `"OpenPine"`, `"PineView"`, or `"MotiveScript"`** (see Section 10). Use a clean-room name paired with the renamed app (e.g., **`LithScript`** or **`RungScript`**).
   - Describe optional syntax compatibility strictly via factual nominative phrasing: *"Clean-room series-oriented scripting language supporting common Pine-inspired study patterns — independent open-source project, not affiliated with or endorsed by TradingView, Inc. Pine Script® is a registered trademark of TradingView, Inc."*
@@ -86,7 +86,7 @@ Verified verbatim from **MotiveWave Software Terms of Service Agreement, Section
 
 > *"9.c. Prohibition on Reverse Engineering, Decompilation, and Disassembly. User may not reverse engineer, decompile, or disassemble Software. User agrees not to attempt, and if User is a corporation, User will use their best efforts to prevent User's employees and contractors from attempting to reverse compile, modify, translate or disassemble the Software in whole or in part. Any failure to comply with the above or any other terms and conditions contained herein will result in the automatic termination of this license and the reversion of the rights granted hereunder to Company."*
 
-- **Mandatory MotiveView Rules:**
+- **Mandatory Allegedly Rules:**
   1. **Zero inspection of MotiveWave installations, `.jar` files, Study SDK binaries, or private config formats.**
   2. Any feature parity with MotiveWave (e.g., Footprint Bars, TPO Profiles, DOM modifier-key execution, Auto-Bracket templates per `R05`/`R10`) MUST derive exclusively from domain mathematics and public product feature descriptions, implemented 100% clean-room in Rust/TypeScript.
   3. **Zero MotiveWave branding, Study SDK compatibility shims, or `"Motive*"` naming** (see Section 10).
@@ -97,7 +97,7 @@ Verified verbatim from **MotiveWave Software Terms of Service Agreement, Section
 
 Verified directly from primary Sierra Chart legal pages on `2026-11-24` (`R04-S22`–`S24`, `R09-S08`):
 
-| Artifact | Verified Legal Status (`2026-11-24`) | MotiveView Policy |
+| Artifact | Verified Legal Status (`2026-11-24`) | Allegedly Policy |
 |---|---|---|
 | **`DTCProtocol.php`** (Wire Protocol Spec) | **Public Domain** (*"no patent or license. The protocol is in the public domain."*) | **ALLOWED strictly as an optional execution-only wire adapter** (never for market data; warn users against Bulenox's explicit DTC bridge ban). |
 | **`DTCServer.php`** (`#Restrictions`, mod. `2026-09-02`) | Explicitly blocks CME, EUREX, NASDAQ, CBOE, UTP, and CTA real-time/historical data over DTC. | **NEVER attempt to circumvent or request blocked exchange data over DTC.** |
@@ -110,7 +110,7 @@ Verified directly from primary Sierra Chart legal pages on `2026-11-24` (`R04-S2
 
 1. **CME Group Information License Agreement (ILA) & Zero-Redistribution Architecture (`R03-S34`):**
    - Verified 2026 CME vendor fees: `$29,280/yr/exchange` real-time (`$117,120/yr` all 4 DCMs), `$21,840/yr/exchange` delayed, `$35,220/yr/exchange` historical.
-   - **Rule:** MotiveView is strictly a **local client-side BYO-key / local-file software tool**. The project MUST **never** host central market-data relay servers, shared historical tick mirrors, or community tick downloads for CME, US equities SIP, or licensed feeds — nor distribute synthetic/CFD proxies disguised as CME futures (violates both `Constraints` #8 and CME DS-45 Sept 2026 rules).
+   - **Rule:** Allegedly is strictly a **local client-side BYO-key / local-file software tool**. The project MUST **never** host central market-data relay servers, shared historical tick mirrors, or community tick downloads for CME, US equities SIP, or licensed feeds — nor distribute synthetic/CFD proxies disguised as CME futures (violates both `Constraints` #8 and CME DS-45 Sept 2026 rules).
 2. **Gray-Area Scrapers Permanently Banned (`R03-S24`, `R03-S25`):**
    - **`yfinance` / Yahoo Finance:** Yahoo ToS bans scraping/feeds and Yahoo actively issued cease-and-desist letters to OSS scrapers in November 2026. **BANNED from core & official plugins.**
    - **Stooq:** Behind CAPTCHA + `apikey` wall since March–April 2026. **BANNED from core & official plugins.**
@@ -118,7 +118,7 @@ Verified directly from primary Sierra Chart legal pages on `2026-11-24` (`R04-S2
    - Out-of-the-box `$0` defaults MUST be **US-compliant regulated venues** (**Kraken Spot WS v2** + **Coinbase Advanced Trade / Exchange WS**).
    - Offshore venues with US blocks or ToS bans (**Binance Global** HTTP 451, **Bybit** HTTP 403, **Hyperliquid** US Terms prohibition) MUST NOT be enabled by default; any opt-in regional adapter requires explicit user selection and a jurisdiction-compliance notice.
 4. **OTC FX Data (`Dukascopy .bi5`, `TrueFX`, `HistData`) (`R03-S31`–`S33`):**
-   - None permit redistribution; MotiveView may provide only a **user-initiated local fetcher/parser** (never mirroring files) stamped loudly as `INDICATIVE OTC QUOTES — NO EXCHANGE AGGRESSOR`.
+   - None permit redistribution; Allegedly may provide only a **user-initiated local fetcher/parser** (never mirroring files) stamped loudly as `INDICATIVE OTC QUOTES — NO EXCHANGE AGGRESSOR`.
 
 ---
 
@@ -132,7 +132,7 @@ Verified directly from primary Sierra Chart legal pages on `2026-11-24` (`R04-S2
 - **`CONDITIONAL-WRITTEN-APPROVAL` Prop Firms (3 of 8 — Do Not Build Without Written Partner Onboarding):**
   - **My Funded Futures (MFFU)**, **Tradeify** (also note sole-ownership & Tradeify-exclusive bot rules bar distributing shared FOSS bots), and **Lucid Trading** (behind-login Plan Agreement `UNVERIFIED`).
 - **`PERMITTED-SANDBOX-FIRST` (1 of 8 — Strictly Sim/Local Only, Post-MVP):**
-  - **Topstep** via user's own paid ProjectX Gateway API (`$14.50–$29/mo`) on **Practice / Combine / XFA ONLY** from the user's **personal local device** — MotiveView MUST programmatically warn/block Live Funded Accounts (LFA) and VPS/VPN execution if a TopstepX plugin is ever added (`R04-S17`).
+  - **Topstep** via user's own paid ProjectX Gateway API (`$14.50–$29/mo`) on **Practice / Combine / XFA ONLY** from the user's **personal local device** — Allegedly MUST programmatically warn/block Live Funded Accounts (LFA) and VPS/VPN execution if a TopstepX plugin is ever added (`R04-S17`).
 - **Retail Broker Guardrails (`R04`):**
   - **Tradovate:** Explicitly excludes all prop-firm/evaluation accounts from personal API keys; requires `$1,000+` funded live brokerage account + `$25/mo` API add-on (`R04-S15`). Display mandatory eligibility notice in any future plugin.
   - **Interactive Brokers:** Use clean-room `wboayue/rust-ibapi` (`MIT`), never IBKR's GPLv3 TWS API `v10.49+`; user connects to their own local TWS/IB Gateway under their own CME Rule 576 & Market Data API acknowledgements (`R03-S29`, `R04-S03`).
@@ -142,10 +142,10 @@ Verified directly from primary Sierra Chart legal pages on `2026-11-24` (`R04-S2
 
 ## 8. "Not Investment Advice", Execution Liability & Hypothetical Performance Disclaimers `[ATTORNEY REVIEW REQUIRED]`
 
-MotiveView is **open-source analytical and order-routing software**, NOT a registered broker-dealer, investment adviser (RIA), commodity trading advisor (CTA), or introducing broker (IB). Required disclaimer placements (exact legal text to be finalized by counsel):
+Allegedly is **open-source analytical and order-routing software**, NOT a registered broker-dealer, investment adviser (RIA), commodity trading advisor (CTA), or introducing broker (IB). Required disclaimer placements (exact legal text to be finalized by counsel):
 
 1. **`README.md` & `NOTICE`:** Prominent non-advisory notice + `Apache-2.0` §7–§8 *AS-IS / Limitation of Liability* disclaimer covering market-data inaccuracies, latency, software bugs, and financial loss.
-2. **First-Run Onboarding Modal (One-Time Local Acknowledgement, Stored in Local Config):** Confirms user understands MotiveView is local-first FOSS software providing zero investment advice, zero execution guarantees, and zero broker/exchange affiliation.
+2. **First-Run Onboarding Modal (One-Time Local Acknowledgement, Stored in Local Config):** Confirms user understands Allegedly is local-first FOSS software providing zero investment advice, zero execution guarantees, and zero broker/exchange affiliation.
 3. **Per-Session `LIVE_ARMED` Confirmation Gate (v0.2+):** Every launch defaults to `LIVE_ARMED = false` (Paper/Sandbox). Arming live routing requires explicit confirmation accepting 100% user responsibility for orders, partial fills, disconnect behavior, and client-managed protective legs (where broker-native brackets are unavailable).
 4. **Backtest & Replay Report Footer (CFTC Rule 4.41 Alignment Guidance):** Every exported backtest report, equity curve, or strategy summary must stamp: (a) **Fill Fidelity Tier** (`L3-FIFO` / `L2-Queue` / `L1-TradeThrough` / `Bar-Close`), (b) **Data Provenance** (`Native` vs. `Inferred` vs. `Synthetic`), and (c) standard **Hypothetical Performance Disclaimer** noting that simulated/hypothetical results have inherent limitations and do not represent actual trading or guarantee future results *(exact wording `[ATTORNEY REVIEW REQUIRED]`)*.
 

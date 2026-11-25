@@ -1,10 +1,10 @@
 ---
 title: "Allegedly Release, Code Signing, Distribution & Auto-Update Architecture"
 type: architecture
-status: draft-for-red-team
+status: verified
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - spikes/S02-tauri-ipc-throughput
   - spikes/S07-scripting-sandbox
@@ -103,9 +103,16 @@ Every tagged release workflow automatically generates and attaches the following
    - `cargo deny check` (`v0.22.1`) passes with `0` disallowed licenses or unacknowledged advisories.
    - npm SPDX gate confirms **`0` `dockview-enterprise`**, `@tradingview/charting_library`, `hqchart`, or copyleft/non-OSI packages.
    - Compile-time check confirms `allow-live-trading` Cargo feature is **off** for `v0.1` (`LIVE_ARMED = false` at boot) and `FORBIDDEN_DO_NOT_BUILD_ADAPTERS` denylist tests pass (`S06-T7`).
-   - **Pre-Public Human Legal Checkpoint (`RK-04`, `Compliance-Notes`):** Confirm formal trademark clearance for **`Allegedly`** (ensuring clean separation from retired `MotiveView`/`MotiveScript` USPTO conflicts) prior to opening public `v0.1` distribution.
+   - **Pre-Public Human Legal Checkpoint (`RK-04`, `Compliance-Notes`):** Confirm formal trademark clearance for **`Allegedly`** (ensuring clean separation from retired `MotiveView`/`MotiveScript` USPTO conflicts) prior to public marketing/distribution (`v1.0` `ST-42` / `RK-04`; `v0.1.0` ships as an unsigned/ad-hoc Alpha tag).
 
 ---
+
+
+> [!IMPORTANT]
+> **Milestone Rollout Staging (Locked in Phase 4 `RT4-01` — [[Milestones]], [[v0.1-Definition-of-Done]], [[Plan-of-Record]]):**
+> - **`v0.1.0` Unsigned/Ad-Hoc Alpha Tag (`ST-40`):** Ships cross-platform macOS (`.dmg`) & Windows (`.msi`/NSIS) unsigned/ad-hoc Alpha builds with `SHA256SUMS.txt` and `THIRD_PARTY_NOTICES.md` (`updates.checkOnStartup = false`; not publicly marketed/distributed).
+> - **`v0.2` Signed Beta (`ST-41`):** Enables Apple Developer ID + `notarytool` notarization, Windows `$0` SignPath OV Authenticode, Minisign Ed25519 `.sig` (`requireSignedVersion`), and opt-in `tauri-plugin-updater`.
+> - **`v1.0` GA (`ST-42` & `RK-04`):** Enables CycloneDX 1.5 + SPDX 2.3 SBOMs, Sigstore Cosign OIDC, SLSA provenance, reproducible builds, and formal attorney trademark clearance prior to public distribution.
 
 ## 6. Release Checklist & Rollback Runbook
 

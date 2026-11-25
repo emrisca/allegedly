@@ -22,3 +22,4 @@ updated: 2026-11-25
 | 2026-11-25 | `orchestrator` (Ember) | `Allegedly Red Team` | Phase 3 Red-Team Re-Verification Pass (`07-Reviews/Red-Team-Phase3.md`) | **Done (`PASS`)** — **18/18 CLOSED** (`0` open Blockers/Majors/Minors/Nits); Phase 3 Gate cleared |
 | 2026-11-25 | `orchestrator` (Ember) | `Allegedly Spikes UI / Core / Data / OMS` | Phase 4 Roadmap (`Milestones`, `Epics-and-Stories`, `Sprint-Plan-v0.1`, `v0.1-Definition-of-Done`, `Roadmap.canvas`) | **Done (`verified`)** — All 5 Phase 4 deliverables authored in parallel |
 | 2026-11-25 | `orchestrator` (Ember) | `Allegedly Red Team` | Phase 4 Adversarial Audit & Re-Verification (`07-Reviews/Red-Team-Phase4.md`) | **Done (`PASS`)** — Initial `12` findings remediated by specialists and re-verified **12/12 CLOSED** (`0` open) |
+| 2026-11-25 | Orchestrator -> Red Team -> Orchestrator | Phase 5 (`Plan-of-Record.md` + holistic audit `RT5-01`–`RT5-06`) | `Red-Team-Phase5.md` `PASS` (`6/6` closed); Stage D `GO` |

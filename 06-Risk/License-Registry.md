@@ -48,7 +48,7 @@ code_refs: []
 | **`GREsau/schemars` (`v1.2.3`)** | **`MIT`** *(verified `Cargo.toml` `2026-11-24`)* | Static (Rust, Runtime/Schema JSON Schema derive for Settings-as-Code & `allegedly-docgen`) | Retain MIT notice | **COMPATIBLE (APPROVED — Runtime/Schema)** | `Docs-Strategy`, `ADR-0010` |
 | **`open-source-cooperative/keyring-rs` (`v4.2.0`)** (`keyring-core`) | **`MIT OR Apache-2.0`** | Static (Rust, Runtime) + OS dynamic system libs (Security.framework / Win32) | Retain notice; uses OS system libraries under standard platform exception | **COMPATIBLE (APPROVED)** | `R08-S12` |
 | **`barter-rs/barter-rs` (`v0.2.1`)** *(v0.2 crypto exec)* | **`MIT`** | Static (Rust, Runtime) | Retain MIT notice | **COMPATIBLE (APPROVED)** | `R04-S33`, `R08-S17` |
-| **`wboayue/rust-ibapi` (`v5.7.0`)** *(v0.3 optional IBKR plugin)* | **`MIT`** | Static (Rust, optional Cargo feature, Runtime) | Retain MIT notice; clean-room socket client (zero IBKR GPL code) | **COMPATIBLE (APPROVED — Optional Plugin)** | `R03-S30`, `R08-S17` |
+| **`wboayue/rust-ibapi` (`v5.7.0`)** *(optional future plugin; `v0.5` uses IBKR Client Portal Web API)* | **`MIT`** | Static (Rust, optional Cargo feature, Runtime) | Retain MIT notice; clean-room socket client (zero IBKR GPL code) | **COMPATIBLE (APPROVED — Optional Plugin)** | `R03-S30`, `R08-S17` |
 | **`Sierra Chart DTC Wire Spec`** (`DTCProtocol.php`) | **Public Domain** (no patent/copyright) | Clean-room Rust implementation (Runtime) | **Execution-only wire protocol**; NEVER extract Sierra Chart/Denali market data | **COMPATIBLE (Execution-Only; Data BANNED)** | `R04-S22`, `R04-S23` |
 
 ---

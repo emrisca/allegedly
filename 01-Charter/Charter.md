@@ -1,9 +1,9 @@
 ---
 title: Allegedly Charter
 type: charter
-status: draft-on-defaults
+status: active
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 

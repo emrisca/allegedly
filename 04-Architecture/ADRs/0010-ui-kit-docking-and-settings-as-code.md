@@ -1,10 +1,10 @@
 ---
 title: "ADR-0010: UI Component Kit (ui-sdk), Docking Workbench (Dockview MIT) & Settings-as-Code Sovereignty"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - AGENTS.md
   - spikes/S03-dockview-multiwindow/package.json

@@ -1,10 +1,10 @@
 ---
 title: "ADR-0005: Study Runtime Architecture & Embedded Scripting Language"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - 01-Charter/Constraints.md
   - 01-Charter/Glossary.md

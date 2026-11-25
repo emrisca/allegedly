@@ -4,7 +4,7 @@ type: architecture-ledger
 status: verified
 phase: Phase 3
 owner: research-priorart
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 

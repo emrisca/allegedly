@@ -1,10 +1,10 @@
 ---
 title: "ADR-0001: License, Brand, and Platform Scope"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - LICENSE
   - README.md

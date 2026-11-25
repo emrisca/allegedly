@@ -3,13 +3,13 @@ title: Allegedly Risk Register
 type: risk
 status: active
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 
 # Risk Register
 
-> Updated at the **Phase 2 Gate (`2026-11-24`)** with primary-source findings from `R01`–`R10`.
+> Synchronized at **Phase 5 (`2026-11-25`)** across `R01`–`R10`, ADRs `0001`–`0010`, and `[[Plan-of-Record]]`.
 
 | ID | Category | Risk | Likelihood | Impact | Owner | Mitigation / Verification Plan | Status |
 |---|---|---|---|---|---|---|---|

@@ -1,10 +1,10 @@
 ---
 title: "ADR-0004: Synchronized Raw WebGL2 Order-Flow Layer & Canvas2D Hot-Path DOM Renderer"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - spikes/S01-chart-webgl-sync/src/
   - spikes/S01-chart-webgl-sync/bench-results.json

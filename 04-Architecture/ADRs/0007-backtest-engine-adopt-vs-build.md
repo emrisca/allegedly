@@ -1,10 +1,10 @@
 ---
 title: "ADR-0007: Deterministic Replay & Backtest Engine — Build Core + Optional Sidecars"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - 01-Charter/Constraints.md
   - 01-Charter/Principles.md

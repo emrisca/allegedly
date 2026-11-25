@@ -1,10 +1,10 @@
 ---
 title: "ADR-0003: Base Charting Engine & Mandatory Rust-Backed 5,000-Bar Viewport Windowing"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - spikes/S01-chart-webgl-sync/package.json
   - spikes/S01-chart-webgl-sync/src/

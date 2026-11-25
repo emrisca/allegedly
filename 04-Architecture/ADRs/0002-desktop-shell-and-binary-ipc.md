@@ -1,10 +1,10 @@
 ---
 title: "ADR-0002: Desktop Shell, Platform Scope (macOS & Windows v1.0) & Binary IPC Architecture"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - spikes/S02-tauri-ipc-throughput/Cargo.toml
   - spikes/S02-tauri-ipc-throughput/src/tauri_bench.rs

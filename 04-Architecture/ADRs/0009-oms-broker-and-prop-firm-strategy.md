@@ -1,10 +1,10 @@
 ---
 title: "ADR-0009: OMS Architecture, Retail Broker Adapters & Prop-Firm Execution Strategy"
 type: adr
-status: proposed
+status: accepted
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - spikes/S06-oms-paper-execution
 ---

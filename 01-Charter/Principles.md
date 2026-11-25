@@ -2,7 +2,7 @@
 title: "Allegedly — UX & Sovereignty Principles"
 status: verified
 owner: ux-teardown
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 
@@ -18,7 +18,7 @@ This charter codifies the non-negotiable user experience, financial integrity, a
 Allegedly is an instrument owned by the trader, not a SaaS rental funnel.
 - **No Account Wall**: The application installs, cold-starts (`< 2 s`), loads offline sample/historical data, replays L1/L2/L3 tick files, and executes all 8 order-flow and profile tools with **zero outbound network requests** when no live [`Provider`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) or [`Broker`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) is enabled.
 - **Zero Dark Patterns**: No artificial limits on indicators-per-chart, panes-per-layout, alerts, or saved templates. No unsolicited telemetry, analytics beacons, or forced cloud synchronization.
-- **User-Owned Open Storage**: All historical market caches (`.mvdepth`, Parquet/DuckDB/SQLite) and user configurations live in documented, unencrypted (except OS-keychain credentials) local directories that the user can back up, script, query, or delete at will.
+- **User-Owned Open Storage**: All historical market caches (`.atdepth`, Parquet/DuckDB/SQLite) and user configurations live in documented, unencrypted (except OS-keychain credentials) local directories that the user can back up, script, query, or delete at will.
 
 ### P2. Speed of Thought (`<= 3` Keystrokes, `60 fps` Canvas, Zero Blocking Modals)
 In active order-flow execution, UI latency is financial slippage.
@@ -37,7 +37,7 @@ Every configuration state in Allegedly is a deterministic, human-readable, Git-d
 - **5-Level Property Cascade**: Settings resolve predictably through:
   $$\texttt{Global Defaults} \longrightarrow \texttt{Workspace} \longrightarrow \texttt{Study/Layout Template} \longrightarrow \texttt{Chart Pane} \longrightarrow \texttt{Study/Drawing Instance}$$
 - **Explicit Delta Overrides**: Each level serializes **only the properties overridden from its parent**, visually badged in the Inspector with a 1-click `Reset to Inherited` and `Promote to Template` action.
-- **Canonical TOML/JSON Portability**: Workspaces (`.mvworkspace.toml`), analysis layers (`.mvanalysis.toml`), study templates (`.mvtemplate.toml`), themes (`theme.toml`), and keymaps (`keymap.toml`) serialize with deterministically sorted keys and validate against a published JSON Schema.
+- **Canonical TOML/JSON Portability**: Workspaces (`.atworkspace.toml`), analysis layers (`.atanalysis.toml`), study templates (`template.toml`), themes (`theme.toml`), and keymaps (`keymap.toml`) serialize with deterministically sorted keys and validate against a published JSON Schema.
 
 ### P5. Unmistakable Data Provenance & Honest Quantitative Disclosure
 A terminal must never lie—or remain conveniently ambiguous—about the fidelity of the data driving an order-flow signal.
@@ -56,7 +56,7 @@ Price and quantity mathematics are exact across all CPUs, operating systems, and
 
 ### P7. Unified Layer & Object Tree ("Parallel Universes" Without File Chaos)
 Traders think in multiple overlapping timeframes and what-if scenarios on the same [`Instrument`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md).
-- **Composable Analysis Layers**: Clean-room evolution of MotiveWave's `Analyses` [R10-S13] merged with TradingView's `Object Tree` [R10-S02]. Drawings and studies belong to named, stackable `.mvanalysis.toml` layers (e.g., `HTF Macro Structure` locked beneath `Intraday Order-Flow` and toggleable `Alt Bearish Count`).
+- **Composable Analysis Layers**: Clean-room evolution of MotiveWave's `Analyses` [R10-S13] merged with TradingView's `Object Tree` [R10-S02]. Drawings and studies belong to named, stackable `.atanalysis.toml` layers (e.g., `HTF Macro Structure` locked beneath `Intraday Order-Flow` and toggleable `Alt Bearish Count`).
 - **Full Z-Order & Timeframe Visibility Control**: Inside each layer, every object supports drag-and-drop Z-ordering, folder grouping, lock/visibility toggles, and 1-click timeframe visibility pills (`1s..1M`).
 
 ### P8. Guarded Precision Execution & Domain-Separated Undo
@@ -89,10 +89,10 @@ Every release candidate of Allegedly must pass **100% of the following 20 automa
 | **SV-02** | **Command Palette Keystroke Bound** | Automated UI harness measures keystrokes required from normal canvas focus to reach and mutate any registered setting across all 8 order-flow tools. | **PASS** if $100\%$ of settings and actions are filterable via `Cmd/Ctrl+K` within **`<= 3` keystrokes** (excluding the search query substring) and mutate inline without spawning a modal dialog. |
 | **SV-03** | **Zero Blocking Configuration Modals** | Inspect UI window/widget tree while editing any Study, Drawing, DOM Ladder, Chart, or Theme property. | **PASS** if **`0` modal backdrop overlays** block mouse panning, zooming, or DOM order clicks on the underlying chart canvas during property editing. |
 | **SV-04** | **Tier-1 Micro-Toolbar Constraint** | Automated accessibility tree scan of every floating contextual micro-toolbar across all Studies and Drawings. | **PASS** if every contextual micro-toolbar contains **`<= 5` top-level interactive controls** and occupies **`<= 36 px` height**. |
-| **SV-05** | **Canvas-to-Chrome Screen Ratio** | Render the default `1920x1080` single-chart workspace and compute the pixel ratio of the WebGPU/wgpu price-time canvas to total window pixels. | **PASS** if active chart/data canvas area is **`>= 90.0%`** of total window area (`>= 1,866,240` of `2,073,600` pixels). |
+| **SV-05** | **Canvas-to-Chrome Screen Ratio** | Render the default `1920x1080` single-chart workspace and compute the pixel ratio of the Lightweight Charts v5 + WebGL2 price-time canvas to total window pixels. | **PASS** if active chart/data canvas area is **`>= 90.0%`** of total window area (`>= 1,866,240` of `2,073,600` pixels). |
 | **SV-06** | **Deterministic TOML Round-Trip & Git Diff** | Export a multi-window Workspace + 3 Analysis Layers + 8 Studies to `.toml`/`.json`, re-import into a clean instance, and re-export. | **PASS** if `SHA-256(export_1) == SHA-256(export_2)` (byte-for-byte identical) and changing 1 study parameter produces a `git diff` of **`<= 3` changed lines**. |
 | **SV-07** | **5-Level Cascade Inheritance & Reset** | Override `imbalance_ratio_bps = 40000` on one Footprint instance, verify `Modified Only` filter count $= 1$, then click `Reset to Inherited`. | **PASS** if the instance TOML delta becomes empty (`{}`) and the parameter immediately reflects the parent Study Template value (`30000 bps`). |
-| **SV-08** | **Zero Binary Float Static Analysis Gate** | Run CI AST/Clippy lint across `mv-core`, `mv-orderflow`, `mv-profile`, and `mv-execution` crates for `f32`/`f64` tokens in price, quantity, tick, or VWAP types. | **PASS** if **`0` occurrences** of `f32` or `f64` exist in any domain struct, trait, accumulator, or serialization schema outside GPU viewport pixel-coordinate projection. |
+| **SV-08** | **Zero Binary Float Static Analysis Gate** | Run CI AST/Clippy lint across `allegedly-core`, `allegedly-orderflow`, `allegedly-oms`, `allegedly-ingest`, `allegedly-storage`, `allegedly-replay`, and `allegedly-ipc` crates for `f32`/`f64` tokens in price, quantity, tick, or VWAP types. | **PASS** if **`0` occurrences** of `f32` or `f64` exist in any domain struct, trait, accumulator, or serialization schema outside GPU viewport pixel-coordinate projection. |
 | **SV-09** | **Bit-Exact Cross-Speed Replay Determinism** | Replay a 1,000,000-tick CME ES MBO/L2 capture file at $1\times$, $50\times$, and max-cpu-batch speed. | **PASS** if the resulting state hashes of all 8 tools (Footprint cells, Volume/TPO POC/VAH/VAL, CVD, DOM PIQ, T&S sweeps, `i128` VWAP bands) match **bit-for-bit (`100%`)** across all runs. |
 | **SV-10** | **Loud Provenance Badge Enforcement** | Feed a chart a mixed dataset: 5 days of `1m` OHLCV bars, 2 days of `L1_TRADE_ONLY` ticks, and 1 day of `L3_MBO` ticks. | **PASS** if the UI displays distinct, non-dismissible provenance badges (`SYNTHETIC: 1m-INTRABAR`, `ESTIMATED: TICK-RULE`, `EXACT: L3-MBO`) on each respective segment and disables Absorption triggers on the `SYNTHETIC` segment. |
 | **SV-11** | **Honest L2 Heuristic Guardrail** | Enable Iceberg and Spoof/Pull detectors on an `L2_MBP` feed without `L3_MBO` order IDs. | **PASS** if the legend and tooltip explicitly display `HEURISTIC: L2-ICEBERG` / `HEURISTIC: L2-PULL`, show `[Est / Max]` queue bounds on the DOM PIQ marker, and expose `dwell_ms` and `conflation_guard_ms` sliders. |

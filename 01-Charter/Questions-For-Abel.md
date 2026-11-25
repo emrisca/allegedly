@@ -1,10 +1,10 @@
 ---
 title: Phase 0 Questions for Abel (Design-Tree Frontier — Round 1)
 type: decision-gate
-status: awaiting-abel
+status: resolved
 round: 1
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 

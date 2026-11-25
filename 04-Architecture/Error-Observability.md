@@ -1,10 +1,10 @@
 ---
 title: "Allegedly Error Taxonomy, Local-First Zero-Telemetry Observability & Live Diagnostics Architecture"
 type: architecture
-status: draft-for-red-team
+status: verified
 phase: Phase 3
 owner: architect
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs:
   - spikes/S05-live-ingest-tickvault/src/model.rs
   - spikes/S05-live-ingest-tickvault/src/resilience.rs
