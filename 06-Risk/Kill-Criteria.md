@@ -13,8 +13,8 @@ code_refs: []
 
 | Trigger ID | Phase | Threshold / Failure Condition | Mandatory Action / Pivot |
 |---|---|---|---|
-| **KC-01** | Phase 2 (`S01`/`S02`) | Selected web chart base cannot hold `>= 55 fps` (target 60 fps) on 100k candles + 5 indicators or 5k footprint bars on macOS **or** Linux | Pivot chart renderer to custom WebGL2/WebGPU canvas layer or native GPU renderer (`wgpu`/`egui`) |
-| **KC-02** | Phase 2 (`S04`) | Tauri v2 + Linux WebKitGTK exhibits broken WebGL2, >2x frame-time regression vs Chromium, or unworkable IPC bottleneck | Pivot shell to fallback evaluated in `R02` (e.g., native Rust UI or Electron with explicit bundle-size ADR revision) |
+| **KC-01** | Phase 2 (`S01`/`S02`) | Selected web chart base cannot hold `>= 55 fps` (target 60 fps) on 100k candles + 5 indicators or 5k footprint bars on **macOS or Windows** *(Linux deferred to post-v1.0)* | Pivot chart renderer to custom WebGL2/WebGPU canvas layer or native GPU renderer (`wgpu`/`egui`) |
+| **KC-02** | Phase 2 (`S02`/`S04`) | Tauri v2 on **macOS (`WKWebView`) or Windows (`WebView2`)** exhibits broken WebGL2, >2x frame-time regression vs Chromium, or unworkable IPC bottleneck *(Linux WebKitGTK gate deferred to future Linux milestone)* | Pivot shell to fallback evaluated in `R02` (e.g., native Rust UI or Electron with explicit bundle-size ADR revision) |
 | **KC-03** | Phase 1 (`R04`) | A prop firm's published rules prohibit third-party/custom execution clients or require unavailable vendor certification | Mark firm `DO-NOT-BUILD` permanently unless written official API program opens |
 | **KC-04** | Phase 1 (`R09`) | Any critical candidate dependency carries an incompatible license (proprietary, BSL/TSL, or viral copyleft conflicting with chosen app license) | Reject dependency or isolate behind a clean optional sidecar/plugin process boundary |
 | **KC-05** | Phase 2 (`S05`) | Ingest pipeline cannot sustain `20k+` ticks/s with bounded memory and deterministic backpressure | Redesign Rust ring-buffer / frame-coalescing pipeline before Phase 3 architecture lock |

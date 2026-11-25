@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "s02-tauri-ipc",
+  "version": "0.1.0",
+  "identifier": "dev.allegedly.s02-ipc-bench",
+  "build": {
+    "frontendDist": "web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Allegedly S02 IPC Bench",
+        "width": 1024,
+        "height": 768,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

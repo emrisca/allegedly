@@ -30,3 +30,26 @@ updated: 2026-11-24
 - **Limit-reset continuation armed:** Gemini 5-hour quota checked at `76.4%` (resets `2026-11-25T05:07:37Z` / 9:07 PM Pacific). Created one-shot `limit_reset` continuation automation so Phase 2 resumes automatically if quota exhausts.
 - **Phase 2 Spikes (`S01`–`S08`) dispatched** across all 4 spike-owning specialists.
 - **Public GitHub repository created (`emrisca/allegedly`):** Added Apache-2.0 `LICENSE`, root `README.md`, ignored local prompt files (`Allegedly Prompt.md`), and pushed `main` to `https://github.com/emrisca/allegedly`.
+
+## 2026-11-24 — Adopted `ui-sdk` into Plan & Resuming Phase 2 Spikes
+- **UI Component Layer Decision (`ui-sdk`):** Adopted `https://ui-sdk.dev/docs` (`@ui-sdk/react` & `@ui-sdk/core` `0.1.0-beta.17`, `Apache-2.0`, requires React 19+) per Abel's direction. Created root `AGENTS.md` with the exact `ui-sdk` setup/reading/skill rules, and updated `R02-Shell-UI-Stack.md`, `Adopt-Build-Fork.md`, `License-Registry.md`, and `00-Start-Here.md` (retaining shadcn/Radix as beta fallback).
+- **Phase 2 Resumption:** All 4 spike specialists built substantial code before their local agent connections dropped (`S01` already benchmarked; `S03`–`S08` source code written; `S02` queued). Resuming all 4 bots from existing code on disk to finish benchmarks, tests, and all 8 `03-Spikes/S01`–`S08` reports.
+
+## 2026-11-24 — Platform Scope Updated (macOS + Windows First; Linux Future) & S05 Verified
+- **Platform Scope Decision (`A01` / `A07` locked by Abel):** Target **macOS (Apple Silicon + Intel)** and **Windows 10/11** for `v0.1`–`v1.0`; defer **Linux (X11/Wayland)** to a future post-v1.0 milestone while preserving portable Rust + WebGL2 + `TransportAdapter` boundaries. Updated `Constraints.md`, `Assumptions.md`, `Questions-For-Abel.md`, `Principles.md`, `Charter.md`, `00-Start-Here.md`, `README.md`, `AGENTS.md`, `R02-Shell-UI-Stack.md`, `Risk-Register.md` (`RK-01` → `Deferred (Post-v1.0)`), and `Kill-Criteria.md` (`KC-01`, `KC-02`).
+- **Spike S05 (`03-Spikes/S05-Live-Ingest-TickVault.md`) Complete:** Verdict `PASS-WITH-CAVEAT` (`KC-05` cleared by `886×` at `17.73M events/s`; live 60s dual-venue Kraken + Coinbase soak verified `100.00%` Kraken CRC32 and `6.1×` Coinbase maker→taker inversion proof; `14/14` release tests pass; `S01`–`S04`, `S06`, `S07`–`S08` still in flight).
+
+## 2026-11-24 — Phase 2 Complete (`S01`–`S08` ALL Verified) & Gate Ready
+- **All 8 Phase 2 Spikes Completed & Verified on Apple M2 (macOS 26.6.2, `rustc 1.99.1`, `Brave 157.1.99.57`):**
+  - `S01` (`PASS-WITH-CAVEAT`): `ISeriesPrimitive` sync `0.000 CSS px` drift; WebGL2 `0.30–0.40 ms` draw; discovered `5,000`-bar Rust viewport windowing needed to sustain `60.0 fps` on live LWC `series.update()`.
+  - `S02` (`PASS-WITH-CAVEAT`): Native Tauri `tauri::ipc::Response` `100k` bars in `3.0 ms`; `16 ms`-batched `Channel` `100,450 msgs/s`; release binary `2.68 MB` gzip.
+  - `S03` (`PASS-WITH-CAVEAT`): MIT-only `dockview` + `dockview-react` `8.9.1` (`0` enterprise deps); `0.60 ms` p95 pop-out sync; `0` DOM/listener leaks across 20 cycles.
+  - `S04` (`PASS`): Canvas2D DOM Ladder + Tape at `60 Hz` / `2,000` deltas/s hit `60.2 fps`, `0` stalls `> 20 ms`, `0.00 ms` Layout/RecalcStyle (`4.9×–5.3×` less CPU).
+  - `S05` (`PASS-WITH-CAVEAT`): Live 60s Kraken + Coinbase soak (`100.00%` Kraken CRC32, `6.1×` Coinbase maker→taker inversion proof); `17.73M events/s` ingest; `dbn v0.75.0` `18.43M rec/s`; `14/14` release tests pass.
+  - `S06` (`PASS-WITH-CAVEAT`): Zero-float `i64` OMS; WAL append `119.75 µs` p50; 50-order Kill-Switch `6.13–7.04 ms` p50 (`0` stray orders); 500-order WAL crash reconcile `6.15 ms`; `54` wire-mock HTTP faults (`0` duplicates); `7/7` release tests pass.
+  - `S07` (`PASS-WITH-CAVEAT`): **Adopt Luau (`mlua`, `+0.47 MiB` gzip), reject Rhai** (`10.05×` faster batch, `19.41×` faster live p99); Wasmtime minimal `+3.32%` vs Native (`+1.74 MiB` gzip); `12/12` hostile escapes blocked; `3/3` release tests pass.
+  - `S08` (`PASS-WITH-CAVEAT`): 100M-tick Hive Parquet write `22.51M ticks/s` (`4.26 B/tick`), streaming replay `102.55M ticks/s` at `34.44 MiB` peak RSS; cold 1h seek `5.22 ms` p50; Dyadic VRVP `0.0271 ms` p99 (`9.2×` faster than `0.25 ms` target); `+2.91 MiB` gzip; `4/4` release tests pass.
+- **Independent Verification by Ember:** Re-ran `cargo test --release` across `S05` (`14/14`), `S06` (`7/7`), `S07` (`3/3`), and `S08` (`4/4`) — all `28/28` Rust release tests passed. Verified `0` `target/` dirs in vault, `0` files `> 2 MB` outside `node_modules`/`.git`, `0` `dockview-enterprise` refs, and `/tmp/allegedly-s08-bench/` cleaned.
+- **Automation Housekeeping:** Paused temporary `limit_reset` continuation automation (`452b1528-84b1-4247-accd-2067c42ae1f6`) and verified `enabled=false`, `nextRunAt=null`.
+- **Gate Status:** Stopped at **Phase 2 Gate** awaiting Abel's approval to begin **Phase 3 (Architecture & ADRs)**.
+

@@ -1,0 +1,27 @@
+{
+  "name": "s03-dockview-multiwindow",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "bench": "node bench.mjs"
+  },
+  "dependencies": {
+    "dockview": "8.9.1",
+    "dockview-react": "8.9.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.3.4",
+    "playwright-core": "1.65.1",
+    "typescript": "5.8.3",
+    "vite": "8.3.8",
+    "ws": "8.18.3"
+  }
+}

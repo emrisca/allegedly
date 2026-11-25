@@ -1,0 +1,25 @@
+[package]
+name = "allegedly-s06-oms"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Allegedly Phase 2 Spike S06 — Deterministic Fixed-Point OMS, Local Paper Simulator, SQLite WAL Crash Recovery & Wire-Compatible Alpaca Paper Mock"
+
+[features]
+default = []
+# Compile-time safety rail: live execution is structurally unreachable in S06 unless explicitly opted in.
+allow-live-trading = []
+
+[dependencies]
+async-trait = "0.1"
+axum = { version = "0.8", features = ["ws"] }
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "http2", "rustls-tls"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+url = "2"
+uuid = { version = "1", features = ["v7", "serde"] }

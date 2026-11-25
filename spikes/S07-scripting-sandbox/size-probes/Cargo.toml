@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = ["baseline", "probe-wasmtime", "probe-rhai", "probe-luau"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

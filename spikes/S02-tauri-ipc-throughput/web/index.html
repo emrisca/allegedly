@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Allegedly S02 — Native Tauri v2 IPC Benchmark</title>
+  </head>
+  <body style="background:#0b0e14;color:#e2e8f0;font-family:monospace;padding:16px">
+    <h3>Allegedly S02 — Native Tauri v2 WKWebView IPC Benchmark</h3>
+    <pre id="log">Starting...</pre>
+    <script>
+      const MAGIC_ALG2 = 0x414c4732;
+      const HEADER_BYTES = 16;
+      const RECORD_BYTES = 32;
+
+      function percentile(sorted, p) {
+        if (!sorted.length) return 0;
+        const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+        return sorted[idx];
+      }
+
+      function decodeDeltaFrame(ab) {
+        const dv = new DataView(ab);
+        if (ab.byteLength < HEADER_BYTES) return { count: 0, checksum: 0 };
+        const magic = dv.getUint32(0, true);
+        if (magic !== MAGIC_ALG2) return { count: 0, checksum: -1 };
+        const count = dv.getUint32(4, true);
+        let checksum = 0;
+        let off = HEADER_BYTES;
+        for (let i = 0; i < count; i++) {
+          // Read fixed-point integer fields without allocating JS objects
+          const priceTickLo = dv.getInt32(off + 16, true);
+          const qty = dv.getInt32(off + 24, true);
+          const flags = dv.getUint32(off + 28, true);
+          checksum = (checksum + priceTickLo + qty + (flags & 1)) | 0;
+          off += RECORD_BYTES;
+        }
+        return { count, checksum };
+      }
+
+      function decodeBulkSoA(ab) {
+        const dv = new DataView(ab);
+        const magic = dv.getUint32(0, true);
+        const barCount = dv.getUint32(4, true);
+        if (magic !== MAGIC_ALG2) throw new Error('Invalid bulk magic');
+        // Zero-copy TypedArray views directly over the received ArrayBuffer
+        const stride = barCount * 8;
+        const times = new BigInt64Array(ab, HEADER_BYTES, barCount);
+        const opens = new BigInt64Array(ab, HEADER_BYTES + stride, barCount);
+        const highs = new BigInt64Array(ab, HEADER_BYTES + stride * 2, barCount);
+        const lows = new BigInt64Array(ab, HEADER_BYTES + stride * 3, barCount);
+        const closes = new BigInt64Array(ab, HEADER_BYTES + stride * 4, barCount);
+        const vols = new BigInt64Array(ab, HEADER_BYTES + stride * 5, barCount);
+        // Touch first + last bar to verify decoded values
+        const check = Number(opens[0] + closes[barCount - 1] + highs[0] - lows[0] + vols[0] + times[0] % 1000n);
+        return { barCount, check, byteLength: ab.byteLength };
+      }
+
+      async function runAll() {
+        const logEl = document.getElementById('log');
+        const log = (s) => { logEl.textContent += '\n' + s; };
+        const core = window.__TAURI__?.core;
+        if (!core) {
+          log('ERROR: window.__TAURI__.core missing');
+          return;
+        }
+        const { invoke, Channel } = core;
+
+        const coldStartToJsReadyMs = await invoke('get_boot_ms');
+        log('Cold start to JS ready: ' + coldStartToJsReadyMs.toFixed(1) + ' ms');
+
+        // 1. Baseline idle IPC ping RTT (100 samples)
+        const idleRtts = [];
+        for (let i = 0; i < 100; i++) {
+          const t0 = performance.now();
+          await invoke('ping_ipc', { id: i, clientTs: t0 });
+          idleRtts.push(performance.now() - t0);
+        }
+        idleRtts.sort((a, b) => a - b);
+
+        // 2. Bulk 100k OHLCV bars: tauri::ipc::Response (SoA binary) vs JSON invoke
+        const bulkBinRuns = [];
+        for (let r = 0; r < 5; r++) {
+          const t0 = performance.now();
+          const ab = await invoke('get_bulk_bars_binary');
+          const tRecv = performance.now();
+          const dec = decodeBulkSoA(ab);
+          const tDec = performance.now();
+          bulkBinRuns.push({
+            totalMs: tDec - t0,
+            ipcMs: tRecv - t0,
+            decodeMs: tDec - tRecv,
+            bytes: dec.byteLength,
+            bars: dec.barCount,
+          });
+        }
+
+        const bulkJsonRuns = [];
+        for (let r = 0; r < 3; r++) {
+          const t0 = performance.now();
+          const arr = await invoke('get_bulk_bars_json');
+          const tEnd = performance.now();
+          bulkJsonRuns.push({
+            totalMs: tEnd - t0,
+            bars: Array.isArray(arr) ? arr.length : 0,
+            sampleClose: Array.isArray(arr) && arr.length ? arr[arr.length - 1].c : 0,
+          });
+        }
+
+        // 3. Streaming Channel<InvokeResponseBody> binary matrix:
+        //    Batched (16ms / 60Hz) at 10k, 50k, 100k msgs/sec + Unbatched (0ms) at 10k, 50k msgs/sec
+        const streamCases = [
+          { rate: 10000, batchMs: 16, durationMs: 3000 },
+          { rate: 50000, batchMs: 16, durationMs: 3000 },
+          { rate: 100000, batchMs: 16, durationMs: 3000 },
+          { rate: 10000, batchMs: 0, durationMs: 2500 },
+          { rate: 50000, batchMs: 0, durationMs: 2000 },
+        ];
+
+        const streamResults = [];
+        for (const sc of streamCases) {
+          let recvMsgs = 0;
+          let recvFrames = 0;
+          let recvBytes = 0;
+          let checksum = 0;
+          const decodeMsSamples = [];
+          const pingRtts = [];
+
+          const ch = new Channel();
+          ch.onmessage = (msg) => {
+            const d0 = performance.now();
+            const ab = msg instanceof ArrayBuffer ? msg : (msg?.buffer ?? null);
+            if (ab) {
+              const r = decodeDeltaFrame(ab);
+              recvMsgs += r.count;
+              recvFrames++;
+              recvBytes += ab.byteLength;
+              checksum = (checksum + r.checksum) | 0;
+            }
+            decodeMsSamples.push(performance.now() - d0);
+          };
+
+          // Interleaved ping probe loop while Channel stream is running to measure real IPC latency under load
+          let probing = true;
+          const probeTask = (async () => {
+            let pid = 0;
+            while (probing) {
+              const p0 = performance.now();
+              try {
+                await invoke('ping_ipc', { id: pid++, clientTs: p0 });
+                pingRtts.push(performance.now() - p0);
+              } catch {
+                break;
+              }
+              await new Promise((r) => setTimeout(r, 20));
+            }
+          })();
+
+          const tStart = performance.now();
+          const serverStats = await invoke('stream_channel_binary', {
+            rate: sc.rate,
+            batchMs: sc.batchMs,
+            durationMs: sc.durationMs,
+            onEvent: ch,
+          });
+          // Small drain pause for any in-flight Channel callbacks
+          await new Promise((r) => setTimeout(r, 80));
+          probing = false;
+          await probeTask;
+
+          const totalClientElapsedMs = performance.now() - tStart - 80;
+          const wallSec = Math.max(0.001, (serverStats.server_elapsed_ms || totalClientElapsedMs) / 1000);
+          decodeMsSamples.sort((a, b) => a - b);
+          pingRtts.sort((a, b) => a - b);
+
+          streamResults.push({
+            transport: 'tauri-channel-binary',
+            targetRateMsgsSec: sc.rate,
+            batchMs: sc.batchMs,
+            durationMs: sc.durationMs,
+            sentMsgs: serverStats.sent_msgs,
+            recvMsgs,
+            sentFrames: serverStats.sent_frames,
+            recvFrames,
+            recvBytes,
+            sustainedMsgsSec: Math.round(recvMsgs / wallSec),
+            throughputMBs: +((recvBytes / (1024 * 1024)) / wallSec).toFixed(2),
+            deliveryRatio: serverStats.sent_msgs > 0 ? +(recvMsgs / serverStats.sent_msgs).toFixed(4) : 0,
+            decodeMsP50: +percentile(decodeMsSamples, 50).toFixed(3),
+            decodeMsP95: +percentile(decodeMsSamples, 95).toFixed(3),
+            decodeMsP99: +percentile(decodeMsSamples, 99).toFixed(3),
+            ipcRttMsP50: +percentile(pingRtts, 50).toFixed(3),
+            ipcRttMsP95: +percentile(pingRtts, 95).toFixed(3),
+            ipcRttMsP99: +percentile(pingRtts, 99).toFixed(3),
+            estOneWayLatencyMsP95: +(percentile(pingRtts, 95) / 2).toFixed(3),
+            pingSamples: pingRtts.length,
+            checksum,
+          });
+          log(`Done rate=${sc.rate} batch=${sc.batchMs}ms -> ${Math.round(recvMsgs / wallSec)} msgs/s`);
+        }
+
+        const payload = {
+          engine: 'Native Tauri v2 WKWebView (macOS, visible=false Accessory)',
+          userAgent: navigator.userAgent,
+          rafNote: 'rAF frame-drop telemetry skipped in hidden WKWebView (AppKit suppresses VSync for visible=false windows); measured in Brave harness.',
+          coldStartToJsReadyMs: +coldStartToJsReadyMs.toFixed(2),
+          idlePingRttMs: {
+            p50: +percentile(idleRtts, 50).toFixed(3),
+            p95: +percentile(idleRtts, 95).toFixed(3),
+            p99: +percentile(idleRtts, 99).toFixed(3),
+          },
+          bulk100kBinary: {
+            bytes: bulkBinRuns[0]?.bytes ?? 0,
+            bars: bulkBinRuns[0]?.bars ?? 0,
+            medianTotalMs: +percentile(bulkBinRuns.map((x) => x.totalMs).sort((a, b) => a - b), 50).toFixed(2),
+            p95TotalMs: +percentile(bulkBinRuns.map((x) => x.totalMs).sort((a, b) => a - b), 95).toFixed(2),
+            medianDecodeMs: +percentile(bulkBinRuns.map((x) => x.decodeMs).sort((a, b) => a - b), 50).toFixed(3),
+            runs: bulkBinRuns,
+          },
+          bulk100kJson: {
+            bars: bulkJsonRuns[0]?.bars ?? 0,
+            medianTotalMs: +percentile(bulkJsonRuns.map((x) => x.totalMs).sort((a, b) => a - b), 50).toFixed(2),
+            runs: bulkJsonRuns,
+          },
+          streamResults,
+        };
+
+        await invoke('report_results', { payload });
+      }
+
+      runAll().catch(async (err) => {
+        document.getElementById('log').textContent += '\nFATAL: ' + String(err);
+        if (window.__TAURI__?.core) {
+          await window.__TAURI__.core.invoke('report_results', {
+            payload: { error: String(err) },
+          });
+        }
+      });
+    </script>
+  </body>
+</html>

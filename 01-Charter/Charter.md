@@ -10,7 +10,7 @@ code_refs: []
 # Allegedly — Project Charter
 
 ## 1. Mission
-Produce a **decision-grade, evidence-backed development plan** for **Allegedly** (working title; trademark risk evaluated in [[R09-Legal-Licensing]]): a free, open-source, local-first, cross-platform trading terminal that merges:
+Produce a **decision-grade, evidence-backed development plan** for **Allegedly** (working title; trademark risk evaluated in [[R09-Legal-Licensing]]): a free, open-source, local-first desktop trading terminal (**macOS & Windows** first; Linux planned for a future milestone) that merges:
 - **TradingView's UI/UX clarity:** crisp chart layouts, low-friction indicator UX, intuitive drawing tools, and ergonomic scripting.
 - **MotiveWave's analytical & order-flow depth:** footprint/cluster charts, Volume Profile, TPO/Market Profile, DOM ladder, liquidity heatmaps, and deep configurable studies.
 - **Total user sovereignty & zero lock-in:** local files, open formats, zero mandatory subscriptions, settings-as-code, no dark patterns.

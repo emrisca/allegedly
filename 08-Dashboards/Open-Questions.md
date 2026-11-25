@@ -16,9 +16,8 @@ WHERE status = "awaiting-abel" OR contains(file.name, "Questions")
 SORT updated DESC
 ```
 
-## Live Summary (Phase 1 Gate)
+## Live Summary (Phase 2 Gate Ready)
 | File | Topic | Status | Waiting On |
 |---|---|---|---|
-| [[Questions-For-Abel]] | Round 1 Frontier (`Q1`–`Q8`: OS, Instruments, Prop Firms, Budget, v0.1 Scope, Build Model, FOSS/Mobile, Repo/Spike Layout) | `awaiting-abel` (defaults logged in [[Assumptions]]) | Abel |
-| [[R09-Legal-Licensing]] | Project Rename Decision (`Ordlith`, `Rungcraft`, `Cairntape`, `Tallyrung`, `Tickkiln`) to resolve USPTO `MOTIVEWAVE`/`TRADINGVIEW` trademark collision | `open-for-round-2` | Abel (before Phase 3 / public repo) |
-| [[R02-Shell-UI-Stack]] / [[Blocked-Items]] | Obsidian `Excluded files` (`userIgnoreFilters`) configuration before Phase 2 `pnpm install`/`cargo build` | `blocking-phase-2-in-vault-builds` | Abel |
+| [[Questions-For-Abel]] | Phase 0/1 Decisions: `Q1` (macOS + Windows first; Linux future), `Q7` (FOSS Desktop-only), `Q8` (in-repo spikes), Brand (**Allegedly**), UI kit (**`ui-sdk`**) **RESOLVED**; remaining defaults (`Q2`–`Q6`) accepted unless Abel overrides | `mostly-resolved` (defaults active in [[Assumptions]]) | Abel (optional override at Phase 2 Gate) |
+| [[03-Spikes/S01-Chart-WebGL-Sync\|Phase 2 Gate (`S01`–`S08`)]] | Explicit approval to advance from Phase 2 (all 8 spikes verified) into **Phase 3 (Architecture & ADRs)** using `grill-with-docs` | `awaiting-abel-gate` | Abel |

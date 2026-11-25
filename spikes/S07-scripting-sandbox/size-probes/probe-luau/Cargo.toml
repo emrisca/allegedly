@@ -1,0 +1,7 @@
+[package]
+name = "probe-luau"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mlua = { version = "0.12.3", features = ["luau"] }

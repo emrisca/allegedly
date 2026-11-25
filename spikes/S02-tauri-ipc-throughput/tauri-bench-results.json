@@ -1,0 +1,210 @@
+{
+  "bulk100kBinary": {
+    "bars": 100000,
+    "bytes": 4800016,
+    "medianDecodeMs": 0,
+    "medianTotalMs": 3,
+    "p95TotalMs": 5,
+    "runs": [
+      {
+        "bars": 100000,
+        "bytes": 4800016,
+        "decodeMs": 1,
+        "ipcMs": 4,
+        "totalMs": 5
+      },
+      {
+        "bars": 100000,
+        "bytes": 4800016,
+        "decodeMs": 0,
+        "ipcMs": 3,
+        "totalMs": 3
+      },
+      {
+        "bars": 100000,
+        "bytes": 4800016,
+        "decodeMs": 0,
+        "ipcMs": 5,
+        "totalMs": 5
+      },
+      {
+        "bars": 100000,
+        "bytes": 4800016,
+        "decodeMs": 0,
+        "ipcMs": 2,
+        "totalMs": 2
+      },
+      {
+        "bars": 100000,
+        "bytes": 4800016,
+        "decodeMs": 0,
+        "ipcMs": 2,
+        "totalMs": 2
+      }
+    ]
+  },
+  "bulk100kJson": {
+    "bars": 100000,
+    "medianTotalMs": 29,
+    "runs": [
+      {
+        "bars": 100000,
+        "sampleClose": 24310,
+        "totalMs": 35
+      },
+      {
+        "bars": 100000,
+        "sampleClose": 24310,
+        "totalMs": 29
+      },
+      {
+        "bars": 100000,
+        "sampleClose": 24310,
+        "totalMs": 28
+      }
+    ]
+  },
+  "coldStartToJsReadyMs": 2330.99,
+  "engine": "Native Tauri v2 WKWebView (macOS, visible=false Accessory)",
+  "idlePingRttMs": {
+    "p50": 0,
+    "p95": 1,
+    "p99": 10
+  },
+  "nativeProcessTree": {
+    "processCount": 2,
+    "processes": [
+      {
+        "comm": "/Users/abelmora/.cache/allegedly-target/release/s02-tauri-ipc",
+        "pid": 37273,
+        "rssMB": 110.19
+      },
+      {
+        "comm": "ps",
+        "pid": 37297,
+        "rssMB": 1.53
+      }
+    ],
+    "rootPid": 37273,
+    "totalRssMB": 111.72
+  },
+  "rafNote": "rAF frame-drop telemetry skipped in hidden WKWebView (AppKit suppresses VSync for visible=false windows); measured in Brave harness.",
+  "streamResults": [
+    {
+      "batchMs": 16,
+      "checksum": 702335720,
+      "decodeMsP50": 0,
+      "decodeMsP95": 0,
+      "decodeMsP99": 1,
+      "deliveryRatio": 1,
+      "durationMs": 3000,
+      "estOneWayLatencyMsP95": 1,
+      "ipcRttMsP50": 1,
+      "ipcRttMsP95": 2,
+      "ipcRttMsP99": 2,
+      "pingSamples": 144,
+      "recvBytes": 970704,
+      "recvFrames": 189,
+      "recvMsgs": 30240,
+      "sentFrames": 189,
+      "sentMsgs": 30240,
+      "sustainedMsgsSec": 10049,
+      "targetRateMsgsSec": 10000,
+      "throughputMBs": 0.31,
+      "transport": "tauri-channel-binary"
+    },
+    {
+      "batchMs": 16,
+      "checksum": -783271696,
+      "decodeMsP50": 0,
+      "decodeMsP95": 0,
+      "decodeMsP99": 0,
+      "deliveryRatio": 1,
+      "durationMs": 3000,
+      "estOneWayLatencyMsP95": 1,
+      "ipcRttMsP50": 1,
+      "ipcRttMsP95": 2,
+      "ipcRttMsP99": 2,
+      "pingSamples": 145,
+      "recvBytes": 4841424,
+      "recvFrames": 189,
+      "recvMsgs": 151200,
+      "sentFrames": 189,
+      "sentMsgs": 151200,
+      "sustainedMsgsSec": 50227,
+      "targetRateMsgsSec": 50000,
+      "throughputMBs": 1.53,
+      "transport": "tauri-channel-binary"
+    },
+    {
+      "batchMs": 16,
+      "checksum": -1566543392,
+      "decodeMsP50": 0,
+      "decodeMsP95": 0,
+      "decodeMsP99": 0,
+      "deliveryRatio": 1,
+      "durationMs": 3000,
+      "estOneWayLatencyMsP95": 1,
+      "ipcRttMsP50": 1,
+      "ipcRttMsP95": 2,
+      "ipcRttMsP99": 3,
+      "pingSamples": 144,
+      "recvBytes": 9679824,
+      "recvFrames": 189,
+      "recvMsgs": 302400,
+      "sentFrames": 189,
+      "sentMsgs": 302400,
+      "sustainedMsgsSec": 100450,
+      "targetRateMsgsSec": 100000,
+      "throughputMBs": 3.07,
+      "transport": "tauri-channel-binary"
+    },
+    {
+      "batchMs": 0,
+      "checksum": 580637500,
+      "decodeMsP50": 0,
+      "decodeMsP95": 0,
+      "decodeMsP99": 0,
+      "deliveryRatio": 1,
+      "durationMs": 2500,
+      "estOneWayLatencyMsP95": 0.5,
+      "ipcRttMsP50": 1,
+      "ipcRttMsP95": 1,
+      "ipcRttMsP99": 2,
+      "pingSamples": 124,
+      "recvBytes": 1200000,
+      "recvFrames": 25000,
+      "recvMsgs": 25000,
+      "sentFrames": 25000,
+      "sentMsgs": 25000,
+      "sustainedMsgsSec": 9999,
+      "targetRateMsgsSec": 10000,
+      "throughputMBs": 0.46,
+      "transport": "tauri-channel-binary"
+    },
+    {
+      "batchMs": 0,
+      "checksum": -1972417296,
+      "decodeMsP50": 0,
+      "decodeMsP95": 0,
+      "decodeMsP99": 0,
+      "deliveryRatio": 1,
+      "durationMs": 2000,
+      "estOneWayLatencyMsP95": 2,
+      "ipcRttMsP50": 1,
+      "ipcRttMsP95": 4,
+      "ipcRttMsP99": 13,
+      "pingSamples": 91,
+      "recvBytes": 4800000,
+      "recvFrames": 100000,
+      "recvMsgs": 100000,
+      "sentFrames": 100000,
+      "sentMsgs": 100000,
+      "sustainedMsgsSec": 49985,
+      "targetRateMsgsSec": 50000,
+      "throughputMBs": 2.29,
+      "transport": "tauri-channel-binary"
+    }
+  ],
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+}

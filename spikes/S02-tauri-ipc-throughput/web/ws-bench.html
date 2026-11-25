@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Allegedly S02 — Loopback Binary WebSocket Benchmark</title>
+  </head>
+  <body style="background:#0b0e14;color:#e2e8f0;font-family:monospace;padding:16px">
+    <h3>Allegedly S02 — Rust tokio-tungstenite Loopback WS + DataView Decode + 60fps rAF</h3>
+    <canvas id="hud" width="400" height="80" style="border:1px solid #334155"></canvas>
+    <script>
+      const MAGIC_ALG2 = 0x414c4732;
+      const HEADER_BYTES = 16;
+      const RECORD_BYTES = 32;
+
+      function percentile(sorted, p) {
+        if (!sorted.length) return 0;
+        const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+        return sorted[idx];
+      }
+
+      function decodeDeltaBinary(ab) {
+        const dv = new DataView(ab);
+        if (ab.byteLength < HEADER_BYTES) return { count: 0, checksum: 0 };
+        const magic = dv.getUint32(0, true);
+        if (magic !== MAGIC_ALG2) return { count: 0, checksum: -1 };
+        const count = dv.getUint32(4, true);
+        let checksum = 0;
+        let off = HEADER_BYTES;
+        for (let i = 0; i < count; i++) {
+          const priceTickLo = dv.getInt32(off + 16, true);
+          const qty = dv.getInt32(off + 24, true);
+          const flags = dv.getUint32(off + 28, true);
+          checksum = (checksum + priceTickLo + qty + (flags & 1)) | 0;
+          off += RECORD_BYTES;
+        }
+        return { count, checksum };
+      }
+
+      function decodeDeltaJson(text) {
+        const arr = JSON.parse(text);
+        let checksum = 0;
+        for (let i = 0; i < arr.length; i++) {
+          const m = arr[i];
+          checksum = (checksum + (m.price_tick | 0) + (m.qty | 0) + (m.flags & 1)) | 0;
+        }
+        return { count: arr.length, checksum };
+      }
+
+      function decodeBulkSoA(ab) {
+        const dv = new DataView(ab);
+        const magic = dv.getUint32(0, true);
+        const barCount = dv.getUint32(4, true);
+        if (magic !== MAGIC_ALG2) throw new Error('Bad bulk magic');
+        const stride = barCount * 8;
+        const times = new BigInt64Array(ab, HEADER_BYTES, barCount);
+        const opens = new BigInt64Array(ab, HEADER_BYTES + stride, barCount);
+        const highs = new BigInt64Array(ab, HEADER_BYTES + stride * 2, barCount);
+        const lows = new BigInt64Array(ab, HEADER_BYTES + stride * 3, barCount);
+        const closes = new BigInt64Array(ab, HEADER_BYTES + stride * 4, barCount);
+        const vols = new BigInt64Array(ab, HEADER_BYTES + stride * 5, barCount);
+        const check = Number(opens[0] + closes[barCount - 1] + highs[0] - lows[0] + vols[0] + (times[0] % 1000n));
+        return { barCount, byteLength: ab.byteLength, check };
+      }
+
+      const canvas = document.getElementById('hud');
+      const ctx = canvas.getContext('2d');
+      let hudTick = 0;
+
+      function startRafMonitor() {
+        let active = true;
+        const dts = [];
+        let last = performance.now();
+        function loop(now) {
+          if (!active) return;
+          const dt = now - last;
+          last = now;
+          dts.push(dt);
+          // Light 60fps canvas paint simulating active terminal HUD
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(0, 0, 400, 80);
+          ctx.fillStyle = '#22c55e';
+          ctx.fillRect((hudTick++ * 7) % 380, 20, 20, 40);
+          requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+        return () => {
+          active = false;
+          // Drop first warmup frame
+          const samples = dts.slice(1);
+          const total = samples.reduce((a, b) => a + b, 0);
+          const droppedOver20ms = samples.filter((x) => x > 20.0).length;
+          const droppedOver33ms = samples.filter((x) => x > 33.33).length;
+          samples.sort((a, b) => a - b);
+          return {
+            frames: samples.length,
+            effectiveFps: total > 0 ? +((samples.length / total) * 1000).toFixed(1) : 0,
+            frameMsP50: +percentile(samples, 50).toFixed(2),
+            frameMsP95: +percentile(samples, 95).toFixed(2),
+            frameMsP99: +percentile(samples, 99).toFixed(2),
+            frameMsMax: +(samples[samples.length - 1] ?? 0).toFixed(2),
+            droppedOver20ms,
+            droppedOver33ms,
+          };
+        };
+      }
+
+      function connectWs(url) {
+        return new Promise((resolve, reject) => {
+          const ws = new WebSocket(url);
+          ws.binaryType = 'arraybuffer';
+          ws.onopen = () => resolve(ws);
+          ws.onerror = (e) => reject(e);
+        });
+      }
+
+      window.__S02_WS__ = {
+        ready: true,
+        runSuite: async (wsUrl) => {
+          const ws = await connectWs(wsUrl);
+
+          // 1. Idle WS Ping RTT (100 samples)
+          const idleRtts = [];
+          for (let i = 0; i < 100; i++) {
+            const t0 = performance.now();
+            await new Promise((resolve) => {
+              ws.onmessage = () => resolve();
+              ws.send(JSON.stringify({ cmd: 'PING', id: i, client_ts: t0 }));
+            });
+            idleRtts.push(performance.now() - t0);
+          }
+          idleRtts.sort((a, b) => a - b);
+
+          // 2. Bulk 100k OHLCV bars: Binary SoA vs JSON over loopback WS
+          const bulkBinRuns = [];
+          for (let r = 0; r < 5; r++) {
+            const t0 = performance.now();
+            const ab = await new Promise((resolve) => {
+              ws.onmessage = (ev) => resolve(ev.data);
+              ws.send(JSON.stringify({ cmd: 'BULK_BIN', bars: 100000 }));
+            });
+            const tRecv = performance.now();
+            const dec = decodeBulkSoA(ab);
+            const tEnd = performance.now();
+            bulkBinRuns.push({
+              totalMs: tEnd - t0,
+              transferMs: tRecv - t0,
+              decodeMs: tEnd - tRecv,
+              bytes: dec.byteLength,
+              bars: dec.barCount,
+            });
+          }
+
+          const bulkJsonRuns = [];
+          for (let r = 0; r < 3; r++) {
+            const t0 = performance.now();
+            const txt = await new Promise((resolve) => {
+              ws.onmessage = (ev) => resolve(ev.data);
+              ws.send(JSON.stringify({ cmd: 'BULK_JSON', bars: 100000 }));
+            });
+            const tRecv = performance.now();
+            const arr = JSON.parse(txt);
+            const tEnd = performance.now();
+            bulkJsonRuns.push({
+              totalMs: tEnd - t0,
+              transferMs: tRecv - t0,
+              parseMs: tEnd - tRecv,
+              bytes: txt.length,
+              bars: arr.length,
+            });
+          }
+
+          // 3. Streaming Matrix: 10k, 50k, 100k msgs/sec (Batched 16ms vs Unbatched 0ms) + JSON baselines
+          const cases = [
+            { mode: 'bin', rate: 10000, batchMs: 16, durationMs: 3000 },
+            { mode: 'bin', rate: 50000, batchMs: 16, durationMs: 3000 },
+            { mode: 'bin', rate: 100000, batchMs: 16, durationMs: 3000 },
+            { mode: 'bin', rate: 10000, batchMs: 0, durationMs: 2500 },
+            { mode: 'bin', rate: 50000, batchMs: 0, durationMs: 2500 },
+            { mode: 'bin', rate: 100000, batchMs: 0, durationMs: 2500 },
+            { mode: 'json', rate: 10000, batchMs: 16, durationMs: 2500 },
+            { mode: 'json', rate: 50000, batchMs: 16, durationMs: 2500 },
+            { mode: 'json', rate: 10000, batchMs: 0, durationMs: 2000 },
+          ];
+
+          const streamResults = [];
+          for (const sc of cases) {
+            const stopRaf = startRafMonitor();
+            let recvMsgs = 0;
+            let recvFrames = 0;
+            let recvBytes = 0;
+            let checksum = 0;
+            const decodeMsSamples = [];
+            const pingRtts = [];
+            let pingSeq = 0;
+            const pingTimer = setInterval(() => {
+              if (ws.readyState === 1) {
+                ws.send(JSON.stringify({ cmd: 'PING', id: ++pingSeq, client_ts: performance.now() }));
+              }
+            }, 25);
+
+            const tStart = performance.now();
+            const doneInfo = await new Promise((resolve) => {
+              ws.onmessage = (ev) => {
+                if (typeof ev.data === 'string') {
+                  if (ev.data.startsWith('{"kind":"PONG"')) {
+                    const p = JSON.parse(ev.data);
+                    pingRtts.push(performance.now() - p.client_ts);
+                    return;
+                  }
+                  if (ev.data.startsWith('{"kind":"STREAM_DONE"')) {
+                    resolve(JSON.parse(ev.data));
+                    return;
+                  }
+                  const d0 = performance.now();
+                  const r = decodeDeltaJson(ev.data);
+                  decodeMsSamples.push(performance.now() - d0);
+                  recvMsgs += r.count;
+                  recvFrames++;
+                  recvBytes += ev.data.length;
+                  checksum = (checksum + r.checksum) | 0;
+                } else {
+                  const d0 = performance.now();
+                  const r = decodeDeltaBinary(ev.data);
+                  decodeMsSamples.push(performance.now() - d0);
+                  recvMsgs += r.count;
+                  recvFrames++;
+                  recvBytes += ev.data.byteLength;
+                  checksum = (checksum + r.checksum) | 0;
+                }
+              };
+              ws.send(
+                JSON.stringify({
+                  cmd: 'STREAM',
+                  mode: sc.mode,
+                  rate: sc.rate,
+                  batch_ms: sc.batchMs,
+                  duration_ms: sc.durationMs,
+                }),
+              );
+            });
+            clearInterval(pingTimer);
+            const wallMs = performance.now() - tStart;
+            const raf = stopRaf();
+
+            decodeMsSamples.sort((a, b) => a - b);
+            pingRtts.sort((a, b) => a - b);
+            const wallSec = Math.max(0.001, wallMs / 1000);
+
+            streamResults.push({
+              transport: sc.mode === 'bin' ? 'loopback-ws-binary' : 'loopback-ws-json',
+              targetRateMsgsSec: sc.rate,
+              batchMs: sc.batchMs,
+              durationMs: sc.durationMs,
+              sentMsgs: doneInfo.sent_msgs,
+              recvMsgs,
+              sentFrames: doneInfo.sent_frames,
+              recvFrames,
+              recvBytes,
+              wallMs: +wallMs.toFixed(1),
+              sustainedMsgsSec: Math.round(recvMsgs / wallSec),
+              throughputMBs: +((recvBytes / (1024 * 1024)) / wallSec).toFixed(2),
+              deliveryRatio: doneInfo.sent_msgs > 0 ? +(recvMsgs / doneInfo.sent_msgs).toFixed(4) : 0,
+              decodeMsP50: +percentile(decodeMsSamples, 50).toFixed(3),
+              decodeMsP95: +percentile(decodeMsSamples, 95).toFixed(3),
+              decodeMsP99: +percentile(decodeMsSamples, 99).toFixed(3),
+              rttMsP50: +percentile(pingRtts, 50).toFixed(3),
+              rttMsP95: +percentile(pingRtts, 95).toFixed(3),
+              rttMsP99: +percentile(pingRtts, 99).toFixed(3),
+              estOneWayLatencyMsP95: +(percentile(pingRtts, 95) / 2).toFixed(3),
+              raf,
+              checksum,
+            });
+            await new Promise((r) => setTimeout(r, 120));
+          }
+
+          ws.close();
+          return {
+            engine: 'Headless Brave (Chromium) + Rust tokio-tungstenite loopback WS',
+            idlePingRttMs: {
+              p50: +percentile(idleRtts, 50).toFixed(3),
+              p95: +percentile(idleRtts, 95).toFixed(3),
+              p99: +percentile(idleRtts, 99).toFixed(3),
+            },
+            bulk100kBinary: {
+              bytes: bulkBinRuns[0]?.bytes ?? 0,
+              bars: bulkBinRuns[0]?.bars ?? 0,
+              medianTotalMs: +percentile(bulkBinRuns.map((x) => x.totalMs).sort((a, b) => a - b), 50).toFixed(2),
+              p95TotalMs: +percentile(bulkBinRuns.map((x) => x.totalMs).sort((a, b) => a - b), 95).toFixed(2),
+              medianDecodeMs: +percentile(bulkBinRuns.map((x) => x.decodeMs).sort((a, b) => a - b), 50).toFixed(3),
+              runs: bulkBinRuns,
+            },
+            bulk100kJson: {
+              bytes: bulkJsonRuns[0]?.bytes ?? 0,
+              bars: bulkJsonRuns[0]?.bars ?? 0,
+              medianTotalMs: +percentile(bulkJsonRuns.map((x) => x.totalMs).sort((a, b) => a - b), 50).toFixed(2),
+              medianParseMs: +percentile(bulkJsonRuns.map((x) => x.parseMs).sort((a, b) => a - b), 50).toFixed(2),
+              runs: bulkJsonRuns,
+            },
+            streamResults,
+          };
+        },
+      };
+    </script>
+  </body>
+</html>

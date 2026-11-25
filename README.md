@@ -2,7 +2,7 @@
 
 > *"Allegedly a trading terminal."*
 
-**Allegedly** is a free (`$0` core), open-source (`Apache-2.0`), local-first, cross-platform trading terminal combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow, profile, and DOM analytical depth** — with total user sovereignty (zero forced cloud accounts, zero telemetry, zero indicator limits, BYO data & broker keys).
+**Allegedly** is a free (`$0` core), open-source (`Apache-2.0`), local-first desktop trading terminal (**macOS & Windows** first; Linux planned for the future) combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow, profile, and DOM analytical depth** — with total user sovereignty (zero forced cloud accounts, zero telemetry, zero indicator limits, BYO data & broker keys).
 
 > **Current Status:** **Phase 2 (Benchmark Spikes `S01`–`S08`)** — This repository currently holds the evidence-backed **Plan of Record** (structured as an Obsidian vault) and runnable benchmark spikes. Product implementation begins after Phase 5 Plan of Record sign-off.
 

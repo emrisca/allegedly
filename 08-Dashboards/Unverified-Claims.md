@@ -7,7 +7,7 @@ updated: 2026-11-24
 
 # Unverified Claims Dashboard
 
-> Consolidated at **Phase 1 Gate (`2026-11-24`)**. Every remaining `UNVERIFIED` item has an explicit owner and concrete verification path (Phase 2 spike measurement, human browser/login check, or attorney review).
+> Consolidated at **Phase 2 Gate (`2026-11-24`)**. Phase 2 spikes (`S01`–`S08`) resolved all core macOS `arm64` performance, binary-size, sync-drift, ingest, OMS, scripting, and 100M-tick replay unknowns. Every remaining `UNVERIFIED` item below has a concrete verification step for Phase 3/4 CI or pre-release review.
 
 ```dataview
 TABLE status, owner, updated
@@ -16,14 +16,14 @@ WHERE contains(string(status), "unverified") OR status = "in-progress"
 SORT file.name ASC
 ```
 
-## Phase 1 Consolidated `UNVERIFIED` Register
+## Remaining `UNVERIFIED` Register (Post-Phase 2)
 
-| Track | Unverified Item | Resolution Path | Target Phase |
+| Track / Spike | Remaining Unverified Item | Resolution Path | Target Phase |
 |---|---|---|---|
-| [[R01-Charting-Rendering]] | Exact live frame times & Linux WebKitGTK Wayland `Error 71` behavior for `200k`-cell heatmap + `5k`-cell footprint; LWC `v5.3` `subscribeVisibleLogicalRangeChange` paint-order timing | Measure empirically in Spikes `S01`–`S03` | Phase 2 |
-| [[R02-Shell-UI-Stack]] | Live `tauri::ipc::Channel<Response>` vs custom URI throughput & Dockview popout window IPC isolation; live USD pricing on JS-rendered Azure Artifact Signing page | Measure IPC/Dockview in Spike `S04`; open Azure pricing page in desktop browser only if paid Windows signing is ever needed | Phase 2 / Optional |
-| [[R03-Market-Data]] | Direct CME 2026/2027 Fee Schedule PDF binary (Akamai 403; figures cross-verified from indexed PDFs/brokers); Massive Futures native aggressor field; Finnhub free WS symbol cap; IBKR `$20/mo` waiver threshold; non-US crypto WS subscription caps | Human desktop browser verification (exact URLs logged in [[Provider-Capability-Matrix]]) prior to building optional paid/non-US adapters | Post-v0.1 / Optional |
-| [[R04-Execution-Brokers-Props]] | Behind-login Lucid Trading Plan Agreement & MFFU Live Funded API addendum; unpublished Rithmic ISV & CQG Enterprise conformance fees | Human account-holder check or partner inquiry only if those optional integrations are pursued (does not affect 4 `DO-NOT-BUILD` verdicts) | Post-v0.2 / Optional |
-| [[R05-Orderflow-Profile-Tooling]] | MotiveWave internal tie-breaker when dual-row Value Area candidate sums are strictly equal | Expose deterministic `va_algorithm: DualRowSteidlmayer \| SingleRow` with center-proximity tie-break | Resolved in Design |
-| [[R06-Scripting-Indicator-Engine]] & [[R07-Storage-Replay-Backtest]] | Exact stripped binary deltas (`wasmtime`, `rhai`, `mlua`/Luau, `parquet`, `datafusion`, `duckdb`); Rhai vs Luau 100k-bar throughput & GC pause p99; real Parquet+Zstd MB/day compression ratios; MotiveWave raw tick CSV export column order | Measure binary sizes, throughput, and compression in Spikes `S07`–`S08`; inspect MotiveWave CSV export before building optional importer preset | Phase 2 / Optional |
-| [[R08-Prior-Art]] & [[R09-Legal-Licensing]] | Formal USPTO TSDR/EUIPO/WIPO phonetic & conceptual trademark clearance for candidate names; attorney sign-off on Pine-inspired clean-room spec, `nautilus_trader` LGPL sidecar boundary, Sierra `.scid` risk, and CFTC Rule 4.41 disclaimers; `hftbacktest` & `openbq-org` 2026 maintenance velocity | Qualified IP/securities counsel before public launch; re-check GitHub activity before direct dependency integration | Pre-Public Release |
+| [[S01-Chart-WebGL-Sync]] – [[S04-CSS-Layout-Perf]], [[S07-Scripting-Sandbox]], [[S08-Storage-100M-Replay]] | **Windows 10/11 (`WebView2` + `x86_64-pc-windows-msvc`)** live WebGL2 frame times, Tauri IPC throughput, pop-out window capabilities, `luau0-src` C++17 cross-build, and packaged `.msi` size *(Linux deferred to post-v1.0)* | Run existing spike benchmarks + packaged `.msi` build on GitHub Actions `windows-latest` | Phase 3 / v0.1 CI |
+| [[S02-Tauri-IPC-Throughput]] | Native macOS `WKWebView` **full XPC process-tree RAM** (including `launchd`-parented WebKit helpers), lazy-init packaged `.app` cold start (`< 1.5 s`), and visible-window `WKWebView` `rAF` drop count | Measure on packaged `.app` bundle with lazy fixture loading (fixing S02's eager `200k`-bar `main()` startup) | Phase 3 / v0.1 |
+| [[S05-Live-Ingest-TickVault]] | 30-minute unattended peak-volatility soak (`SOL/USD`, depth=100, `>= 1,000` trades/venue) + real user-downloaded Databento `.dbn.zst` CME file (`$125` free credits) | Promote soak to Phase 3/4 CI; optional human smoke test with portal `.dbn.zst` sample | Phase 3 / v0.1 |
+| [[S06-OMS-Paper-Execution]] | Live-network smoke test against `paper-api.alpaca.markets/v2` & optional tastytrade Certification Sandbox | Intentionally skipped in Phase 2 (`Constraints` §3 zero-account/zero-network rail); run opt-in user-env smoke test in v0.2 | v0.2 (Opt-in) |
+| [[S07-Scripting-Sandbox]] & [[S08-Storage-100M-Replay]] | `TA-Lib v0.8.3` C oracle cross-check (4-runtime parity already verified at `0.000e0` vs Native Rust); 10M-row L2 MBP delta Parquet archive compression/seek | Add `TA-Lib` golden fixture parity test & L2 snapshot archive benchmark in Phase 3/4 | Phase 3 / v0.1 |
+| [[R03-Market-Data]] & [[R04-Execution-Brokers-Props]] | Direct CME PDF binary (Akamai 403), Massive Futures native aggressor field, Finnhub WS cap, behind-login Lucid/MFFU addenda, Rithmic/CQG enterprise fees | Human browser verification only if those optional paid/post-MVP adapters are pursued | Post-v0.2 / Optional |
+| [[R08-Prior-Art]] & [[R09-Legal-Licensing]] | Formal trademark attorney clearance for **"Allegedly"** (`allegedly.market` / `allegedlyapp.com`), Pine clean-room spec, `nautilus_trader` LGPL sidecar boundary, Sierra `.scid` prohibition, CFTC Rule 4.41 disclaimers | Qualified IP/securities counsel prior to public marketing / binary release | Pre-Public Release |

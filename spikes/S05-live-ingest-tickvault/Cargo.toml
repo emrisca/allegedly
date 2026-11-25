@@ -1,0 +1,24 @@
+[package]
+name = "allegedly-s05-live-ingest-tickvault"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0 OR MIT"
+description = "Allegedly Phase 2 Spike S05: Live Market Data Ingest, Side Normalization & Local Tick-Vault Persistence"
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+crc32fast = "1.5"
+dbn = { version = "0.75", default-features = true }
+futures-util = "0.3"
+lzma-rs = "0.3"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
+tokio = { version = "1.44", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
+zstd = "0.14"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

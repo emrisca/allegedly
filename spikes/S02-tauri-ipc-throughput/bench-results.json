@@ -1,0 +1,606 @@
+{
+  "timestamp": "2026-11-25T05:24:39.957Z",
+  "cargoTargetDir": "/Users/abelmora/.cache/allegedly-target",
+  "platformNote": "Measured on macOS Apple M2 host only. Linux WebKitGTK and Windows WebView2 remain UNVERIFIED.",
+  "loopbackWs": {
+    "engine": "Headless Brave (Chromium) + Rust tokio-tungstenite loopback WS",
+    "idlePingRttMs": {
+      "p50": 0.1,
+      "p95": 0.4,
+      "p99": 1.6
+    },
+    "bulk100kBinary": {
+      "bytes": 4800016,
+      "bars": 100000,
+      "medianTotalMs": 19.5,
+      "p95TotalMs": 20.5,
+      "medianDecodeMs": 0,
+      "runs": [
+        {
+          "totalMs": 17.800000000745058,
+          "transferMs": 17.200000002980232,
+          "decodeMs": 0.5999999977648258,
+          "bytes": 4800016,
+          "bars": 100000
+        },
+        {
+          "totalMs": 19.5,
+          "transferMs": 19.5,
+          "decodeMs": 0,
+          "bytes": 4800016,
+          "bars": 100000
+        },
+        {
+          "totalMs": 18.300000000745058,
+          "transferMs": 18.300000000745058,
+          "decodeMs": 0,
+          "bytes": 4800016,
+          "bars": 100000
+        },
+        {
+          "totalMs": 20.100000001490116,
+          "transferMs": 20,
+          "decodeMs": 0.10000000149011612,
+          "bytes": 4800016,
+          "bars": 100000
+        },
+        {
+          "totalMs": 20.5,
+          "transferMs": 20.5,
+          "decodeMs": 0,
+          "bytes": 4800016,
+          "bars": 100000
+        }
+      ]
+    },
+    "bulk100kJson": {
+      "bytes": 6568026,
+      "bars": 100000,
+      "medianTotalMs": 55.9,
+      "medianParseMs": 13.3,
+      "runs": [
+        {
+          "totalMs": 40.5,
+          "transferMs": 24.099999997764826,
+          "parseMs": 16.400000002235174,
+          "bytes": 6568026,
+          "bars": 100000
+        },
+        {
+          "totalMs": 55.899999998509884,
+          "transferMs": 43.599999997764826,
+          "parseMs": 12.300000000745058,
+          "bytes": 6568026,
+          "bars": 100000
+        },
+        {
+          "totalMs": 61.30000000074506,
+          "transferMs": 48,
+          "parseMs": 13.300000000745058,
+          "bytes": 6568026,
+          "bars": 100000
+        }
+      ]
+    },
+    "streamResults": [
+      {
+        "transport": "loopback-ws-binary",
+        "targetRateMsgsSec": 10000,
+        "batchMs": 16,
+        "durationMs": 3000,
+        "sentMsgs": 30240,
+        "recvMsgs": 30240,
+        "sentFrames": 189,
+        "recvFrames": 189,
+        "recvBytes": 970704,
+        "wallMs": 3011.1,
+        "sustainedMsgsSec": 10043,
+        "throughputMBs": 0.31,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0.1,
+        "decodeMsP99": 0.1,
+        "rttMsP50": 0.4,
+        "rttMsP95": 0.7,
+        "rttMsP99": 2.7,
+        "estOneWayLatencyMsP95": 0.35,
+        "raf": {
+          "frames": 180,
+          "effectiveFps": 59.7,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.7,
+          "frameMsP99": 16.8,
+          "frameMsMax": 33.3,
+          "droppedOver20ms": 1,
+          "droppedOver33ms": 0
+        },
+        "checksum": 702335720
+      },
+      {
+        "transport": "loopback-ws-binary",
+        "targetRateMsgsSec": 50000,
+        "batchMs": 16,
+        "durationMs": 3000,
+        "sentMsgs": 151200,
+        "recvMsgs": 151200,
+        "sentFrames": 189,
+        "recvFrames": 189,
+        "recvBytes": 4841424,
+        "wallMs": 3010.3,
+        "sustainedMsgsSec": 50228,
+        "throughputMBs": 1.53,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0.1,
+        "decodeMsP99": 0.1,
+        "rttMsP50": 0.4,
+        "rttMsP95": 0.7,
+        "rttMsP99": 0.8,
+        "estOneWayLatencyMsP95": 0.35,
+        "raf": {
+          "frames": 181,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.7,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": -783271696
+      },
+      {
+        "transport": "loopback-ws-binary",
+        "targetRateMsgsSec": 100000,
+        "batchMs": 16,
+        "durationMs": 3000,
+        "sentMsgs": 302400,
+        "recvMsgs": 302400,
+        "sentFrames": 189,
+        "recvFrames": 189,
+        "recvBytes": 9679824,
+        "wallMs": 3011,
+        "sustainedMsgsSec": 100432,
+        "throughputMBs": 3.07,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0.1,
+        "decodeMsP99": 0.1,
+        "rttMsP50": 0.4,
+        "rttMsP95": 0.9,
+        "rttMsP99": 0.9,
+        "estOneWayLatencyMsP95": 0.45,
+        "raf": {
+          "frames": 181,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.8,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": -1566543392
+      },
+      {
+        "transport": "loopback-ws-binary",
+        "targetRateMsgsSec": 10000,
+        "batchMs": 0,
+        "durationMs": 2500,
+        "sentMsgs": 25010,
+        "recvMsgs": 25010,
+        "sentFrames": 25010,
+        "recvFrames": 25010,
+        "recvBytes": 1200480,
+        "wallMs": 2501.1,
+        "sustainedMsgsSec": 10000,
+        "throughputMBs": 0.46,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "rttMsP50": 0.3,
+        "rttMsP95": 0.6,
+        "rttMsP99": 2.7,
+        "estOneWayLatencyMsP95": 0.3,
+        "raf": {
+          "frames": 150,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.7,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": 580868605
+      },
+      {
+        "transport": "loopback-ws-binary",
+        "targetRateMsgsSec": 50000,
+        "batchMs": 0,
+        "durationMs": 2500,
+        "sentMsgs": 125050,
+        "recvMsgs": 125050,
+        "sentFrames": 125050,
+        "recvFrames": 125050,
+        "recvBytes": 6002400,
+        "wallMs": 2503.2,
+        "sustainedMsgsSec": 49956,
+        "throughputMBs": 2.29,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "rttMsP50": 1,
+        "rttMsP95": 1.6,
+        "rttMsP99": 5.8,
+        "estOneWayLatencyMsP95": 0.8,
+        "raf": {
+          "frames": 151,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.7,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": -1390622271
+      },
+      {
+        "transport": "loopback-ws-binary",
+        "targetRateMsgsSec": 100000,
+        "batchMs": 0,
+        "durationMs": 2500,
+        "sentMsgs": 250000,
+        "recvMsgs": 250000,
+        "sentFrames": 250000,
+        "recvFrames": 250000,
+        "recvBytes": 12000000,
+        "wallMs": 2502.4,
+        "sustainedMsgsSec": 99904,
+        "throughputMBs": 4.57,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "rttMsP50": 1.9,
+        "rttMsP95": 5.7,
+        "rttMsP99": 8.3,
+        "estOneWayLatencyMsP95": 2.85,
+        "raf": {
+          "frames": 150,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.8,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": 1511407704
+      },
+      {
+        "transport": "loopback-ws-json",
+        "targetRateMsgsSec": 10000,
+        "batchMs": 16,
+        "durationMs": 2500,
+        "sentMsgs": 25280,
+        "recvMsgs": 25280,
+        "sentFrames": 158,
+        "recvFrames": 158,
+        "recvBytes": 1857016,
+        "wallMs": 2514.2,
+        "sustainedMsgsSec": 10055,
+        "throughputMBs": 0.7,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0.2,
+        "decodeMsP99": 0.2,
+        "rttMsP50": 0.4,
+        "rttMsP95": 0.9,
+        "rttMsP99": 3.8,
+        "estOneWayLatencyMsP95": 0.45,
+        "raf": {
+          "frames": 151,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.8,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": 587135540
+      },
+      {
+        "transport": "loopback-ws-json",
+        "targetRateMsgsSec": 50000,
+        "batchMs": 16,
+        "durationMs": 2500,
+        "sentMsgs": 126400,
+        "recvMsgs": 126400,
+        "sentFrames": 158,
+        "recvFrames": 158,
+        "recvBytes": 9355352,
+        "wallMs": 2515,
+        "sustainedMsgsSec": 50258,
+        "throughputMBs": 3.55,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0.2,
+        "decodeMsP95": 0.3,
+        "decodeMsP99": 0.3,
+        "rttMsP50": 0.4,
+        "rttMsP95": 0.6,
+        "rttMsP99": 1.3,
+        "estOneWayLatencyMsP95": 0.3,
+        "raf": {
+          "frames": 151,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.8,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": -1359264096
+      },
+      {
+        "transport": "loopback-ws-json",
+        "targetRateMsgsSec": 10000,
+        "batchMs": 0,
+        "durationMs": 2000,
+        "sentMsgs": 20010,
+        "recvMsgs": 20010,
+        "sentFrames": 20010,
+        "recvFrames": 20010,
+        "recvBytes": 1485735,
+        "wallMs": 2001.7,
+        "sustainedMsgsSec": 9997,
+        "throughputMBs": 0.71,
+        "deliveryRatio": 1,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "rttMsP50": 0.4,
+        "rttMsP95": 0.8,
+        "rttMsP99": 1.3,
+        "estOneWayLatencyMsP95": 0.4,
+        "raf": {
+          "frames": 120,
+          "effectiveFps": 60,
+          "frameMsP50": 16.7,
+          "frameMsP95": 16.8,
+          "frameMsP99": 16.8,
+          "frameMsMax": 16.8,
+          "droppedOver20ms": 0,
+          "droppedOver33ms": 0
+        },
+        "checksum": 464741105
+      }
+    ],
+    "rustServerResource": {
+      "peakRssMB": 35.59,
+      "peakCpuPct": 35.4,
+      "samples": 55
+    },
+    "browserProcessTree": {
+      "processCount": 6,
+      "totalRssMB": 622.33
+    },
+    "errors": []
+  },
+  "nativeTauriWkWebView": {
+    "bulk100kBinary": {
+      "bars": 100000,
+      "bytes": 4800016,
+      "medianDecodeMs": 0,
+      "medianTotalMs": 3,
+      "p95TotalMs": 5,
+      "runs": [
+        {
+          "bars": 100000,
+          "bytes": 4800016,
+          "decodeMs": 1,
+          "ipcMs": 4,
+          "totalMs": 5
+        },
+        {
+          "bars": 100000,
+          "bytes": 4800016,
+          "decodeMs": 0,
+          "ipcMs": 3,
+          "totalMs": 3
+        },
+        {
+          "bars": 100000,
+          "bytes": 4800016,
+          "decodeMs": 0,
+          "ipcMs": 5,
+          "totalMs": 5
+        },
+        {
+          "bars": 100000,
+          "bytes": 4800016,
+          "decodeMs": 0,
+          "ipcMs": 2,
+          "totalMs": 2
+        },
+        {
+          "bars": 100000,
+          "bytes": 4800016,
+          "decodeMs": 0,
+          "ipcMs": 2,
+          "totalMs": 2
+        }
+      ]
+    },
+    "bulk100kJson": {
+      "bars": 100000,
+      "medianTotalMs": 29,
+      "runs": [
+        {
+          "bars": 100000,
+          "sampleClose": 24310,
+          "totalMs": 35
+        },
+        {
+          "bars": 100000,
+          "sampleClose": 24310,
+          "totalMs": 29
+        },
+        {
+          "bars": 100000,
+          "sampleClose": 24310,
+          "totalMs": 28
+        }
+      ]
+    },
+    "coldStartToJsReadyMs": 2330.99,
+    "engine": "Native Tauri v2 WKWebView (macOS, visible=false Accessory)",
+    "idlePingRttMs": {
+      "p50": 0,
+      "p95": 1,
+      "p99": 10
+    },
+    "nativeProcessTree": {
+      "processCount": 2,
+      "processes": [
+        {
+          "comm": "/Users/abelmora/.cache/allegedly-target/release/s02-tauri-ipc",
+          "pid": 37273,
+          "rssMB": 110.19
+        },
+        {
+          "comm": "ps",
+          "pid": 37297,
+          "rssMB": 1.53
+        }
+      ],
+      "rootPid": 37273,
+      "totalRssMB": 111.72
+    },
+    "rafNote": "rAF frame-drop telemetry skipped in hidden WKWebView (AppKit suppresses VSync for visible=false windows); measured in Brave harness.",
+    "streamResults": [
+      {
+        "batchMs": 16,
+        "checksum": 702335720,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 1,
+        "deliveryRatio": 1,
+        "durationMs": 3000,
+        "estOneWayLatencyMsP95": 1,
+        "ipcRttMsP50": 1,
+        "ipcRttMsP95": 2,
+        "ipcRttMsP99": 2,
+        "pingSamples": 144,
+        "recvBytes": 970704,
+        "recvFrames": 189,
+        "recvMsgs": 30240,
+        "sentFrames": 189,
+        "sentMsgs": 30240,
+        "sustainedMsgsSec": 10049,
+        "targetRateMsgsSec": 10000,
+        "throughputMBs": 0.31,
+        "transport": "tauri-channel-binary"
+      },
+      {
+        "batchMs": 16,
+        "checksum": -783271696,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "deliveryRatio": 1,
+        "durationMs": 3000,
+        "estOneWayLatencyMsP95": 1,
+        "ipcRttMsP50": 1,
+        "ipcRttMsP95": 2,
+        "ipcRttMsP99": 2,
+        "pingSamples": 145,
+        "recvBytes": 4841424,
+        "recvFrames": 189,
+        "recvMsgs": 151200,
+        "sentFrames": 189,
+        "sentMsgs": 151200,
+        "sustainedMsgsSec": 50227,
+        "targetRateMsgsSec": 50000,
+        "throughputMBs": 1.53,
+        "transport": "tauri-channel-binary"
+      },
+      {
+        "batchMs": 16,
+        "checksum": -1566543392,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "deliveryRatio": 1,
+        "durationMs": 3000,
+        "estOneWayLatencyMsP95": 1,
+        "ipcRttMsP50": 1,
+        "ipcRttMsP95": 2,
+        "ipcRttMsP99": 3,
+        "pingSamples": 144,
+        "recvBytes": 9679824,
+        "recvFrames": 189,
+        "recvMsgs": 302400,
+        "sentFrames": 189,
+        "sentMsgs": 302400,
+        "sustainedMsgsSec": 100450,
+        "targetRateMsgsSec": 100000,
+        "throughputMBs": 3.07,
+        "transport": "tauri-channel-binary"
+      },
+      {
+        "batchMs": 0,
+        "checksum": 580637500,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "deliveryRatio": 1,
+        "durationMs": 2500,
+        "estOneWayLatencyMsP95": 0.5,
+        "ipcRttMsP50": 1,
+        "ipcRttMsP95": 1,
+        "ipcRttMsP99": 2,
+        "pingSamples": 124,
+        "recvBytes": 1200000,
+        "recvFrames": 25000,
+        "recvMsgs": 25000,
+        "sentFrames": 25000,
+        "sentMsgs": 25000,
+        "sustainedMsgsSec": 9999,
+        "targetRateMsgsSec": 10000,
+        "throughputMBs": 0.46,
+        "transport": "tauri-channel-binary"
+      },
+      {
+        "batchMs": 0,
+        "checksum": -1972417296,
+        "decodeMsP50": 0,
+        "decodeMsP95": 0,
+        "decodeMsP99": 0,
+        "deliveryRatio": 1,
+        "durationMs": 2000,
+        "estOneWayLatencyMsP95": 2,
+        "ipcRttMsP50": 1,
+        "ipcRttMsP95": 4,
+        "ipcRttMsP99": 13,
+        "pingSamples": 91,
+        "recvBytes": 4800000,
+        "recvFrames": 100000,
+        "recvMsgs": 100000,
+        "sentFrames": 100000,
+        "sentMsgs": 100000,
+        "sustainedMsgsSec": 49985,
+        "targetRateMsgsSec": 50000,
+        "throughputMBs": 2.29,
+        "transport": "tauri-channel-binary"
+      }
+    ],
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+  },
+  "tauriError": null
+}

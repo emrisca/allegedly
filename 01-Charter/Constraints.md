@@ -13,7 +13,7 @@ code_refs: []
 1. **FOSS or die.** Zero proprietary runtime dependencies in core. Zero copied code, assets, icons, docs, or trademarks from TradingView or MotiveWave. Zero decompiling or reverse-engineering MotiveWave (EULA). Clean-room reimplementation from public docs, screenshots, and domain math only.
 2. **$0 core.** A user with zero paid subscriptions gets a genuinely useful terminal. Paid data feeds and brokers are optional plug-ins, never load-bearing.
 3. **Local-first & sovereign.** All data, settings, layouts, scripts, and history live on disk in open formats. Full import/export. Offline capable. Zero telemetry without explicit opt-in. No account required.
-4. **Truly cross-platform.** macOS (Apple Silicon + Intel), Windows 10/11, and Linux (X11 + Wayland, including at least one non-Ubuntu distro). No second-class platform.
+4. **Cross-platform desktop (macOS + Windows first; Linux future).** Initial target (`v0.1`–`v1.0`, locked by Abel `2026-11-24`): **macOS (Apple Silicon + Intel)** and **Windows 10/11** as first-class platforms with zero second-class compromises. **Linux (X11 + Wayland)** is deferred to a future post-v1.0 milestone; keep core Rust + Web architecture portable (WebGL2 baseline, `TransportAdapter`) so Linux can be enabled later without a rewrite.
 5. **Lightweight, with measured budgets** (validated or revised with evidence in Phase 2):
    - Installer `< 40 MB`
    - Cold start `< 2 s`

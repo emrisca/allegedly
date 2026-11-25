@@ -17,7 +17,7 @@ code_refs: []
 
 ❓ **Q1** - **Primary OS & Cross-Platform Verification Path**: We verified your dev machine is **macOS 26.6.2 (Apple Silicon `arm64`)** with `git`, `node`, `pnpm`, `cargo`/`rustc`, `python3`, `uv`, and `gh` already installed. Should we treat **macOS Apple Silicon** as your primary daily-driver OS, while verifying **Linux (X11 + Wayland, incl. a non-Ubuntu distro)** and **Windows 10/11** via local VMs and GitHub Actions CI matrices?
 
-➡️ Yes — treat macOS Apple Silicon as primary dev/trading OS, and validate Linux (Ubuntu + Fedora/Arch on X11 & Wayland) and Windows 10/11 through local VM spikes + CI.
+➡️ **Resolved by Abel (`2026-11-24`):** Support **macOS** (primary dev OS) and **Windows 10/11** for now (`v0.1`–`v1.0`); defer **Linux** to a future post-v1.0 milestone.
 
 ---
 
@@ -58,7 +58,7 @@ code_refs: []
 
 ❓ **Q7** - **Open-Source Community Ambitions & Mobile/Tablet Scope**: Should we plan Allegedly as a **public FOSS project from day one** (clean-room discipline, strict license hygiene, trademark-safe rename options evaluated in R09) while keeping **v0.1–v1.0 strictly Desktop-only** (macOS, Windows, Linux — treating mobile/tablet as explicitly out-of-scope for v1.0)?
 
-➡️ Yes — public FOSS standards from day one, Desktop-only through v1.0 (mobile/tablet explicitly out of scope until post-v1.0).
+➡️ **Resolved by Abel (`2026-11-24`):** Public FOSS (`Apache-2.0`, `emrisca/allegedly`), Desktop-only (**macOS + Windows** through v1.0; Linux and mobile/tablet deferred to future milestones).
 
 ---
 

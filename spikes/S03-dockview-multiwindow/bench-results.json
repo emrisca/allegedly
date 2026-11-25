@@ -1,0 +1,156 @@
+{
+  "timestamp": "2026-11-25T05:14:40.221Z",
+  "licenseAudit": {
+    "dockviewVersion": "8.9.1",
+    "dockviewLicense": "MIT",
+    "dockviewReactVersion": "8.9.1",
+    "dockviewReactLicense": "MIT",
+    "dockviewCoreVersion": "transitive",
+    "dockviewCoreLicense": "MIT (via pnpm store)",
+    "hasEnterpriseInPackageJson": false,
+    "hasEnterpriseInLockfile": false,
+    "enterpriseDirsFound": [],
+    "cleanMitOnly": true
+  },
+  "initialLayout": {
+    "panelIds": [
+      "blotter",
+      "chart-btc",
+      "chart-cl",
+      "chart-es",
+      "chart-nq",
+      "dom-es",
+      "inspector",
+      "tape-es",
+      "watchlist"
+    ],
+    "groupCount": 8,
+    "jsonBytes": 2376,
+    "mountMs": 68.39999999850988,
+    "lifecycleStats": {
+      "mountedCount": 9,
+      "unmountedCount": 0,
+      "activeHeavyPanels": 4,
+      "activeChannels": 9
+    }
+  },
+  "roundTrip": {
+    "iterations": 10,
+    "serializeMsP50": 0.09999999776482582,
+    "serializeMsP95": 0.20000000298023224,
+    "restoreMsP50": 2.399999998509884,
+    "restoreMsP95": 5.300000000745058,
+    "fidelityAllPassed": true,
+    "panelCountBefore": 9,
+    "panelCountAfter": 9,
+    "jsonBytes": 2376
+  },
+  "popoutInfo": {
+    "supported": true,
+    "popoutWindowOpened": true,
+    "popoutGroupCount": 1,
+    "error": null,
+    "playwrightCapturedPopup": true,
+    "popupUrl": "http://127.0.0.1:4173/popout.html"
+  },
+  "crossWindowSync": [
+    {
+      "transport": "broadcast",
+      "sent": 200,
+      "received": 200,
+      "rttMsP50": 0.30000000074505806,
+      "rttMsP95": 0.6000000014901161,
+      "rttMsP99": 1.699999999254942,
+      "rttMsMax": 1.699999999254942,
+      "oneWayEstP95": 0.30000000074505806
+    },
+    {
+      "transport": "ws-hub",
+      "sent": 200,
+      "received": 200,
+      "rttMsP50": 0.20000000298023224,
+      "rttMsP95": 0.6000000014901161,
+      "rttMsP99": 3,
+      "rttMsMax": 12.699999999254942,
+      "oneWayEstP95": 0.30000000074505806
+    }
+  ],
+  "leakSummary": {
+    "baseline": {
+      "jsHeapMB": 5.104,
+      "domNodes": 423,
+      "jsListeners": 1890
+    },
+    "final": {
+      "jsHeapMB": 5.213,
+      "domNodes": 423,
+      "jsListeners": 1890
+    },
+    "heapDeltaMB": 0.109,
+    "domNodesDelta": 0,
+    "listenersDelta": 0,
+    "finalLifecycleStats": {
+      "mountedCount": 121,
+      "unmountedCount": 112,
+      "activeHeavyPanels": 4,
+      "activeChannels": 9
+    },
+    "cycleSamples": [
+      {
+        "cycle": 1,
+        "jsHeapMB": 5.134,
+        "domNodes": 423,
+        "jsListeners": 1890,
+        "mountedCount": 102,
+        "unmountedCount": 93,
+        "activeHeavyPanels": 4,
+        "activeChannels": 9
+      },
+      {
+        "cycle": 5,
+        "jsHeapMB": 5.124,
+        "domNodes": 423,
+        "jsListeners": 1890,
+        "mountedCount": 106,
+        "unmountedCount": 97,
+        "activeHeavyPanels": 4,
+        "activeChannels": 9
+      },
+      {
+        "cycle": 10,
+        "jsHeapMB": 5.165,
+        "domNodes": 423,
+        "jsListeners": 1890,
+        "mountedCount": 111,
+        "unmountedCount": 102,
+        "activeHeavyPanels": 4,
+        "activeChannels": 9
+      },
+      {
+        "cycle": 15,
+        "jsHeapMB": 5.178,
+        "domNodes": 423,
+        "jsListeners": 1890,
+        "mountedCount": 116,
+        "unmountedCount": 107,
+        "activeHeavyPanels": 4,
+        "activeChannels": 9
+      },
+      {
+        "cycle": 20,
+        "jsHeapMB": 5.215,
+        "domNodes": 423,
+        "jsListeners": 1890,
+        "mountedCount": 121,
+        "unmountedCount": 112,
+        "activeHeavyPanels": 4,
+        "activeChannels": 9
+      }
+    ],
+    "browserProcessTree": {
+      "processCount": 6,
+      "totalRssMB": 553.28
+    }
+  },
+  "errors": []
+}

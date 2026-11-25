@@ -1,0 +1,23 @@
+[package]
+name = "s02-tauri-ipc-throughput"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "s02-ws-server"
+path = "src/ws_server.rs"
+
+[[bin]]
+name = "s02-tauri-ipc"
+path = "src/tauri_bench.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

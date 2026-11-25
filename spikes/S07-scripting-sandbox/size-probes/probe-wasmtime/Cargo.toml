@@ -1,0 +1,7 @@
+[package]
+name = "probe-wasmtime"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wasmtime = { version = "51.0.0", default-features = false, features = ["cranelift", "runtime", "std"] }
