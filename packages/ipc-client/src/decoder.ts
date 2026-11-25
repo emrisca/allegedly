@@ -541,3 +541,70 @@ export function formatFixedE9(valueE9: bigint, decimals = 2): string {
   const frac = decimals > 0 ? `.${fracRaw.slice(0, Math.min(decimals, 9))}` : "";
   return `${negative ? "-" : ""}${whole.toString()}${frac}`;
 }
+
+export function encodeFootprintDelta(
+  streamId: number,
+  sendNs: bigint,
+  cells: readonly FootprintCell[],
+): ArrayBuffer {
+  const buf = new ArrayBuffer(HEADER_BYTES + cells.length * 32);
+  const dv = new DataView(buf);
+  writeFrameHeader(dv, 0, FrameType.LIVE_FOOTPRINT_DELTA, streamId, cells.length, sendNs);
+  for (let i = 0; i < cells.length; i++) {
+    const base = HEADER_BYTES + i * 32;
+    const c = cells[i];
+    dv.setBigInt64(base, c.priceTick, true);
+    dv.setBigInt64(base + 8, c.bidVolE9, true);
+    dv.setBigInt64(base + 16, c.askVolE9, true);
+    dv.setUint32(base + 24, c.tradeCount, true);
+    dv.setUint8(base + 28, c.imbalanceFlags);
+    dv.setUint8(base + 29, 0);
+    dv.setUint16(base + 30, 0, true);
+  }
+  return buf;
+}
+
+export function encodeVolumeProfile(
+  streamId: number,
+  sendNs: bigint,
+  summary: VolumeProfileSummary,
+  bins: readonly VolumeProfileBin[],
+): ArrayBuffer {
+  const buf = new ArrayBuffer(HEADER_BYTES + 24 + bins.length * 24);
+  const dv = new DataView(buf);
+  writeFrameHeader(dv, 0, FrameType.VOLUME_PROFILE_SOA, streamId, bins.length, sendNs);
+  dv.setBigInt64(HEADER_BYTES, summary.pocPrice, true);
+  dv.setBigInt64(HEADER_BYTES + 8, summary.vahPrice, true);
+  dv.setBigInt64(HEADER_BYTES + 16, summary.valPrice, true);
+  for (let i = 0; i < bins.length; i++) {
+    const base = HEADER_BYTES + 24 + i * 24;
+    const b = bins[i];
+    dv.setBigInt64(base, b.priceTick, true);
+    dv.setBigInt64(base + 8, b.bidVolE9, true);
+    dv.setBigInt64(base + 16, b.askVolE9, true);
+  }
+  return buf;
+}
+
+export function encodeTpoProfileBitmask(
+  streamId: number,
+  sendNs: bigint,
+  tpoHeader: TpoHeader,
+  rows: readonly TpoRow128[],
+): ArrayBuffer {
+  const buf = new ArrayBuffer(HEADER_BYTES + 8 + rows.length * 24);
+  const dv = new DataView(buf);
+  writeFrameHeader(dv, 0, FrameType.TPO_PROFILE_BITMASK, streamId, rows.length, sendNs);
+  dv.setUint16(HEADER_BYTES, tpoHeader.wordsPerRow, true);
+  dv.setUint16(HEADER_BYTES + 2, tpoHeader.periodCount, true);
+  dv.setUint32(HEADER_BYTES + 4, 0, true);
+  const mask64 = 0xffffffffffffffffn;
+  for (let i = 0; i < rows.length; i++) {
+    const base = HEADER_BYTES + 8 + i * 24;
+    const r = rows[i];
+    dv.setBigInt64(base, r.priceTick, true);
+    dv.setBigUint64(base + 8, r.periodMask & mask64, true);
+    dv.setBigUint64(base + 16, (r.periodMask >> 64n) & mask64, true);
+  }
+  return buf;
+}

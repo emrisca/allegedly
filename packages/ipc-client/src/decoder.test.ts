@@ -211,11 +211,14 @@ describe("ALG2 v1 binary wire decoder (T07)", () => {
     expect(afterKill.orders[0].status).toBe("canceled");
 
     const frames = sim.stepFrames(1);
-    expect(frames).toHaveLength(4);
+    expect(frames).toHaveLength(7);
     expect(decodeLiveTradeBatch(frames[0]).trades).toHaveLength(4);
     expect(decodeLiveBarUpdateBatch(frames[1]).bars).toHaveLength(1);
-    expect(decodeLiveL2BookBatch(frames[2]).levels).toHaveLength(24);
-    expect(decodeStreamStatusFrame(frames[3]).status.bookState).toBe(BookState.Live);
+    expect(decodeFootprintDelta(frames[2]).cells).toHaveLength(11);
+    expect(decodeVolumeProfile(frames[3]).bins).toHaveLength(11);
+    expect(decodeTpoProfileBitmask(frames[4]).rows).toHaveLength(11);
+    expect(decodeLiveL2BookBatch(frames[5]).levels).toHaveLength(24);
+    expect(decodeStreamStatusFrame(frames[6]).status.bookState).toBe(BookState.Live);
     sim.dispose();
   });
 });

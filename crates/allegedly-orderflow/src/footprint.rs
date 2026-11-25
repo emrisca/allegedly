@@ -150,4 +150,31 @@ impl FootprintSlabArena {
     pub fn active_cells_snapshot(&self) -> Vec<FootprintCell> {
         self.active_cells.values().copied().collect()
     }
+
+    /// Exact heap memory consumed by contiguous BarSlice + FootprintCell slabs (UV-04 / SV-13).
+    pub fn estimated_heap_bytes(&self) -> usize {
+        self.bars.capacity() * std::mem::size_of::<BarSlice>()
+            + self.cells.capacity() * std::mem::size_of::<FootprintCell>()
+            + self.active_cells.len()
+                * (std::mem::size_of::<i64>() + std::mem::size_of::<FootprintCell>() + 32)
+    }
+
+    /// Evict oldest historical bars beyond `keep_bars`, compacting the contiguous cell slab.
+    pub fn evict_oldest_bars(&mut self, keep_bars: usize) {
+        if self.bars.len() <= keep_bars {
+            return;
+        }
+        let drop_bars = self.bars.len() - keep_bars;
+        let first_kept_cell = self.bars[drop_bars].cell_offset as usize;
+        self.bars.drain(..drop_bars);
+        if first_kept_cell > 0 && first_kept_cell <= self.cells.len() {
+            self.cells.drain(..first_kept_cell);
+            let shift = first_kept_cell as u32;
+            for b in &mut self.bars {
+                b.cell_offset -= shift;
+            }
+        }
+        self.bars.shrink_to_fit();
+        self.cells.shrink_to_fit();
+    }
 }

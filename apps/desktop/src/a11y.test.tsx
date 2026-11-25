@@ -3,10 +3,11 @@ import { render, screen } from "@testing-library/react";
 import axe from "axe-core";
 import { BookState, ProvenanceTier } from "@allegedly/ipc-client";
 import { ChromeToolbar, StatusBar } from "@allegedly/ui-chrome";
+import { ChartOverlayToolbar } from "./panels/chart-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
 
 describe("UV-01 @ui-sdk/react WCAG AA accessibility & SV-01 boot invariants", () => {
-  it("renders @ui-sdk/react ChromeToolbar, PaperOmsPanel, and StatusBar with 0 critical/serious axe-core violations", async () => {
+  it("renders @ui-sdk/react ChromeToolbar, ChartOverlayToolbar, PaperOmsPanel, and StatusBar with 0 critical/serious axe-core violations", async () => {
     const bootConfig = {
       updates_check_on_startup: false,
       live_armed: false,
@@ -26,6 +27,21 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility & SV-01 boot invariants", ()
           onResetLayout={() => {}}
         />
         <main>
+          <ChartOverlayToolbar
+            visibility={{ footprint: true, vrvp: true, tpo: true }}
+            activeTool="trendline"
+            magnetEnabled={true}
+            canUndo={true}
+            canRedo={false}
+            drawingCount={2}
+            rendererLabel="WebGL2"
+            onToggleVisibility={() => {}}
+            onSelectTool={() => {}}
+            onToggleMagnet={() => {}}
+            onUndo={() => {}}
+            onRedo={() => {}}
+            onClearDrawings={() => {}}
+          />
           <PaperOmsPanel
             symbol="BTC/USD"
             account={{
@@ -54,6 +70,7 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility & SV-01 boot invariants", ()
     // Safety & SV-01 UI invariants
     expect(screen.getByTestId("mode-badge").textContent).toContain("PAPER / SIM");
     expect(screen.getByTestId("live-armed-badge").textContent).toContain("LIVE_ARMED = false");
+    expect(screen.getByTestId("renderer-badge").textContent).toContain("WebGL2");
     expect(container.textContent).toContain("UPDATES_ON_BOOT: false");
 
     // axe-core WCAG AA verification (color-contrast disabled in jsdom since computed styles lack layout engine)

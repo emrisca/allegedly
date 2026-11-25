@@ -1,12 +1,16 @@
 pub mod classifier;
 pub mod dispatcher;
 pub mod parsers;
+pub mod ws_client;
 
 pub use classifier::SideClassifier;
 pub use dispatcher::{
     CoreEventDispatcher, DEFAULT_RING_CAP, ProviderIngress, ProviderRing, SyntheticSimProvider,
 };
 pub use parsers::{ParseError, kraken_book_crc32, parse_coinbase_trade, parse_kraken_trade};
+pub use ws_client::{
+    FaultEvent, VenueProtocol, WsIngestError, WsSessionStats, run_resilient_ws_session,
+};
 
 #[cfg(test)]
 mod tests {

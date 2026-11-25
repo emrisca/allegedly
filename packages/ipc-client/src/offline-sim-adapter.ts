@@ -1,5 +1,11 @@
 import {
+  BIT_BUY_IMBAL,
+  BIT_POC,
+  BIT_SELL_IMBAL,
   BookState,
+  encodeFootprintDelta,
+  encodeTpoProfileBitmask,
+  encodeVolumeProfile,
   encodeLiveBarUpdateBatch,
   encodeLiveL2BookBatch,
   encodeLiveTradeBatch,
@@ -8,7 +14,10 @@ import {
   ProvenanceTier,
   type LiveBarUpdate,
   type LiveL2BookLevel,
+  type FootprintCell,
   type LiveTradeRecord,
+  type TpoRow128,
+  type VolumeProfileBin,
 } from "./decoder.js";
 import type {
   BootConfig,
@@ -176,9 +185,46 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
     }
     this.bookSeq += 1n;
 
+    const centerTick = this.currentPriceE9 / this.tickSizeE9;
+    const fpCells: FootprintCell[] = [];
+    const vpBins: VolumeProfileBin[] = [];
+    const tpoRows: TpoRow128[] = [];
+    for (let offset = -5; offset <= 5; offset++) {
+      const tick = centerTick + BigInt(offset);
+      const weight = BigInt(6 - Math.abs(offset));
+      const bidVol = weight * 420_000_000n + (this.nextRand() % 300_000_000n);
+      const askVol = weight * 450_000_000n + (this.nextRand() % 300_000_000n);
+      let flags = 0;
+      if (offset === 0) flags |= BIT_POC;
+      if (askVol > bidVol * 2n) flags |= BIT_BUY_IMBAL;
+      if (bidVol > askVol * 2n) flags |= BIT_SELL_IMBAL;
+      fpCells.push({
+        priceTick: tick,
+        bidVolE9: bidVol,
+        askVolE9: askVol,
+        tradeCount: Number(weight * 4n),
+        imbalanceFlags: flags,
+      });
+      vpBins.push({
+        priceTick: tick,
+        bidVolE9: bidVol * 3n,
+        askVolE9: askVol * 3n,
+      });
+      const mask = ((1n << (weight + 2n)) - 1n) << BigInt(Math.abs(offset));
+      tpoRows.push({ priceTick: tick, periodMask: mask });
+    }
+
     return [
       encodeLiveTradeBatch(streamId, nowNs, trades),
       encodeLiveBarUpdateBatch(streamId, nowNs, [bar]),
+      encodeFootprintDelta(streamId, nowNs, fpCells),
+      encodeVolumeProfile(
+        streamId,
+        nowNs,
+        { pocPrice: centerTick, vahPrice: centerTick + 3n, valPrice: centerTick - 3n },
+        vpBins,
+      ),
+      encodeTpoProfileBitmask(streamId, nowNs, { wordsPerRow: 2, periodCount: 16 }, tpoRows),
       encodeLiveL2BookBatch(
         streamId,
         nowNs,
