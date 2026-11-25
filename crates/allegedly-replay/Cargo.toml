@@ -3,6 +3,7 @@ name = "allegedly-replay"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly deterministic streaming tick replay engine producing bit-exact SHA-256 state hashes across speeds (SV-09)."
 
 [lints]

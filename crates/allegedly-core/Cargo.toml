@@ -3,6 +3,7 @@ name = "allegedly-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly zero-float fixed-point primitives, canonical domain entities, 5-tier provenance, 5-state book health, and 5-level TOML delta cascade."
 
 [lints]

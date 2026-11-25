@@ -3,6 +3,7 @@ name = "allegedly-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly local-first desktop runtime wiring (SV-01 zero-network boot, updates.checkOnStartup=false, Paper/Sim default)."
 
 [lints]

@@ -3,6 +3,7 @@ name = "allegedly-desktop"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
+publish = false
 description = "Allegedly Tauri v2 desktop shell (macOS + Windows, SV-01 zero-network offline boot)."
 
 [build-dependencies]

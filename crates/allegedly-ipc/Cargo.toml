@@ -3,6 +3,7 @@ name = "allegedly-ipc"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly aligned binary IPC v1 framing (24 B ALG2 header, 40/32/24/16/72 B records), 16 ms coalescing batcher, and authoritative state_rev Workspace State Hub."
 
 [lints]

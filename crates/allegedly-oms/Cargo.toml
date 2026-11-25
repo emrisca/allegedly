@@ -3,6 +3,7 @@ name = "allegedly-oms"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly zero-float 12-state OMS, Risk-Reduction Bypass Rule, SQLite WAL crash recovery, APFS fullfsync batched Kill-Switch, and DO-NOT-BUILD denylist."
 
 [lints]

@@ -3,6 +3,7 @@ name = "allegedly-ingest"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly per-provider rtrb SPSC ingest pipeline, Synthetic Sim, Kraken/Coinbase parsers with maker->taker inversion, and Lee-Ready/Tick-Rule provenance classifier."
 
 [lints]

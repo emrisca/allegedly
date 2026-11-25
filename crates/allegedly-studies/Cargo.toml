@@ -3,6 +3,7 @@ name = "allegedly-studies"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly built-in native Study library and sandboxed Luau (mlua) Study runtime with <= 64 MiB global pool cap."
 
 [lints]

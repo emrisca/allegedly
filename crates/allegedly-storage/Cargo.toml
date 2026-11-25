@@ -3,6 +3,7 @@ name = "allegedly-storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish = false
 description = "Allegedly crash-safe .atvault Zstd+CRC32 segment storage, Hive Parquet 2.0 compactor/reader, and SQLite WAL catalog."
 
 [lints]
