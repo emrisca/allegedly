@@ -12,7 +12,9 @@ code_refs: []
 
 > *"Allegedly a trading terminal."*
 
-> **Mission:** Produce a long-lived, evidence-backed development plan for **Allegedly** *(working title — trademark collision confirmed in [[R09-Legal-Licensing]]; clean-room rename options ready)*: a free, open-source (`Apache-2.0`), local-first, cross-platform trading terminal combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow & analytical depth**.
+> **Mission:** Produce a long-lived, evidence-backed development plan for **Allegedly** *(chosen brand after retiring working title `MotiveView`; see [[R09-Legal-Licensing]] & [[Compliance-Notes]])*: a free, open-source (`Apache-2.0`), local-first, cross-platform trading terminal combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow & analytical depth**.
+>
+> **GitHub Repository:** https://github.com/emrisca/allegedly (`Apache-2.0`, public)
 >
 > **Current Phase:** **Phase 2 In Progress (`S01`–`S08`)** — Vault renamed to **Allegedly**, Obsidian build exclusions written while closed, `CARGO_TARGET_DIR` isolated to `~/.cache/allegedly-target`, and Spikes `S01`–`S08` running.
 

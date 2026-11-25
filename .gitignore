@@ -37,3 +37,7 @@ data-dumps/
 # Obsidian ephemeral state (if vault root is ever moved here)
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
+
+# Local private planning prompts (never push publicly)
+Allegedly Prompt.md
+MotiveView Prompt.md

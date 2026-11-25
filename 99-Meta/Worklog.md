@@ -29,3 +29,4 @@ updated: 2026-11-24
 - **Obsidian hygiene applied safely:** Verified Obsidian was closed (`NOT_RUNNING`) and wrote `userIgnoreFilters` (`node_modules`, `target`, `dist`, `build`, `.git`, `.venv`, `spikes/*/node_modules`) + `"showUnsupportedFiles": false` into `/Users/abelmora/Documents/Obsidian/.obsidian/app.json`. All Rust spike builds additionally isolate `CARGO_TARGET_DIR=/Users/abelmora/.cache/allegedly-target` outside the vault.
 - **Limit-reset continuation armed:** Gemini 5-hour quota checked at `76.4%` (resets `2026-11-25T05:07:37Z` / 9:07 PM Pacific). Created one-shot `limit_reset` continuation automation so Phase 2 resumes automatically if quota exhausts.
 - **Phase 2 Spikes (`S01`–`S08`) dispatched** across all 4 spike-owning specialists.
+- **Public GitHub repository created (`emrisca/allegedly`):** Added Apache-2.0 `LICENSE`, root `README.md`, ignored local prompt files (`Allegedly Prompt.md`), and pushed `main` to `https://github.com/emrisca/allegedly`.
