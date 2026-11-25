@@ -15,11 +15,11 @@ code_refs: []
 
 ## Question
 
-Which broker execution APIs, open wire protocols (specifically Sierra Chart's DTC protocol), crypto execution libraries, and futures prop-firm gateways are **legally usable, technically viable, and aligned with MotiveView's FOSS / $0-core / local-first non-negotiables**? Specifically:
+Which broker execution APIs, open wire protocols (specifically Sierra Chart's DTC protocol), crypto execution libraries, and futures prop-firm gateways are **legally usable, technically viable, and aligned with Allegedly's FOSS / $0-core / local-first non-negotiables**? Specifically:
 
 1. What are the documented authentication models, sandbox availability, fees, Terms of Service (ToS) restrictions, and FOSS SDK licenses across Interactive Brokers, Alpaca, Tradier, tastytrade, Tradovate, ProjectX, Rithmic, CQG, Sierra Chart DTC, and major crypto FOSS execution stacks?
 2. For all **8 named futures prop firms** (Topstep, Apex Trader Funding, Take Profit Trader, My Funded Futures, Tradeify, Bulenox, Lucid Trading, Elite Trader Funding), what execution gateways do they use, are custom/third-party API clients and automated strategies permitted, and which firms must be marked **`DO-NOT-BUILD`**?
-3. What order semantics, state-machine invariants, fixed-point math, idempotency, sim-vs-live isolation, and kill-switch safety architecture must MotiveView enforce before routing any broker order?
+3. What order semantics, state-machine invariants, fixed-point math, idempotency, sim-vs-live isolation, and kill-switch safety architecture must Allegedly enforce before routing any broker order?
 4. Which sandbox broker and pre-declared pass/fail thresholds should govern **Phase 2 Spike S06**?
 
 ---
@@ -39,7 +39,7 @@ Which broker execution APIs, open wire protocols (specifically Sierra Chart's DT
   - **Free Trial / Demo Account** requires no live account, works with **TWS only** (IB Gateway rejects logins without an active account), and restricts data to delayed quotes without real-time subscription feeds (`R04-S01`).
 - **Fees & Licensing / ToS:**
   - **$0 API access fee**, but real-time API market data requires paid exchange subscriptions (APIs are treated as off-platform under exchange rules), and redistributing market data to third parties without written approval is prohibited (`R04-S01`, `R04-S02`).
-  - Official `ibapi` source code is distributed under IBKR's proprietary **IB API Non-Commercial License** or **Commercial License** (`R04-S01`) — incompatible with bundling inside MotiveView's FOSS core (`Constraints.md` §1.1).
+  - Official `ibapi` source code is distributed under IBKR's proprietary **IB API Non-Commercial License** or **Commercial License** (`R04-S01`) — incompatible with bundling inside Allegedly's FOSS core (`Constraints.md` §1.1).
   - Third-party Web API OAuth integration requires a business entity, live website, multi-tier IBKR Compliance onboarding, and an executed Web API Agreement (`R04-S02`).
 - **FOSS SDK:** [`ib-api-reloaded/ib_async`](https://github.com/ib-api-reloaded/ib_async) is licensed under **BSD-2-Clause** (verified from `LICENSE`, 1,796 stars, pushed `2026-11-24`, active successor to archived `ib_insync`) (`R04-S03`, `R04-S04`). It speaks the TWS binary socket protocol directly without wrapping IBKR's proprietary `ibapi` package; end-user sessions remain governed by the user's IBKR account/data agreements.
 
@@ -104,7 +104,7 @@ A critical distinction separates the **DTC wire specification** from **Sierra Ch
 1. **The DTC Wire Protocol Specification (`DTCProtocol.php`) — OPEN / PUBLIC DOMAIN:**
    - Verified verbatim from `#OpenSpecification`: *"The specifications for the DTC Protocol has no license and is in the public domain. ... Complete and open documentation for the DTC Protocol is found on the DTC Messages and Procedures page. It has no copyrights. ... Patent/License: This protocol has no patent or license. The protocol is in the public domain."* (`R04-S22`).
    - Supports Binary, Binary VLS, JSON, Compact JSON, and Protobuf over TCP or WebSockets. **Note:** Spec Principle #4 explicitly excludes managed order types like trailing stops from standard DTC (`R04-S22`).
-   - **Implication:** MotiveView may legally implement a clean-room DTC client or server adapter under an open-source license with zero licensing/patent encumbrance.
+   - **Implication:** Allegedly may legally implement a clean-room DTC client or server adapter under an open-source license with zero licensing/patent encumbrance.
 
 2. **Sierra Chart's DTC Protocol Server & Denali Data (`DTCServer.php` + `LicenseAgreement.php`) — STRICT MARKET-DATA BLOCK & `DATA LICENSE` PROHIBITION:**
    - Verified verbatim from `DTCServer.php` (`#Restrictions`, last modified 2026-09-02): *"It is not possible to access real-time or historical data from the CME Group of exchanges, EUREX, NASDAQ, CBOE, US equities data originating from UTP or CTA, from the DTC Protocol server. Requests are rejected in these cases."* (`R04-S23`).
@@ -117,7 +117,7 @@ All four candidate libraries were verified directly via their repository `LICENS
 - **`ccxt/ccxt`** — **MIT** (`LICENSE.txt`), 44,977 stars, pushed `2026-11-24`, active. Unified REST + WebSocket execution across 100+ CEX/DEX venues (TS/JS, Python, Go, C#, PHP, Java, Rust bindings). Note: includes default exchange broker IDs / DEX builder fees, which can be inspected and overridden under MIT (`R04-S32`, `R04-S04`).
 - **`barter-rs/barter-rs`** — **MIT** (`LICENSE`), 2,377 stars, pushed `2026-08-24`, active. Native Rust modular crates (`barter-execution`, `barter-data`, `barter-instrument`, `barter-integration`) with zero-GC statically linkable `ExecutionClient` traits (`R04-S33`, `R04-S04`).
 - **`hummingbot/hummingbot`** — **Apache-2.0** (`LICENSE`), 21,388 stars, pushed `2026-11-24`, active. Python/Cython + Gateway middleware covering 140+ CEX/DEX connectors; heavy runtime footprint if embedded inside a `< 40 MB` native terminal, best used as an exchange-quirk reference (`R04-S34`, `R04-S04`).
-- **`nautechsystems/nautilus_trader`** — **LGPL-3.0-only** (`LICENSE`), 31,788 stars, pushed `2026-11-24`, active. Rust core + Python bindings. **License Caution:** Statically linking LGPL-3.0 Rust crates into a distributed binary triggers LGPL-3.0 relinkability obligations (and modified library code must remain LGPL-3.0); also carries a Trademark Policy and upstream CLA (`R04-S35`, `R04-S04`). Strong architectural reference, unsuitable as a statically linked core dependency unless MotiveView itself adopts compatible copyleft/dynamic-linking hygiene.
+- **`nautechsystems/nautilus_trader`** — **LGPL-3.0-only** (`LICENSE`), 31,788 stars, pushed `2026-11-24`, active. Rust core + Python bindings. **License Caution:** Statically linking LGPL-3.0 Rust crates into a distributed binary triggers LGPL-3.0 relinkability obligations (and modified library code must remain LGPL-3.0); also carries a Trademark Policy and upstream CLA (`R04-S35`, `R04-S04`). Strong architectural reference, unsuitable as a statically linked core dependency unless Allegedly itself adopts compatible copyleft/dynamic-linking hygiene.
 
 ---
 
@@ -147,7 +147,7 @@ All four candidate libraries were verified directly via their repository `LICENS
    - *Gateways:* Tradovate (Tradovate/NinjaTrader/TradingView), dxFeed/Volumetrica (Quantower, Volumetrica, DeepChart/DeepDOM, ATAS), Hyperprop.
    - *Custom/3P API Clients:* No native MFFU API; Tradovate prop accounts are ineligible for personal Tradovate API keys (`R04-S15`). Connecting an unapproved custom desktop client directly requires gateway + MFFU platform/partner authorization.
    - *Automation & Copy Trading:* *Fair Play Section 1* permits personal automated trading strategies tailored to the trader's own settings (no HFT, no SIM-fill exploitation; CME guidelines apply on live). Own-account copy trading permitted (Tradesyncer, Tradovate Group, or external copiers at trader's risk); copying other traders and device sharing banned.
-   - *Written Permission:* Required for MotiveView to onboard as a supported third-party platform/partner (plus underlying gateway authorization). *Note:* Behind-login live-account API addendum terms are `UNVERIFIED` (see Open Questions).
+   - *Written Permission:* Required for Allegedly to onboard as a supported third-party platform/partner (plus underlying gateway authorization). *Note:* Behind-login live-account API addendum terms are `UNVERIFIED` (see Open Questions).
 
 5. **Tradeify** (`R04-S29`, `R04-S40`) — **Verdict: `CONDITIONAL-WRITTEN-APPROVAL`**
    - *Gateways:* Tradovate (Tradovate, NinjaTrader, TradingView), Rithmic (Tradesea, Quantower, Sierra Chart, R|Trader Pro), WealthCharts. *(ProjectX discontinued in 2026.)*
@@ -177,14 +177,14 @@ All four candidate libraries were verified directly via their repository `LICENS
 
 ### 3. Order Semantics & Execution Safety Architecture
 
-Per `01-Charter/Constraints.md` §1.7 (**zero IEEE-754 binary floats for money, tick math, or order quantities**) and `01-Charter/Glossary.md`, MotiveView's Execution Engine (OMS) must enforce the following architecture across all brokers and local simulation:
+Per `01-Charter/Constraints.md` §1.7 (**zero IEEE-754 binary floats for money, tick math, or order quantities**) and `01-Charter/Glossary.md`, Allegedly's Execution Engine (OMS) must enforce the following architecture across all brokers and local simulation:
 
 1. **Fixed-Point Domain Types (Non-Negotiable #7):**
    - Represent all order prices as exact signed tick counts `PriceTicks(i64)` bound to an immutable `InstrumentSpec { venue, symbol, tick_size_num: i64, tick_size_den: i64, qty_scale: u32, currency }`, or exact fixed-scale decimal (`i128` scaled integers). Format to broker wire strings (`"5942.25"`) only at the adapter serialization boundary; parse broker fills directly from JSON strings into integer ticks without intermediate `f64`.
 2. **Bracket Orders, OCO, Auto-Bracket Templates & Trailing Stops:**
    - **Broker-Native First:** Prefer server-held atomic brackets (`Alpaca order_class=bracket|oco|oto`, `tastytrade OTO/OCO/OTOCO`, `IBKR parentId + ocaGroup`, `Tradovate OSO`).
    - **Auto-Bracket Templates (vendor-neutral equivalent of "ATM strategies"):** Local workspace presets attaching protective stop-loss ticks + 1..N profit-target tiers + optional break-even move or trailing-stop rule upon entry submission.
-   - **Synthetic/Client-Managed Fallback Warning:** Where a broker or protocol (e.g., standard DTC Principle #4, which omits trailing stops `R04-S22`) does not natively hold a stop/trail server-side, MotiveView must display a persistent warning badge (*"CLIENT-MANAGED PROTECTIVE LEG — INACTIVE IF DISCONNECTED"*) and never silently downgrade a server-held stop to a client-held stop.
+   - **Synthetic/Client-Managed Fallback Warning:** Where a broker or protocol (e.g., standard DTC Principle #4, which omits trailing stops `R04-S22`) does not natively hold a stop/trail server-side, Allegedly must display a persistent warning badge (*"CLIENT-MANAGED PROTECTIVE LEG — INACTIVE IF DISCONNECTED"*) and never silently downgrade a server-held stop to a client-held stop.
 3. **Partial Fills State Machine & Bracket Quantity Coupling:**
    - Canonical order states: `IntentLogged -> PendingNew -> Working -> PartiallyFilled -> Filled | PendingCancel -> Canceled | PendingReplace -> Replaced | Rejected | Expired`.
    - Track `(order_qty, cum_filled_qty, leaves_qty, avg_fill_price_ticks)` strictly in integer units. When a bracket entry receives a partial fill of `k < N` units (e.g., Alpaca Paper's 10% random partial-fill simulation `R04-S05`), client-managed or OTO protective legs MUST size to `k` and increment atomically as additional fills arrive — preventing over-hedged accidental position reversals.
@@ -208,7 +208,7 @@ Per `01-Charter/Constraints.md` §1.7 (**zero IEEE-754 binary floats for money, 
 
 ### 4. Phase 2 Spike S06 Plan & Pre-Declared Pass/Fail Thresholds
 
-- **Primary Sandbox Target:** **Alpaca Paper Trading API** (`https://paper-api.alpaca.markets/v2` + `wss://paper-api.alpaca.markets/stream`) alongside MotiveView's **Local Paper Simulator**.
+- **Primary Sandbox Target:** **Alpaca Paper Trading API** (`https://paper-api.alpaca.markets/v2` + `wss://paper-api.alpaca.markets/stream`) alongside Allegedly's **Local Paper Simulator**.
 - **Optional Secondary Target (Abstraction Proof):** **tastytrade Certification Sandbox** (`https://api.cert.tastyworks.com`) solely to verify OAuth2 refresh-token lifecycle and `orders/dry-run` behind the same `BrokerAdapter` trait (no REST market data dependency in sandbox due to documented HTTP 502s `R04-S12`).
 - **Pre-Declared Pass/Fail Thresholds for Spike S06:**
 
@@ -228,9 +228,9 @@ Per `01-Charter/Constraints.md` §1.7 (**zero IEEE-754 binary floats for money, 
 
 ### Table 1: Broker & Execution Gateway Matrix
 
-| Broker / Gateway | Asset Classes (Per A02) | Transport & Auth | Sandbox / Paper Availability | API & Data Fees | Key ToS / Licensing Constraints | FOSS SDKs & Verified Licenses | MotiveView Fit |
+| Broker / Gateway | Asset Classes (Per A02) | Transport & Auth | Sandbox / Paper Availability | API & Data Fees | Key ToS / Licensing Constraints | FOSS SDKs & Verified Licenses | Allegedly Fit |
 |---|---|---|---|---|---|---|---|
-| **Local Paper Simulator (Built-in)** | All (Futures, Crypto, Equities, FX) | In-process Rust OMS | Native, offline, deterministic | **$0** | 100% FOSS clean-room | First-party MotiveView crate | **Core v0.1/v0.2 (Required)** |
+| **Local Paper Simulator (Built-in)** | All (Futures, Crypto, Equities, FX) | In-process Rust OMS | Native, offline, deterministic | **$0** | 100% FOSS clean-room | First-party Allegedly crate | **Core v0.1/v0.2 (Required)** |
 | **Alpaca** (`R04-S05`–`S08`) | US Equities, Options, Crypto | REST v2 + WS (`trade_updates`); API Key/Secret | **Best-in-class:** Free email-only Paper-Only account ($100k, IEX RT data, 10% partial fills) | **$0 API**; $0 Basic IEX; $99/mo SIP | User assumes API execution risk; standard broker disclosures | `alpacahq/alpaca-py` (**Apache-2.0**); `alpaca-trade-api-js` (**Apache-2.0**) | **Primary S06 Sandbox & v0.2 Adapter** |
 | **tastytrade** (`R04-S12`–`S14`) | US Equities, Options, **CME Futures**, Crypto | REST + WS Streamer; **OAuth2 mandatory** + `User-Agent` | Free cert sandbox (`api.cert.tastyworks.com`), `dry-run`; **Caveat:** REST `/market-data` returns HTTP 502; only equity fills verified | **$0 API**; $0 live data on funded acct; live comms ($1/$0.75 futures) | No storing raw user passwords; no market data redistribution | `tastytrade-api-js` (**MIT**); `tastyware/tastytrade` (**MIT**) | **Secondary S06 / v0.2–v0.3 Adapter** |
 | **Interactive Brokers** (`R04-S01`–`S04`) | **CME Futures**, Equities, Options, FX, Crypto | TWS TCP Socket (local TWS/IBGW) or Web API (local gateway / OAuth) | Paper ($1M) requires **approved live account**; Free Trial is TWS-only with delayed data | **$0 API**; paid exchange data subs required for RT API data | Official `ibapi` is proprietary Non-Commercial/Commercial; Web API 3P OAuth needs Compliance & Legal agreement; no data redistribution | `ib-api-reloaded/ib_async` (**BSD-2-Clause**, independent socket impl) | **v0.3 Optional Futures/Multi-Asset Plug-in** (clean-room socket) |
@@ -245,7 +245,7 @@ Per `01-Charter/Constraints.md` §1.7 (**zero IEEE-754 binary floats for money, 
 
 ### Table 2: Crypto Execution FOSS Libraries Matrix (Verified `2026-11-24`)
 
-| Library | GitHub Repo | Verified License (`LICENSE` file) | Stars & Last Push (`2026-11-24`) | Stack | Execution Scope | MotiveView Compatibility |
+| Library | GitHub Repo | Verified License (`LICENSE` file) | Stars & Last Push (`2026-11-24`) | Stack | Execution Scope | Allegedly Compatibility |
 |---|---|---|---|---|---|---|
 | **barter-rs** (`R04-S33`) | `barter-rs/barter-rs` | **MIT** | 2,377 · `2026-08-24` (Active) | Pure Rust | Modular `barter-execution` + `barter-data` + `barter-instrument` traits | **Best native Rust fit** — permissive, zero-GC, static-link safe |
 | **CCXT** (`R04-S32`) | `ccxt/ccxt` | **MIT** | 44,977 · `2026-11-24` (Active) | TS/JS, Python, Go, C#, Rust | 100+ CEX & DEX unified REST + WS (ex-CCXT Pro merged into MIT) | High coverage; watch/override default broker IDs; heavier if JS/Py sidecar |
@@ -288,7 +288,7 @@ Weighted evaluation of **Phase 2 Spike S06 & v0.2 Execution Foundation** archite
 
 1. **Adopt Option A — Pluggable `BrokerAdapter` Trait Architecture anchored by a $0 Local Paper Simulator + Alpaca Paper Trading API for Phase 2 Spike S06:**
    - **Alpaca Paper** is the only verified retail broker combining **$0 email-only sandbox provisioning**, **identical live/paper REST + WebSocket schemas**, **native Bracket/OCO/OTO/Trailing Stop semantics**, **`client_order_id` idempotency**, **Apache-2.0 official SDKs**, and **built-in 10% simulated partial fills** (`R04-S05`–`S08`).
-   - Pairing Alpaca Paper with an optional **tastytrade Certification Sandbox** secondary check (`OAuth2` + `dry-run` `R04-S12`, `R04-S13`) ensures MotiveView's `BrokerAdapter` trait is genuinely broker-agnostic before v0.2 begins.
+   - Pairing Alpaca Paper with an optional **tastytrade Certification Sandbox** secondary check (`OAuth2` + `dry-run` `R04-S12`, `R04-S13`) ensures Allegedly's `BrokerAdapter` trait is genuinely broker-agnostic before v0.2 begins.
 2. **Adopt `barter-rs` (MIT) or clean-room Rust REST/WS adapters for v0.2 Crypto Execution:**
    - Directly serves Assumption A02 Priority #2 (Crypto) with zero GC stalls, native Rust static linking, and MIT permissiveness (`R04-S33`), while avoiding `NautilusTrader`'s LGPL-3.0 static-linking copyleft (`R04-S35`) and `Hummingbot`'s Python runtime weight (`R04-S34`).
 3. **Treat Retail Futures Brokers (IBKR socket, tastytrade live, Tradovate retail-only) & TopstepX/ProjectX strictly as Optional User-Configured Plug-ins (v0.3+):**
@@ -304,8 +304,8 @@ Weighted evaluation of **Phase 2 Spike S06 & v0.2 Execution Foundation** archite
 
 ## Inferences
 
-- **Prop-Firm Ecosystem Structural Shift (2026):** ProjectX's 2026 retreat to Topstep exclusivity (`R04-S17`, `R04-S29`), Tradovate's hard exclusion of prop accounts from personal API keys (`R04-S15`), and widespread prop bans on bots/unapproved clients (4 of 8 audited firms are hard `DO-NOT-BUILD`) mean **independent FOSS terminals cannot treat futures prop firms as a reliable execution wedge**. MotiveView's futures value proposition should center on **charting + order-flow analysis (v0.1)**, **local deterministic paper trading ($0 core)**, and **compliant retail futures brokerage plug-ins (IBKR, tastytrade, retail Tradovate)**, while keeping any prop integration strictly opt-in, rulebook-gated, and explicitly labeled.
-- **Local-First Architecture Is a Legal Advantage:** Topstep (`R04-S17`), Bulenox (`R04-S30`), and Elite Trader Funding (`R04-S43`) all prohibit trading from VPS/VPN/cloud servers. MotiveView's local-first desktop architecture naturally complies with personal-device execution mandates (unlike cloud webhook relay SaaS tools).
+- **Prop-Firm Ecosystem Structural Shift (2026):** ProjectX's 2026 retreat to Topstep exclusivity (`R04-S17`, `R04-S29`), Tradovate's hard exclusion of prop accounts from personal API keys (`R04-S15`), and widespread prop bans on bots/unapproved clients (4 of 8 audited firms are hard `DO-NOT-BUILD`) mean **independent FOSS terminals cannot treat futures prop firms as a reliable execution wedge**. Allegedly's futures value proposition should center on **charting + order-flow analysis (v0.1)**, **local deterministic paper trading ($0 core)**, and **compliant retail futures brokerage plug-ins (IBKR, tastytrade, retail Tradovate)**, while keeping any prop integration strictly opt-in, rulebook-gated, and explicitly labeled.
+- **Local-First Architecture Is a Legal Advantage:** Topstep (`R04-S17`), Bulenox (`R04-S30`), and Elite Trader Funding (`R04-S43`) all prohibit trading from VPS/VPN/cloud servers. Allegedly's local-first desktop architecture naturally complies with personal-device execution mandates (unlike cloud webhook relay SaaS tools).
 - **Fixed-Point OMS Eliminates Whole Classes of Order Rejects:** CME futures contracts with fractional/quarter-tick increments (`ES` 0.25, `ZB` 1/32, `GC` 0.10) routinely trigger broker price-increment rejections when formatted from `f64` arithmetic; integer `PriceTicks(i64)` guarantees tick-aligned wire formatting by construction.
 
 ---
@@ -314,10 +314,10 @@ Weighted evaluation of **Phase 2 Spike S06 & v0.2 Execution Foundation** archite
 
 | Risk | Severity | Mitigation |
 |---|---|---|
-| **Prop-firm rulebook volatility:** Prop firms frequently revise automation/copier/platform rules (e.g., ProjectX exclusivity shift in Feb 2026; ETF ToS updated Nov 2026). | **High** | Re-audit rulebook URLs before any prop plug-in release; never market MotiveView as "prop-firm approved"; default all `DO-NOT-BUILD` and `CONDITIONAL` firms to disabled. |
+| **Prop-firm rulebook volatility:** Prop firms frequently revise automation/copier/platform rules (e.g., ProjectX exclusivity shift in Feb 2026; ETF ToS updated Nov 2026). | **High** | Re-audit rulebook URLs before any prop plug-in release; never market Allegedly as "prop-firm approved"; default all `DO-NOT-BUILD` and `CONDITIONAL` firms to disabled. |
 | **Accidental cross-account hedging (CME Rule 534):** Multi-account or correlated-contract orders (`ES` + `MES`, `NQ` + `MNQ`) cause instant non-appealable prop account termination (`R04-S25`, `R04-S28`, `R04-S29`). | **High** | Build a mandatory, configurable **Anti-Hedging & Correlated Product-Group Guard** inside the local OMS risk layer. |
 | **Duplicate orders on network drops / partial-fill reverse positions:** Blind retries or unsynchronized OCO sizing can double-fill or flip positions. | **Critical** | Enforce WAL-persisted UUIDv7 `client_order_id`, query-before-retry reconciliation, and `cum_qty`-coupled bracket sizing — gated by Spike S06 tests `S06-T3` and `S06-T4`. |
-| **Client-managed stop loss lost on crash/disconnect:** Using synthetic brackets/trailing stops on brokers lacking native support leaves open positions unprotected if MotiveView exits. | **Critical** | Default to broker-native server-held brackets; force explicit opt-in + permanent UI warning for any client-managed protective leg. |
+| **Client-managed stop loss lost on crash/disconnect:** Using synthetic brackets/trailing stops on brokers lacking native support leaves open positions unprotected if Allegedly exits. | **Critical** | Default to broker-native server-held brackets; force explicit opt-in + permanent UI warning for any client-managed protective leg. |
 | **Upstream FOSS license/DMCA taint:** Merging community Rithmic `.proto` bindings or IBKR `ibapi` code or statically linking LGPL-3.0 `nautilus_trader` crates would violate `Constraints.md` §1.1. | **High** | Enforce CI license-check gate (`cargo-deny`) allowing only MIT/Apache-2.0/BSD/ISC/MPL-2.0 in core; reject any PR containing proprietary SDK/protobuf artifacts. |
 
 ---
@@ -334,7 +334,7 @@ Weighted evaluation of **Phase 2 Spike S06 & v0.2 Execution Foundation** archite
    - *Exact Human Check Steps:* Contact MFFU support via `https://help.myfundedfutures.com/` requesting their official third-party platform/ISV integration policy and current Live Funded Trader Agreement automation clause.
 3. **`UNVERIFIED` — Rithmic direct conformance fee & timeline:**
    - *Gap:* `https://www.rithmic.com/apis` states conformance is required and refers developers to Rithmic + their FCM for commercial terms (`R04-S19`), without publishing fixed fees.
-   - *Exact Human Check Steps:* Only if MotiveView ever forms a commercial entity/foundation pursuing official Rithmic ISV certification, email Rithmic API sales (contact via `https://www.rithmic.com/apis`) requesting the Software System License Agreement and current conformance fee schedule.
+   - *Exact Human Check Steps:* Only if Allegedly ever forms a commercial entity/foundation pursuing official Rithmic ISV certification, email Rithmic API sales (contact via `https://www.rithmic.com/apis`) requesting the Software System License Agreement and current conformance fee schedule.
 4. **`UNVERIFIED` — CQG Enterprise WebAPI / FIX Connect exact pricing & application fee:**
    - *Gap:* Official CQG Monthly Price Sheet lists both as "Contact us for pricing" and gates demo credentials behind an executed agreement + application fee (`R04-S21`).
    - *Exact Human Check Steps:* Only if institutional sponsorship funds CQG ISV onboarding, request the current Enterprise API fee schedule via `https://www.cqg.com/products/cqg-apis/cqg-enterprise-api-questionnaire`.
@@ -351,7 +351,7 @@ Weighted evaluation of **Phase 2 Spike S06 & v0.2 Execution Foundation** archite
 ## What Would Change This Decision
 
 - **A Futures Broker Launches a $0 Free Sandbox REST/WS API:** If Tradovate removes its $1,000 live-balance + $25/mo API paywall for demo keys, or tastytrade resolves its certification sandbox `/market-data` HTTP 502s and formally verifies CME futures sandbox fills, **tastytrade or Tradovate** would become a co-primary futures target for S06/v0.2.
-- **Prop Firms Open Compliant Retail Execution APIs:** If MFFU, Tradeify, or Lucid launch an official, publicly documented retail API (or grant MotiveView written ISV/partner approval without NDA-conflicting proprietary SDK blobs), their status can move from `CONDITIONAL-WRITTEN-APPROVAL` to `PERMITTED-SANDBOX-FIRST` as optional plug-ins.
+- **Prop Firms Open Compliant Retail Execution APIs:** If MFFU, Tradeify, or Lucid launch an official, publicly documented retail API (or grant Allegedly written ISV/partner approval without NDA-conflicting proprietary SDK blobs), their status can move from `CONDITIONAL-WRITTEN-APPROVAL` to `PERMITTED-SANDBOX-FIRST` as optional plug-ins.
 - **Topstep Enables ProjectX API on Live Funded Accounts or Drops API Subscription Fee:** Would elevate TopstepX from a niche post-MVP Sim-only plug-in to a stronger optional futures plug-in (still gated behind Topstep's personal-device / anti-hedging rules).
 - **Sierra Chart Relaxes DTC Market-Data Restrictions:** Extremely unlikely due to CME/EUREX/NASDAQ/CBOE exchange contracts; until `DTCServer.php` and `LicenseAgreement.php` change, DTC remains **execution-only** for Sierra Chart users.
 

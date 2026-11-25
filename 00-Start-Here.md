@@ -1,18 +1,20 @@
 ---
-title: MotiveView — Start Here (MOC)
+title: Allegedly — Start Here (MOC)
 type: moc
 status: active
-phase: Phase 1 Complete -> Pre-Phase 2 Gate
+phase: Phase 2 In Progress (Spikes S01–S08)
 owner: orchestrator
 updated: 2026-11-24
 code_refs: []
 ---
 
-# MotiveView — Plan of Record (MOC)
+# Allegedly — Plan of Record (MOC)
 
-> **Mission:** Produce a long-lived, evidence-backed development plan for **MotiveView** *(working title — trademark collision confirmed in [[R09-Legal-Licensing]]; clean-room rename options ready)*: a free, open-source (`Apache-2.0`), local-first, cross-platform trading terminal combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow & analytical depth**.
+> *"Allegedly a trading terminal."*
+
+> **Mission:** Produce a long-lived, evidence-backed development plan for **Allegedly** *(working title — trademark collision confirmed in [[R09-Legal-Licensing]]; clean-room rename options ready)*: a free, open-source (`Apache-2.0`), local-first, cross-platform trading terminal combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow & analytical depth**.
 >
-> **Current Phase:** **Phase 1 Gate PASSED** (all 10 research tracks `R01`–`R10` `verified` with 279 consolidated primary sources). Ready to start **Phase 2 Spikes (`S01`–`S08`)** once Abel confirms Round 1 defaults / Obsidian build exclusions.
+> **Current Phase:** **Phase 2 In Progress (`S01`–`S08`)** — Vault renamed to **Allegedly**, Obsidian build exclusions written while closed, `CARGO_TARGET_DIR` isolated to `~/.cache/allegedly-target`, and Spikes `S01`–`S08` running.
 
 ## 01 — Charter & Decisions
 - [[Charter]] — Mission, scope, phase gates, and Definition of Done

@@ -18,7 +18,7 @@ SORT file.name ASC
 ## Planned Phase 3 ADRs (Informed by Phase 1 Evidence)
 | Proposed ADR | Decision Topic | Phase 1 Leading Direction | Required Phase 2 Evidence |
 |---|---|---|---|
-| `0001` | Application License & Project Name | `Apache-2.0` + clean-room rename off `"MotiveView"` ([[R09-Legal-Licensing]]) | Abel's Round 2 name pick |
+| `0001` | Application License & Project Name | `Apache-2.0` + clean-room rename off `"Allegedly"` ([[R09-Legal-Licensing]]) | Abel's Round 2 name pick |
 | `0002` | Desktop Shell & Binary IPC | `Tauri v2` + `tauri::ipc::Channel<Response>` behind `TransportAdapter` (Fallback: `Electron`) ([[R02-Shell-UI-Stack]]) | Spike `S04` (macOS + Linux X11/Wayland) |
 | `0003` | Chart Base & Order-Flow GPU Layer | `Lightweight Charts v5.3.0` + synchronized raw `WebGL2` overlay (Fallbacks: `KLineChart`, unified `WebGL2`) ([[R01-Charting-Rendering]]) | Spikes `S01`, `S02`, `S03` |
 | `0004` | Study Runtime & Scripting Language | Rust `mv-studies` → `Wasmtime` → `Rhai` vs `Luau` (`mlua`) → clean-room Pine-inspired DSL ([[R06-Scripting-Indicator-Engine]]) | Spike `S07` |

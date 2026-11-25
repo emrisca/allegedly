@@ -21,7 +21,7 @@ code_refs: []
 
 ---
 
-❓ **Q2** - **Target Instruments & Priority Order**: Which asset classes matter most for MotiveView, and in what order should we optimize data pipelines, session calendars, and order-flow tools?
+❓ **Q2** - **Target Instruments & Priority Order**: Which asset classes matter most for Allegedly, and in what order should we optimize data pipelines, session calendars, and order-flow tools?
 - **Option A (Recommended):** `1. Futures (CME index/metals/energy: ES/MES, NQ/MNQ, GC, CL)` + `2. Crypto (spot & perpetuals via free public tick + L2 WebSockets as our zero-cost full-depth reference feed)` → `3. US Equities` → `4. Spot FX`
 - **Option B:** Crypto-first only (defer CME futures calendars & tick rules)
 - **Option C:** US Equities + Options first
@@ -56,16 +56,16 @@ code_refs: []
 
 ---
 
-❓ **Q7** - **Open-Source Community Ambitions & Mobile/Tablet Scope**: Should we plan MotiveView as a **public FOSS project from day one** (clean-room discipline, strict license hygiene, trademark-safe rename options evaluated in R09) while keeping **v0.1–v1.0 strictly Desktop-only** (macOS, Windows, Linux — treating mobile/tablet as explicitly out-of-scope for v1.0)?
+❓ **Q7** - **Open-Source Community Ambitions & Mobile/Tablet Scope**: Should we plan Allegedly as a **public FOSS project from day one** (clean-room discipline, strict license hygiene, trademark-safe rename options evaluated in R09) while keeping **v0.1–v1.0 strictly Desktop-only** (macOS, Windows, Linux — treating mobile/tablet as explicitly out-of-scope for v1.0)?
 
 ➡️ Yes — public FOSS standards from day one, Desktop-only through v1.0 (mobile/tablet explicitly out of scope until post-v1.0).
 
 ---
 
 ❓ **Q8** - **Vault/Repo Root & Spike Code Location**: Two environment details we verified on your Mac:
-1. `/Users/abelmora/Documents/Obsidian/` currently holds `.obsidian/` (Obsidian is open on it right now), while `MotiveView/` is a subfolder inside it; Desktop & Documents iCloud sync is **OFF** (verified `0` `.icloud` files).
-2. Prompt Section 0.1 puts spikes inside the repo at `spikes/S01-…/`, whereas Section 6 mentions `~/Documents/Projects/motiveview-spikes/`.
+1. `/Users/abelmora/Documents/Obsidian/` currently holds `.obsidian/` (Obsidian is open on it right now), while `Allegedly/` is a subfolder inside it; Desktop & Documents iCloud sync is **OFF** (verified `0` `.icloud` files).
+2. Prompt Section 0.1 puts spikes inside the repo at `spikes/S01-…/`, whereas Section 6 mentions `~/Documents/Projects/allegedly-spikes/`.
 
-Should we: (a) keep the **Section 0.1 root layout** (`00-Start-Here.md`, `01-Charter/…99-Meta/` alongside `apps/`, `crates/`, `packages/`, `plugins/`), (b) keep runnable spikes **inside the repo at `spikes/S01-…/`** so one git history holds plan + spikes, and (c) keep `MotiveView` as a git repo inside `/Users/abelmora/Documents/Obsidian/MotiveView` (with Obsidian's `Excluded files` updated by you in Obsidian Settings)?
+Should we: (a) keep the **Section 0.1 root layout** (`00-Start-Here.md`, `01-Charter/…99-Meta/` alongside `apps/`, `crates/`, `packages/`, `plugins/`), (b) keep runnable spikes **inside the repo at `spikes/S01-…/`** so one git history holds plan + spikes, and (c) keep `Allegedly` as a git repo inside `/Users/abelmora/Documents/Obsidian/Allegedly` (with Obsidian's `Excluded files` updated by you in Obsidian Settings)?
 
-➡️ Yes — use the Section 0.1 co-located layout, keep runnable spikes inside `spikes/S01-…/` in the same git repo, and keep `/Users/abelmora/Documents/Obsidian/MotiveView` as the git root (adding build exclusions in Obsidian Settings before any `pnpm install` / `cargo build`).
+➡️ Yes — use the Section 0.1 co-located layout, keep runnable spikes inside `spikes/S01-…/` in the same git repo, and keep `/Users/abelmora/Documents/Obsidian/Allegedly` as the git root (adding build exclusions in Obsidian Settings before any `pnpm install` / `cargo build`).

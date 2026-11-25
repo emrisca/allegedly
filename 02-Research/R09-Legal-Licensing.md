@@ -9,6 +9,8 @@ code_refs: []
 
 # R09 — Legal, Licensing, IP Boundaries & Trademark Risk Analysis
 
+> **Brand Decision Resolved (`2026-11-24`):** Abel officially retired the working title `"MotiveView"` and named the project **Allegedly** — *"Allegedly a trading terminal."* (vault/repo moved to `/Users/abelmora/Documents/Obsidian/Allegedly`). Preliminary `2026-11-24` screening of **ALLEGEDLY**: 0 USPTO active registrations/applications in Classes `009` or `042` found in public indexes and 0 real trading terminals; two existing software/adjacent uses logged for future attorney review: `allegedly.market` (iOS parody meme-maker styled as fake prediction-market cards, explicitly disclaims being a trading platform) and `allegedlyapp.com` (workplace feedback), plus `kyscott18/allegedly` (GitHub Solidity compiler). Formal USPTO TSDR / EUIPO / common-law clearance remains `[ATTORNEY REVIEW REQUIRED]` before public release. Historical analysis of the retired `"MotiveView"` working title is preserved below for audit trail.
+
 > [!CAUTION]
 > **NOT LEGAL ADVICE:** This document is an engineering, licensing-hygiene, and compliance risk assessment prepared for planning purposes only. It is **not** formal legal advice and does **not** create an attorney–client relationship. Every item marked **`[ATTORNEY REVIEW REQUIRED]`** below and in [[Compliance-Notes]] MUST be reviewed by a qualified intellectual-property, open-source, trademark, or financial-regulatory attorney before public release, commercial partnership, or trademark filing.
 

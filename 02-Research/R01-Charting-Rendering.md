@@ -48,7 +48,7 @@ All repositories, versions, licenses, and release dates below were directly veri
   2. **Zero built-in Studies:** Official docs explicitly state *"Lightweight Charts™ does not contain any built-in indicators"* [R01-S06].
   3. **No complete Drawing suite:** Primitives provide coordinate transforms (`timeToCoordinate`, `priceToCoordinate`) and hit-testing hooks, not a turnkey drawing toolbar, magnet snapping engine, undo/redo command stack, or drawing persistence model [R01-S04].
   4. **No built-in MTF:** Consumer must supply resampled bars and synchronize crosshairs/time ranges across charts [R01-S06].
-  5. **IEEE-754 `number` API:** JS series inputs use standard JS floats; per `[[Constraints]]` #7, MotiveView MUST keep canonical prices/quantities as fixed-point `i64` tick counts in Rust and convert only at the chart view boundary.
+  5. **IEEE-754 `number` API:** JS series inputs use standard JS floats; per `[[Constraints]]` #7, Allegedly MUST keep canonical prices/quantities as fixed-point `i64` tick counts in Rust and convert only at the chart view boundary.
   6. **Mandatory Attribution Notice:** The Apache-2.0 `NOTICE` file and `README.md` require retaining the attribution notice (`TradingView Lightweight Charts™`, copyright notice) and a link to `https://www.tradingview.com/` (satisfiable via the built-in `attributionLogo` option or a visible attribution notice/link in the terminal UI/About page) [R01-S02].
 
 #### 2.2 TradingView Charting Library — Why It Is Hard-Disqualified
@@ -56,7 +56,7 @@ All repositories, versions, licenses, and release dates below were directly veri
   - **Private proprietary repository:** Requires submitting an access form and signing TradingView's proprietary license agreement; source code is **non-redistributable** and prohibited in public open-source repositories [R01-S07], [R01-S08].
   - **Public-website-only restriction:** Free *Advanced Charts* is permitted *"provided that the TradingView attribution remains visible and the implementation environment is public (not for private use or behind a paywall)"* — incompatible with a local-first, offline-capable desktop FOSS terminal [R01-S08].
   - **Commercial paywall for terminal features:** Multi-chart layouts, Session Volume Profile, DOM, order tickets, and chart trading are gated behind the paid commercial **Trading Platform** license [R01-S08].
-- **Rule:** MotiveView must **never** depend on, wrap, bundle, or copy assets/code from TradingView Advanced Charts or Trading Platform.
+- **Rule:** Allegedly must **never** depend on, wrap, bundle, or copy assets/code from TradingView Advanced Charts or Trading Platform.
 
 #### 2.3 KLineChart (`v10.1.1`, Apache-2.0)
 - `v10.0.0` (`2026-07-10`) through `v10.1.1` (`2026-11-16`) introduced a major architectural upgrade: multiple Y-axes per pane (`createYAxis`, `yAxisId`), custom hotkey registration (`setHotkey`, `registerHotkey`), continuous freehand `brush` overlay, zoom anchors, and decoupled pane/axis APIs [R01-S09], [R01-S12].
@@ -74,7 +74,7 @@ All repositories, versions, licenses, and release dates below were directly veri
 
 ### 3. GPU Rendering Layer Options (WebGL2 / WebGPU)
 
-| Option | Latest Stable | License | Backend Capabilities | Assessment for MotiveView Order-Flow Layer |
+| Option | Latest Stable | License | Backend Capabilities | Assessment for Allegedly Order-Flow Layer |
 |---|---|---|---|---|
 | **Raw WebGL2** *(+ optional WebGPU future path)* | Web standard (GLSL ES 3.00) | Royalty-free W3C/Khronos spec | Universal across `WKWebView`, `WebView2`, `WebKitGTK` (hardware + Mesa software fallback) [R01-S19], [R01-S20] | **Best fit for targeted order-flow layer.** Zero JS dependency bloat; 1 instanced draw call renders 200k+ heatmap cells or 10k footprint boxes; direct Float32/Int32 typed-array upload from Rust IPC. |
 | **PixiJS** | `v8.23.0` (`2026-11-11`) [R01-S21] | MIT [R01-S21] | Dual **WebGPU + WebGL2** renderer, 48,894 stars [R01-S21] | Viable if building an entire custom scene-graph renderer, but retains display-object overhead for 200k+ volatile heatmap cells compared to raw instanced buffers + adds bundle weight. |
@@ -93,7 +93,7 @@ All repositories, versions, licenses, and release dates below were directly veri
 
 A dense **Footprint Bar** viewport (100 visible bars × 50 price ticks = 5,000 cells = 10,000 bid/ask numbers) or **TPO Profile** (hundreds of bracket letters) exceeds what naive `Canvas2D.fillText()` can shape and rasterize within a `16.6 ms` frame during continuous pan/zoom.
 
-| Strategy | Underlying Tech / Libs | Pros | Cons | Best Use in MotiveView |
+| Strategy | Underlying Tech / Libs | Pros | Cons | Best Use in Allegedly |
 |---|---|---|---|---|
 | **1. Direct Canvas2D `fillText()`** | Browser native Skia/CoreGraphics | Crisp subpixel hinting; full Unicode/RTL support | CPU-bound text shaping stalls `60 fps` above ~500–1,500 dynamic strings/frame | Price/time axes, crosshair badges, Drawing labels, sparse Study tags |
 | **2. Pre-Baked DPR Glyph Sprite Atlas** *(Bitmap Atlas)* | Offscreen `<canvas>` pre-rendering `0-9`, `.`, `,`, `K`, `M`, `-`, `+`, `A-Z`, `a-z` at current `devicePixelRatio` | **Pixel-sharp at small sizes (8–13 px)**; renders 10,000+ Footprint digits in `< 1 ms` via WebGL2 instanced textured quads (or fast Canvas2D `drawImage`) | Must re-bake atlas (~2 ms one-time) when font size or `devicePixelRatio` changes | **Primary strategy for Footprint Bars & TPO letters** (tiny fixed monospace glyph set) |
@@ -137,7 +137,7 @@ Scoring scale: `1` (poor) to `5` (excellent). Disqualified candidates are marked
 
 ### Primary Recommendation: **Hybrid Adopt + Targeted Build (Option A)**
 1. **Adopt `tradingview/lightweight-charts` (`v5.3.0`, Apache-2.0)** as the primary price/time coordinate engine, multi-pane manager (`IPaneApi`), standard **Bar** renderer, and crosshair/scale interaction layer. Retain the Apache-2.0 `NOTICE` attribution cleanly (documented in About + non-intrusive attribution link per `NOTICE`).
-2. **Build a Drawing & Study Overlay Layer on LWC `ISeriesPrimitive` / `ICustomSeriesPaneView`:** Owns MotiveView's clean-room **Drawing** tools (trendline, ray, fib, channel, rectangle, anchored VWAP/profile, text), snap-to-OHLC magnet logic, undo/redo command history, and JSON/TOML serialization — completely decoupled from any vendor UI.
+2. **Build a Drawing & Study Overlay Layer on LWC `ISeriesPrimitive` / `ICustomSeriesPaneView`:** Owns Allegedly's clean-room **Drawing** tools (trendline, ray, fib, channel, rectangle, anchored VWAP/profile, text), snap-to-OHLC magnet logic, undo/redo command history, and JSON/TOML serialization — completely decoupled from any vendor UI.
 3. **Build a Synchronized Raw WebGL2 Order-Flow Canvas Layer:** A pointer-transparent `<canvas>` aligned over LWC's main pane, driven by `timeScale().subscribeVisibleLogicalRangeChange` and `series.priceToCoordinate()`, rendering:
    - **Order-book Liquidity Heatmaps** via instanced colored quads (or 2D data texture),
    - **Footprint Bars** & **TPO Profiles** via instanced quads + a **pre-baked DPR-snapped monospace glyph atlas** (benchmarked vs MSDF in Spike S02),
@@ -202,7 +202,7 @@ Scoring scale: `1` (poor) to `5` (excellent). Disqualified candidates are marked
 
 1. **UNVERIFIED — Exact real-world frame times on Linux Wayland + NVIDIA (`WebKitGTK 2.52+/2.54+`) for our target `200k`-cell heatmap + `5k`-cell footprint scene:** Cannot be determined from docs alone; **Human/Spike Verification:** Run `spikes/S01-chart-base/` and `spikes/S02-orderflow-gpu/` on Linux X11 + Wayland VMs (and NVIDIA hardware if available) and record `p50/p95/p99` frame times and `Error 71` logs.
 2. **UNVERIFIED — Exact LWC `v5.3` `priceToCoordinate` / `timeToCoordinate` timing relative to internal `requestAnimationFrame` paint:** Does `subscribeVisibleLogicalRangeChange` fire before or after LWC paints its own canvas? **Human/Spike Verification:** Measure single-frame video capture / canvas timestamp delta in Spike S01.
-3. **Attribution UX preference:** Should Lightweight Charts' built-in `attributionLogo` stay visible in the chart corner, or should MotiveView satisfy the `NOTICE` link via a clean status-bar / About attribution (to be cross-checked with `[[R09-Legal-Licensing]]`)?
+3. **Attribution UX preference:** Should Lightweight Charts' built-in `attributionLogo` stay visible in the chart corner, or should Allegedly satisfy the `NOTICE` link via a clean status-bar / About attribution (to be cross-checked with `[[R09-Legal-Licensing]]`)?
 
 ---
 

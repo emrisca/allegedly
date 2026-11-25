@@ -1,5 +1,5 @@
 ---
-title: MotiveView Agent Roster & Exclusive Path Ownership
+title: Allegedly Agent Roster & Exclusive Path Ownership
 type: meta
 owner: orchestrator
 updated: 2026-11-24
@@ -7,7 +7,7 @@ updated: 2026-11-24
 
 # Agent Roster & Exclusive File Ownership
 
-> **Write-conflict rule:** Every agent writes ONLY to its owned paths. Cross-writes go through [[Handoffs]]. All MotiveView specialists run on `gemini-4-neon` or `gemini-4-argon` per Abel's standing rule.
+> **Write-conflict rule:** Every agent writes ONLY to its owned paths. Cross-writes go through [[Handoffs]]. All Allegedly specialists run on `gemini-4-neon` or `gemini-4-argon` per Abel's standing rule.
 
 | Bot Name | Mission Role(s) | Model | Exclusive Owned Paths |
 |---|---|---|---|

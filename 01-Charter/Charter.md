@@ -1,5 +1,5 @@
 ---
-title: MotiveView Charter
+title: Allegedly Charter
 type: charter
 status: draft-on-defaults
 owner: orchestrator
@@ -7,10 +7,10 @@ updated: 2026-11-24
 code_refs: []
 ---
 
-# MotiveView — Project Charter
+# Allegedly — Project Charter
 
 ## 1. Mission
-Produce a **decision-grade, evidence-backed development plan** for **MotiveView** (working title; trademark risk evaluated in [[R09-Legal-Licensing]]): a free, open-source, local-first, cross-platform trading terminal that merges:
+Produce a **decision-grade, evidence-backed development plan** for **Allegedly** (working title; trademark risk evaluated in [[R09-Legal-Licensing]]): a free, open-source, local-first, cross-platform trading terminal that merges:
 - **TradingView's UI/UX clarity:** crisp chart layouts, low-friction indicator UX, intuitive drawing tools, and ergonomic scripting.
 - **MotiveWave's analytical & order-flow depth:** footprint/cluster charts, Volume Profile, TPO/Market Profile, DOM ladder, liquidity heatmaps, and deep configurable studies.
 - **Total user sovereignty & zero lock-in:** local files, open formats, zero mandatory subscriptions, settings-as-code, no dark patterns.

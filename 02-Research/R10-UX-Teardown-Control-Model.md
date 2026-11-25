@@ -1,5 +1,5 @@
 ---
-title: "R10 — UX Teardown (TradingView vs. MotiveWave) & MotiveView Control Model"
+title: "R10 — UX Teardown (TradingView vs. MotiveWave) & Allegedly Control Model"
 track: R10
 status: verified
 owner: ux-teardown
@@ -7,11 +7,11 @@ updated: 2026-11-24
 code_refs: []
 ---
 
-# R10 — UX Teardown (TradingView vs. MotiveWave) & MotiveView Control Model
+# R10 — UX Teardown (TradingView vs. MotiveWave) & Allegedly Control Model
 
 ## 1. Question
 
-How can MotiveView combine **TradingView's low-friction visual hierarchy, direct canvas manipulation, Object Tree, and Command Palette** with **MotiveWave's institutional order-flow depth, dockable multi-monitor workspaces, `Analyses` scenario layers, and price-axis execution** — while eliminating MotiveWave's 14-tab modal dialog sprawl and TradingView's cloud lock-in, upsell dark patterns, and missing L2/L3 order-flow controls?
+How can Allegedly combine **TradingView's low-friction visual hierarchy, direct canvas manipulation, Object Tree, and Command Palette** with **MotiveWave's institutional order-flow depth, dockable multi-monitor workspaces, `Analyses` scenario layers, and price-axis execution** — while eliminating MotiveWave's 14-tab modal dialog sprawl and TradingView's cloud lock-in, upsell dark patterns, and missing L2/L3 order-flow controls?
 
 ---
 
@@ -23,9 +23,9 @@ Based on public documentation, user guides, and public interface layouts from Tr
 
 #### A. Visual Hierarchy, Chrome Density & Toolbar Topology
 
-| Dimension | TradingView (Public Web / Desktop Docs) [R10-S01, R10-S03] | MotiveWave (Public User Guide) [R10-S07, R10-S11, R10-S12] | Verdict & MotiveView Synthesis |
+| Dimension | TradingView (Public Web / Desktop Docs) [R10-S01, R10-S03] | MotiveWave (Public User Guide) [R10-S07, R10-S11, R10-S12] | Verdict & Allegedly Synthesis |
 | :--- | :--- | :--- | :--- |
-| **Canvas-to-Chrome Ratio** | **~88–92% Canvas**: Single slim top bar (`38 px`), slim left drawing rail (`44 px`), collapsible right utility rail, ultra-compact bottom timeframe/timezone strip. | **~72–80% Canvas** (out of the box): Native OS menu bar + multi-row customizable `Tool Bar` + `Console` side docks + workspace/page tab strips + chart title bars + status bars [R10-S07, R10-S12]. | **TradingView Wins on Default Chrome Restraint; MotiveWave Wins on Toolbar Customizability.** MotiveView adopts a `36 px` unified header + `40 px` left drawing rail (`>90%` canvas area) where any study toggle or template hotkey can be pinned as a compact pill. |
+| **Canvas-to-Chrome Ratio** | **~88–92% Canvas**: Single slim top bar (`38 px`), slim left drawing rail (`44 px`), collapsible right utility rail, ultra-compact bottom timeframe/timezone strip. | **~72–80% Canvas** (out of the box): Native OS menu bar + multi-row customizable `Tool Bar` + `Console` side docks + workspace/page tab strips + chart title bars + status bars [R10-S07, R10-S12]. | **TradingView Wins on Default Chrome Restraint; MotiveWave Wins on Toolbar Customizability.** Allegedly adopts a `36 px` unified header + `40 px` left drawing rail (`>90%` canvas area) where any study toggle or template hotkey can be pinned as a compact pill. |
 | **Typography & Whitespace** | High-legibility tabular sans-serif (`Inter`/`Trebuchet`/`Roboto Mono` numerals), generous `8–12 px` padding inside popovers, muted slate borders (`1 px`) that recede behind price action. | Dense Java/JavaFX desktop widget styling; compact `2–4 px` form margins allow packing 40+ controls into one tab, but create high visual fatigue and target-acquisition errors under stress. | **TradingView Wins.** Enforce tabular monospace numerals (`tnum` OpenType feature) on all price scales, DOM cells, and Footprint rows, paired with clean 4px/8px spatial grid tokens. |
 | **Floating Contextual Toolbar** | Selecting any drawing or study surfaces a compact **Floating Micro-Toolbar** (`6–8` icons: color, stroke, style, alert, lock, visibility, delete) `12 px` above/below the selection [R10-S03]. | Selecting a drawing/study requires right-clicking a long context menu or double-clicking to launch a multi-tab modal properties dialog [R10-S08, R10-S09]. | **TradingView Wins Decisively.** Zero-modal inline floating micro-toolbar for Tier-1 properties (`<= 5` controls). |
 
@@ -37,15 +37,15 @@ Based on public documentation, user guides, and public interface layouts from Tr
 - **TradingView's 3-Tab Non-Blocking Inspector (`Inputs | Style | Visibility`) [R10-S01, R10-S03]**:
   - Every indicator in TradingView uses the exact same 3-tab mental model (`Inputs`, `Style`, `Visibility`), updating the chart canvas live (`60 fps` reactive preview) with a single `Defaults / Reset` menu at the bottom.
   - However, TradingView flattens complex studies into a single long scrolling `Inputs` list without collapsible semantic groups or parameter search, which becomes unwieldy once an order-flow study has 30+ parameters.
-- **MotiveView Synthesis**:
+- **Allegedly Synthesis**:
   - Replace all blocking modals with a **Dockable / Floating Right-Hand Property Inspector (`320 px` wide)** that updates the canvas in real time (`0 ms` commit lag), organized into 4 invariant tabs (`Parameters | Style | Timeframes & Session | Alerts`), equipped with an **instant top filter bar** and **"Modified Only" toggle** (highlighting only parameters that differ from the template default).
 
 #### C. Right-Side Price Scale, Crosshair & Direct-Canvas Execution
 
-| Interaction | TradingView [R10-S01, R10-S04] | MotiveWave [R10-S08, R10-S14, R10-S17] | MotiveView Standard |
+| Interaction | TradingView [R10-S01, R10-S04] | MotiveWave [R10-S08, R10-S14, R10-S17] | Allegedly Standard |
 | :--- | :--- | :--- | :--- |
 | **Vertical Scale Drag & Reset** | Click-drag vertically to compress/expand price scale; double-click price axis or press `Alt+R` to reset `Auto` fit; gear icon at bottom-right toggles `Log`, `Percent`, `Indexed to 100`, `Invert`, `Lock Price-to-Bar Ratio`. | Click-drag vertically on price axis to scale; drag horizontally on time axis; lock/unlock auto-scale button on axis corner [R10-S08]. | **Combine Both**: Click-drag scale, double-click or `Alt+R` instant auto-fit reset, `Shift+Wheel` horizontal zoom, `Ctrl/Cmd+Wheel` vertical price zoom. |
-| **Price-Axis Order Placement** | "+" button attached to the crosshair label on the price scale opens a menu (`Alert`, `Buy/Sell Limit/Stop`, `Draw Horizontal Line`). | **Direct Modifier-Key Price-Axis Trading** [R10-S14, R10-S17]: Hovering the price axis previews a live order line; `Click` = Limit, `Shift+Click` = Stop, `Ctrl+Click` = Market; dragging an `Exit Strategy` from the `Trade Panel` drops a complete OCO [`Bracket Order`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) onto the chart. | **MotiveWave's Modifier-Key Axis Trading + TradingView's `+` Quick Pill**: Support both the `+` hover pill (for 1-click Horizontal Ray / Alert / Order) AND MotiveWave's modifier-key rapid staging (`Shift`/`Ctrl` on price axis or DOM) with an optional `Arm Direct Axis Trading` safety toggle. |
+| **Price-Axis Order Placement** | "+" button attached to the crosshair label on the price scale opens a menu (`Alert`, `Buy/Sell Limit/Stop`, `Draw Horizontal Line`). | **Direct Modifier-Key Price-Axis Trading** [R10-S14, R10-S17]: Hovering the price axis previews a live order line; `Click` = Limit, `Shift+Click` = Stop, `Ctrl+Click` = Market; dragging an `Exit Strategy` from the `Trade Panel` drops a complete OCO [`Bracket Order`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) onto the chart. | **MotiveWave's Modifier-Key Axis Trading + TradingView's `+` Quick Pill**: Support both the `+` hover pill (for 1-click Horizontal Ray / Alert / Order) AND MotiveWave's modifier-key rapid staging (`Shift`/`Ctrl` on price axis or DOM) with an optional `Arm Direct Axis Trading` safety toggle. |
 | **Crosshair & Magnet Modes** | `Weak Magnet` (snaps near OHLC), `Strong Magnet` (forces snap to exact OHLC regardless of distance), temporary magnet override by holding `Ctrl/Cmd` while drawing [R10-S03, R10-S04]. | Crosshair + snap-to-candle/bar magnet toggle in toolbar [R10-S12]. | **Adopt TradingView's 3-State Magnet + Order-Flow Snap**: Add a fourth snap target — **`Snap to POC / VAH / VAL / HVN`** — so horizontal rays and execution limits snap deterministically to exact fixed-point Volume/TPO Profile nodes! |
 
 #### D. Object Tree vs. MotiveWave `Analyses` & Window Docking
@@ -54,17 +54,17 @@ Based on public documentation, user guides, and public interface layouts from Tr
    - Exposes every active Study and Drawing on the current chart in a flat/folder hierarchy with drag-and-drop Z-order stacking, multi-select (`Shift/Cmd+Click`) bulk grouping into folders, and 4 quick-action icons per row (`Show/Hide`, `Lock/Unlock`, `Settings`, `Delete`).
    - *Limitation*: Drawings live in a single monolithic per-layout state (or global symbol sync), making it awkward to switch between an intraday scalping drawing set and a weekly macro Elliott/TPO scenario without cluttering one Object Tree.
 2. **MotiveWave's `Analyses` ("Parallel Universes") & Docking Framework [R10-S10, R10-S13]**:
-   - MotiveWave decouples the chart viewport from the [`Analysis`](file:///Users/abelmora/Documents/Obsidian/MotiveView/02-Research/R05-Orderflow-Profile-Tooling.md) document (which holds drawings and studies for an [`Instrument`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md)) [R10-S13]. A trader can create `ES - RTH Orderflow`, `ES - HTF Macro Structure`, and `ES - Alt Bearish Count`, and flip a chart between them or link 4 charts to the same Analysis.
+   - MotiveWave decouples the chart viewport from the [`Analysis`](file:///Users/abelmora/Documents/Obsidian/Allegedly/02-Research/R05-Orderflow-Profile-Tooling.md) document (which holds drawings and studies for an [`Instrument`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md)) [R10-S13]. A trader can create `ES - RTH Orderflow`, `ES - HTF Macro Structure`, and `ES - Alt Bearish Count`, and flip a chart between them or link 4 charts to the same Analysis.
    - Furthermore, MotiveWave's **Docking Framework** [R10-S10] supports tearing off any chart group, DOM Ladder, or Time & Sales pane into native OS floating windows across 4–8 monitors, organized into `Desktops` and `Pages`.
    - *Limitation*: MotiveWave lacks TradingView's visual per-object Z-order tree and bulk folder manipulation inside an Analysis.
-3. **MotiveView Synthesis — The Unified `Layer & Object Tree`**:
-   - MotiveView merges both paradigms into a two-level **Layer & Object Tree**:
+3. **Allegedly Synthesis — The Unified `Layer & Object Tree`**:
+   - Allegedly merges both paradigms into a two-level **Layer & Object Tree**:
      - **Top Level (`Analysis Layers`)**: Composable, stackable named layers stored as human-readable `.mvanalysis.toml` files (e.g., `[x] Base HTF Levels (Locked)` + `[x] Intraday Footprint & VWAP` + `[ ] Scenario B: Breakdown`). Users can toggle entire scenario layers on/off or overlay an HTF layer transparently beneath an intraday layer.
-     - **Inner Level (`Object Tree`)**: Within each layer, every [`Study`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) and [`Drawing`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) appears in a drag-and-drop Z-ordered tree with folders, visibility, lock, timeframe-visibility pill badge (`1m–15m`), and provenance badge.
+     - **Inner Level (`Object Tree`)**: Within each layer, every [`Study`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) and [`Drawing`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) appears in a drag-and-drop Z-ordered tree with folders, visibility, lock, timeframe-visibility pill badge (`1m–15m`), and provenance badge.
 
 ---
 
-### 2.2 MotiveView Information Architecture (IA) & Control Model
+### 2.2 Allegedly Information Architecture (IA) & Control Model
 
 ```mermaid
 flowchart TD
@@ -88,7 +88,7 @@ flowchart TD
   3. **Crosshair & Replay Cursor Link** (60 fps synchronized time+price hairlines across Footprint, TPO, DOM History, and HTF charts).
 
 #### 2. Command Palette (`Cmd/Ctrl+K`) & Universal Fuzzy Search
-Inspired by VS Code, Linear, and TradingView's `Quick Search` (`Cmd/Ctrl+K` [R10-S04, R10-S05]), MotiveView makes **every action, study, setting, template, instrument, and workspace reachable in $\le 3$ keystrokes**:
+Inspired by VS Code, Linear, and TradingView's `Quick Search` (`Cmd/Ctrl+K` [R10-S04, R10-S05]), Allegedly makes **every action, study, setting, template, instrument, and workspace reachable in $\le 3$ keystrokes**:
 - **Prefix Modes**:
   - *(No prefix)*: Global fuzzy search across Actions, Studies, Settings, and Instruments.
   - `@` or typing symbol directly on canvas: **Instrument & Venue Switcher** (with data-provider & feed-fidelity tags, e.g., `ESZ6 [CME • Rithmic L3-MBO]`).
@@ -120,10 +120,10 @@ All hotkeys are 100% user-remappable in a flat `keymap.toml` file with conflict 
 | | `Shift + X` / `Shift + F12` | **Cancel All Working Orders** / **Flatten Position & Cancel All (Panic Key)** |
 
 #### 4. Settings Inheritance & Settings-as-Code (`TOML/JSON` Cascade)
-To prevent user configuration drift across charts, MotiveView enforces a deterministic **5-Level CSS-Style Property Cascade**:
+To prevent user configuration drift across charts, Allegedly enforces a deterministic **5-Level CSS-Style Property Cascade**:
 $$\texttt{Global Defaults} \longrightarrow \texttt{Workspace} \longrightarrow \texttt{Layout / Study Template} \longrightarrow \texttt{Chart Pane} \longrightarrow \texttt{Study / Drawing Instance}$$
 - **Explicit Override Tracking**: At every level, the TOML/JSON file stores **only the delta overrides** from its parent level. In the Property Inspector, any overridden field displays a blue left-border accent pill with a 1-click `Reset to Inherited (<Parent Value>)` action and a `Promote to Template Default` action.
-- **Settings-as-Code Guarantee**: Every workspace, layout, study template, theme, and keymap is stored as deterministic, sorted-key, human-readable `.toml` (with lossless `.json` export/import and a published JSON Schema). Running `git diff` on a MotiveView config folder produces a clean, minimal line diff.
+- **Settings-as-Code Guarantee**: Every workspace, layout, study template, theme, and keymap is stored as deterministic, sorted-key, human-readable `.toml` (with lossless `.json` export/import and a published JSON Schema). Running `git diff` on a Allegedly config folder produces a clean, minimal line diff.
 
 #### 5. Theme System & High-Contrast / Colorblind-Safe Palettes
 Order-flow tools (Footprints, Heatmaps, DOM Ladders) fail catastrophically when red/green numbers sit on red/green backgrounds or when protanopia/deuteranopia users cannot distinguish buy vs. sell imbalances.
@@ -141,7 +141,7 @@ Order-flow tools (Footprints, Heatmaps, DOM Ladders) fail catastrophically when 
 
 ### 2.3 Ranked Settings Inventory (Compressing MotiveWave's 14-Tab Sprawl into 3 Tiers)
 
-To prove how MotiveView preserves **100% of MotiveWave's analytical power** while eliminating its multi-tabbed dialog sprawl [R10-S09, R10-S15, R10-S16, R10-S17], every setting across all 8 tools and chart chrome is classified into three strict tiers:
+To prove how Allegedly preserves **100% of MotiveWave's analytical power** while eliminating its multi-tabbed dialog sprawl [R10-S09, R10-S15, R10-S16, R10-S17], every setting across all 8 tools and chart chrome is classified into three strict tiers:
 
 - **Tier 1 — Essential (Floating Contextual Micro-Toolbar & Pane Header, $\le 5$ controls per tool)**: Always visible in 1 click or single hotkey without opening an inspector.
 - **Tier 2 — Power (Non-Blocking Right Inspector Drawer & `Cmd/Ctrl+K`, 12–25 controls per tool)**: Grouped into collapsible semantic sections with instant search and "Modified Only" filtering.
@@ -163,7 +163,7 @@ To prove how MotiveView preserves **100% of MotiveWave's analytical power** whil
 
 ## 3. Options Table (Weighted Criteria)
 
-We evaluate four UX and Control-Model architectures against MotiveView's performance, ergonomics, and user-sovereignty constraints:
+We evaluate four UX and Control-Model architectures against Allegedly's performance, ergonomics, and user-sovereignty constraints:
 
 | Criterion | Weight | **Option A: TradingView Web-Clone UX** (Clean chrome, cloud-centric layouts, flat Object Tree, weak L2/DOM/execution ergonomics) | **Option B: MotiveWave Classic Desktop WIMP UX** (Dockable MDI, deep multi-tab modal dialogs, binary config files, menu-heavy) | **Option C: Full-Terminal TUI / Keyboard-Only Bloomberg Clone** (Pure command codes, tiling only, minimal direct mouse canvas controls) | **Option D: Hybrid Direct-Canvas + Command-Palette + Dockable Layer Architecture (Recommended)** |
 | :--- | :---: | :--- | :--- | :--- | :--- |
@@ -187,7 +187,7 @@ We evaluate four UX and Control-Model architectures against MotiveView's perform
    - **Tier 2 ($12\text{--}25$ controls)**: Right Inspector (`Parameters | Style | Timeframes & Session | Alerts`).
    - **Tier 3**: Consolidated into semantic theme tokens (`theme.toml`) or cut.
 3. **Unify TradingView's `Object Tree` with MotiveWave's `Analyses`**: Store per-instrument drawings and studies in composable, human-readable `.mvanalysis.toml` layers managed inside a single left/right dockable **Layer & Object Tree** with Z-order drag-and-drop, folders, timeframe visibility pills (`1m–15m`), and lock toggles.
-4. **Ship First-Class Price-Axis & DOM Execution with POC-Snap Magnet**: Combine MotiveWave's modifier-key execution (`Click` Limit, `Shift+Click` Stop, `Ctrl+Click` Market, drag-and-drop OCO [`Bracket Order`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) handles) with a 4-state Magnet (`Off | Weak | Strong | POC/VAH/VAL/HVN Snap`).
+4. **Ship First-Class Price-Axis & DOM Execution with POC-Snap Magnet**: Combine MotiveWave's modifier-key execution (`Click` Limit, `Shift+Click` Stop, `Ctrl+Click` Market, drag-and-drop OCO [`Bracket Order`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) handles) with a 4-state Magnet (`Off | Weak | Strong | POC/VAH/VAL/HVN Snap`).
 5. **Deterministic Settings-as-Code**: Persist all state across the 5-level inheritance cascade (`Global -> Workspace -> Template -> Chart -> Study`) as sorted-key `.toml` files with 1-click JSON export/import.
 
 ---
@@ -195,7 +195,7 @@ We evaluate four UX and Control-Model architectures against MotiveView's perform
 ## 5. Inferences
 
 1. **[INFERENCE — Why MotiveWave's Dialogs Accumulated 14+ Tabs]**: Over 15+ years of iterative Java desktop releases, MotiveWave exposed individual Swing/JavaFX widget properties (font family, font size, border width, fill color, alignment) per sub-component inside each study's dialog rather than using a centralized design-token cascade. Moving typography and spacing into semantic theme tokens eliminates $>65\%$ of MotiveWave's form controls without removing a single mathematical or analytical parameter.
-2. **[INFERENCE — Why Order-Flow Traders Bounce Back from TradingView to Desktop Terminals]**: Despite preferring TradingView's smooth 2D canvas and Object Tree, active futures and crypto order-flow traders return to MotiveWave, Sierra Chart, or Bookmap for four specific reasons: (a) true tick/L2/MBO data fidelity without 1-minute intrabar approximations, (b) 60 Hz DOM Ladder with Pulling/Stacking delta and MBO Queue Priority (PIQ), (c) multi-monitor native tear-off windows with synchronized tick replay, and (d) direct modifier-key Price-Axis/DOM execution. Solving all four inside a TradingView-grade canvas UI is MotiveView's primary product wedge.
+2. **[INFERENCE — Why Order-Flow Traders Bounce Back from TradingView to Desktop Terminals]**: Despite preferring TradingView's smooth 2D canvas and Object Tree, active futures and crypto order-flow traders return to MotiveWave, Sierra Chart, or Bookmap for four specific reasons: (a) true tick/L2/MBO data fidelity without 1-minute intrabar approximations, (b) 60 Hz DOM Ladder with Pulling/Stacking delta and MBO Queue Priority (PIQ), (c) multi-monitor native tear-off windows with synchronized tick replay, and (d) direct modifier-key Price-Axis/DOM execution. Solving all four inside a TradingView-grade canvas UI is Allegedly's primary product wedge.
 
 ---
 
@@ -219,7 +219,7 @@ We evaluate four UX and Control-Model architectures against MotiveView's perform
 
 ## 8. What Would Change This Decision
 
-1. **Touch / Tablet Surface Target**: If MotiveView were later targeted at iPadOS or touch-first monitors, modifier-key (`Shift`/`Ctrl`) axis trading and hover-dependent micro-toolbars would need persistent touch-mode toggle pills (`Limit | Stop | Market` radio bar). For Phase 1–3 desktop targets (macOS, Windows, Linux), keyboard + multi-button mouse ergonomics remain primary.
+1. **Touch / Tablet Surface Target**: If Allegedly were later targeted at iPadOS or touch-first monitors, modifier-key (`Shift`/`Ctrl`) axis trading and hover-dependent micro-toolbars would need persistent touch-mode toggle pills (`Limit | Stop | Market` radio bar). For Phase 1–3 desktop targets (macOS, Windows, Linux), keyboard + multi-button mouse ergonomics remain primary.
 2. **Empirical Keystroke-Level Modeling (KLM) User Testing**: If Phase 2 prototype testing reveals that migrating MotiveWave users rely on seeing all 7 study categories simultaneously rather than an inspector drawer, the Right Inspector will support an optional `Expand All Sections (Wide 520px Two-Column Mode)` toggle.
 
 ---

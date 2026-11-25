@@ -11,7 +11,7 @@ code_refs: []
 
 ## 1. Question
 
-How must MotiveView specify the exact fixed-point integer/decimal mathematics, in-memory and persistent data structures, minimum data fidelity requirements (`L3/MBO`, `L2/MBP`, `L1 Trade+BBO`, `L1 Trade-only`, `OHLCV 1m/1s`), memory/CPU budgets, graceful L1 degradation with loud provenance badges, and user configuration schemas for its 8 core order-flow and market-profile tools — while identifying which non-orderflow MotiveWave features merit clean-room re-architecture?
+How must Allegedly specify the exact fixed-point integer/decimal mathematics, in-memory and persistent data structures, minimum data fidelity requirements (`L3/MBO`, `L2/MBP`, `L1 Trade+BBO`, `L1 Trade-only`, `OHLCV 1m/1s`), memory/CPU budgets, graceful L1 degradation with loud provenance badges, and user configuration schemas for its 8 core order-flow and market-profile tools — while identifying which non-orderflow MotiveWave features merit clean-room re-architecture?
 
 ---
 
@@ -19,18 +19,18 @@ How must MotiveView specify the exact fixed-point integer/decimal mathematics, i
 
 ### 2.1 Canonical Fixed-Point Arithmetic Foundation
 
-In strict compliance with [`01-Charter/Constraints.md`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Constraints.md) and [`01-Charter/Glossary.md`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md), **IEEE-754 binary floating-point types (`f32`, `f64`) are prohibited** in all price, quantity, tick-indexing, profile bucket aggregation, imbalance ratio, and VWAP accumulation paths. Floating-point drift causes off-by-one tick bucket misalignments (e.g., `5000.25 / 0.25` evaluating to `20000.999999999996` and truncating to tick `20000` instead of `20001`), which corrupts Footprint rows, Volume Profile Points of Control (POC), and DOM Ladder levels.
+In strict compliance with [`01-Charter/Constraints.md`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Constraints.md) and [`01-Charter/Glossary.md`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md), **IEEE-754 binary floating-point types (`f32`, `f64`) are prohibited** in all price, quantity, tick-indexing, profile bucket aggregation, imbalance ratio, and VWAP accumulation paths. Floating-point drift causes off-by-one tick bucket misalignments (e.g., `5000.25 / 0.25` evaluating to `20000.999999999996` and truncating to tick `20000` instead of `20001`), which corrupts Footprint rows, Volume Profile Points of Control (POC), and DOM Ladder levels.
 
 All domain math operates on four canonical integer primitives:
 
 1. **Price Tick Coordinate (`TickIndex = i64`)**:
-   Every [`Instrument`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) defines an exact decimal minimum price increment $\Delta P = M_P \times 10^{-E_P}$ (`tick_size_mantissa: i64`, `tick_size_exponent: u8`). Every wire price $P$ is parsed directly from ASCII decimal strings or FIX/SBE fixed-point mantissas into a discrete integer price tick index:
+   Every [`Instrument`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) defines an exact decimal minimum price increment $\Delta P = M_P \times 10^{-E_P}$ (`tick_size_mantissa: i64`, `tick_size_exponent: u8`). Every wire price $P$ is parsed directly from ASCII decimal strings or FIX/SBE fixed-point mantissas into a discrete integer price tick index:
    $$p = \frac{P \times 10^{E_P}}{M_P} \in \mathbb{Z} \quad (\text{stored as } \texttt{i64})$$
    When rows are grouped by a user-selected `row_ticks: i64` multiplier $G \ge 1$ (MotiveWave `Tick Interval` [R05-S01]; TradingView `Row size` [R05-S08]), the grouped bucket coordinate $b(p)$ uses Euclidean floor division (`div_euclid`) so negative prices or spreads never reflect across zero:
    $$b(p) = \left\lfloor \frac{p}{G} \right\rfloor \times G$$
 
 2. **Lot Quantity (`LotQty = i64`)**:
-   Every [`Instrument`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) defines a minimum size increment $\Delta Q = M_Q \times 10^{-E_Q}$ (`lot_size`). For CME futures ($\Delta Q = 1\text{ contract}$), `1 LotQty = 1 contract`. For spot crypto ($\Delta Q = 10^{-8}\text{ BTC}$), `1 LotQty = 1 satoshi`. Signed net delta uses `SignedLotQty = i64`:
+   Every [`Instrument`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) defines a minimum size increment $\Delta Q = M_Q \times 10^{-E_Q}$ (`lot_size`). For CME futures ($\Delta Q = 1\text{ contract}$), `1 LotQty = 1 contract`. For spot crypto ($\Delta Q = 10^{-8}\text{ BTC}$), `1 LotQty = 1 satoshi`. Signed net delta uses `SignedLotQty = i64`:
    $$\Delta V = V_{\text{ask}} - V_{\text{bid}} \in \mathbb{Z}$$
 
 3. **Basis-Point Ratios (`Bps = i32` or `i64`)**:
@@ -43,7 +43,7 @@ All domain math operates on four canonical integer primitives:
 
 ### 2.2 Aggressor Classification & Data Fidelity Hierarchy
 
-Every order-flow tool depends on classifying each trade tick's [`Aggressor`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) side $s_i \in \{\text{Buy (Ask)}, \text{Sell (Bid)}, \text{Neutral}\}$ and tagging its [`Provenance`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md). Public documentation from CME MDP 3.0 [R05-S12], MotiveWave [R05-S01, R05-S05], and TradingView [R05-S08, R05-S10] establishes five distinct fidelity tiers:
+Every order-flow tool depends on classifying each trade tick's [`Aggressor`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) side $s_i \in \{\text{Buy (Ask)}, \text{Sell (Bid)}, \text{Neutral}\}$ and tagging its [`Provenance`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md). Public documentation from CME MDP 3.0 [R05-S12], MotiveWave [R05-S01, R05-S05], and TradingView [R05-S08, R05-S10] establishes five distinct fidelity tiers:
 
 | Fidelity Tier | Wire Feed Content | Aggressor Classification Algorithm | Provenance Badge |
 | :--- | :--- | :--- | :--- |
@@ -62,7 +62,7 @@ Every order-flow tool depends on classifying each trade tick's [`Aggressor`](fil
 #### Tool 1: Footprint Bar (Volume Imprint / Cluster Chart)
 
 ##### A. Mathematical Formulation
-For a [`Bar`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) $k$ spanning $[t_{\text{open}}, t_{\text{close}})$ with price grouping $G \ge 1$ ticks (`row_ticks`), each grouped price bucket $b = \lfloor p / G \rfloor \cdot G \in [b_{\text{low}}, b_{\text{high}}]$ maintains a `FootprintCell`:
+For a [`Bar`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) $k$ spanning $[t_{\text{open}}, t_{\text{close}})$ with price grouping $G \ge 1$ ticks (`row_ticks`), each grouped price bucket $b = \lfloor p / G \rfloor \cdot G \in [b_{\text{low}}, b_{\text{high}}]$ maintains a `FootprintCell`:
 $$V_{\text{bid}}[b] = \sum_{i \in \text{Sell}(b)} q_i, \quad V_{\text{ask}}[b] = \sum_{i \in \text{Buy}(b)} q_i, \quad V_{\text{tot}}[b] = V_{\text{bid}}[b] + V_{\text{ask}}[b], \quad \Delta V[b] = V_{\text{ask}}[b] - V_{\text{bid}}[b]$$
 $$N_{\text{bid}}[b] = |\text{Sell}(b)|, \quad N_{\text{ask}}[b] = |\text{Buy}(b)|$$
 
@@ -139,7 +139,7 @@ pub struct FootprintBar {
 ##### C. Minimum Data Fidelity & Graceful L1 Degradation
 - **Optimal**: `L3_MBO` or `L2_MBP`/`L1_TAGGED` (`EXACT: TICK-AGGR`).
 - **Degraded L1**: Falls back to `L1_QUOTE_SYNC` or `L1_TRADE_ONLY`. All formulas execute identically, and the chart header displays `ESTIMATED: L1-QUOTE` or `ESTIMATED: TICK-RULE`.
-- **Degraded OHLCV (`1s`/`1m`)**: When tick history is absent for historical back-fill (MotiveWave `Use Historical Bars` [R05-S01]), MotiveView renders **Volume-Only** or **Synthetic Intrabar Bid/Ask** cells with a hatched border and an orange `SYNTHETIC: 1m-INTRABAR` provenance badge, disabling Absorption and Unfinished Auction alerts on synthetic bars so traders never mistake approximated intrabar volume for real order flow.
+- **Degraded OHLCV (`1s`/`1m`)**: When tick history is absent for historical back-fill (MotiveWave `Use Historical Bars` [R05-S01]), Allegedly renders **Volume-Only** or **Synthetic Intrabar Bid/Ask** cells with a hatched border and an orange `SYNTHETIC: 1m-INTRABAR` provenance badge, disabling Absorption and Unfinished Auction alerts on synthetic bars so traders never mistake approximated intrabar volume for real order flow.
 
 ##### D. User Configuration Schema
 - `display_mode`: `BidAsk` | `Delta` | `Volume` | `Profile` | `Ladder` [R05-S01]
@@ -165,7 +165,7 @@ Total profile volume is $V_{\text{total}} = \sum_{b=b_{\min}}^{b_{\max}} V[b]$.
 2. **Exact Integer 70% Value Area Algorithm (`VAH` & `VAL`)**:
    Using ceiling integer division in basis points ($VA_{\text{bps}} = 7000$ default), the target volume threshold is:
    $$V_{\text{target}} = \left\lceil \frac{V_{\text{total}} \times VA_{\text{bps}}}{10000} \right\rceil = \frac{V_{\text{total}} \times VA_{\text{bps}} + 9999}{10000}$$
-   Public documentation reveals two standard industry variants that MotiveView supports via an explicit `va_algorithm` enum:
+   Public documentation reveals two standard industry variants that Allegedly supports via an explicit `va_algorithm` enum:
    - **Algorithm A: Standard Dual-Row Step-Out (Steidlmayer / TradingView Standard [R05-S07])**:
      Initialize $i_{\text{up}} = i_{\text{poc}}$, $i_{\text{dn}} = i_{\text{poc}}$, $V_{\text{acc}} = V[i_{\text{poc}}]$.
      While $V_{\text{acc}} < V_{\text{target}}$ and $(i_{\text{up}} < N-1 \lor i_{\text{dn}} > 0)$:
@@ -188,7 +188,7 @@ Total profile volume is $V_{\text{total}} = \sum_{b=b_{\min}}^{b_{\max}} V[b]$.
    - **LVN**: Local minima ($\tilde{V}[i] < \tilde{V}[i-1] \land \tilde{V}[i] \le \tilde{V}[i+1]$) inside $[b_{\min}, b_{\max}]$ satisfying $V[i] \le P_{q_{\text{low}}}(V)$ (default 25th percentile).
 
 ##### B. Data Structures & Fast Visible-Range (VRVP) Segment Tree
-To guarantee `60 fps` (`< 16.6 ms` frame budget) during rapid horizontal pan/zoom on `100k+` bars when **Visible Range Volume Profile (VRVP)** is active, MotiveView maintains a hierarchical **Dyadic Profile Segment Tree** over bars:
+To guarantee `60 fps` (`< 16.6 ms` frame budget) during rapid horizontal pan/zoom on `100k+` bars when **Visible Range Volume Profile (VRVP)** is active, Allegedly maintains a hierarchical **Dyadic Profile Segment Tree** over bars:
 - Level 0: Individual bar profiles.
 - Level $L$: Non-overlapping blocks of $2^L$ bars ($16, 64, 256, 1024, 4096$ bars).
 - Any visible viewport $[k_{\text{left}}, k_{\text{right}}]$ decomposes into at most $2 \log_4(N) \le 16$ pre-aggregated segments plus boundary bars, computing an exact 50,000-bar VRVP in **$< 0.25\text{ ms}$** without iterating every bar or tick.
@@ -254,7 +254,7 @@ $$L(m) = \begin{cases} \texttt{'A'} + m & 0 \le m < 26 \\ \texttt{'a'} + (m - 26
 Each price row requires only `tpo_mask: u64` (8 bytes) + `vol: i64` (8 bytes) = **16 bytes/row**. A 200-row daily TPO profile takes **3.2 KB**; 1,000 trading days (4 years) take **3.2 MB RAM**. Updating or splitting a profile takes `< 200 ns`.
 
 ##### C. Minimum Data Fidelity & Graceful L1 Degradation
-- **Minimum**: `OHLCV 1m` or `30m` bars suffice to compute exact 30-minute TPO letters because a sub-interval only tests whether $[L_m, H_m]$ intersected bucket $b$ (`EXACT: SUB-BAR-RANGE`). If the user selects a sub-interval finer than the available historical bar size, MotiveView displays `DEGRADED: BAR-GRANULARITY`.
+- **Minimum**: `OHLCV 1m` or `30m` bars suffice to compute exact 30-minute TPO letters because a sub-interval only tests whether $[L_m, H_m]$ intersected bucket $b$ (`EXACT: SUB-BAR-RANGE`). If the user selects a sub-interval finer than the available historical bar size, Allegedly displays `DEGRADED: BAR-GRANULARITY`.
 
 ##### D. User Configuration Schema
 - `timeframe`: `Daily` | `Weekly` | `Monthly` | `Session` | `Custom` [R05-S02]
@@ -282,7 +282,7 @@ Each price row requires only `tpo_mask: u64` (8 bytes) + `vol: i64` (8 bytes) = 
    - **Continuous / Anchored Reset**: Accumulates without reset from an user-picked anchor bar $k_{\text{anchor}}$.
 
 3. **Delta Divergence Detection Rules**:
-   MotiveView provides two deterministic, non-repainting divergence modes:
+   Allegedly provides two deterministic, non-repainting divergence modes:
    - **Mode 1: Bar-Level Exhaustion / Absorption Divergence**:
      - *Bullish Bar Divergence* (New N-bar Price Low with Positive Delta):
        $$L_k < \min_{1 \le j \le N} L_{k-j} \;\land\; \Delta_{\text{close}, k} > 0 \;\land\; (C_k > O_k)$$
@@ -329,7 +329,7 @@ Clean-room enhancement of MotiveWave's `DOM History` study [R05-S04] into a GPU-
    - **Discrete Stepped Mode**: Supports MotiveWave's 5-level stepped color thresholds (`Level 1..5` [R05-S04]) as an alternative to continuous colormaps (Viridis / Inferno / Institutional Cyan-Gold).
 
 ##### B. Memory-Bounded Columnar Ring Buffer & Zstd Persistence
-Naive 2D float matrices of L2 history cause catastrophic RAM bloat in Java/Electron terminals. MotiveView enforces a strict **`< 64 MB` in-memory budget per active heatmap** using a two-tier architecture:
+Naive 2D float matrices of L2 history cause catastrophic RAM bloat in Java/Electron terminals. Allegedly enforces a strict **`< 64 MB` in-memory budget per active heatmap** using a two-tier architecture:
 1. **In-Memory Tier 0 (`Keyframe + Delta Ring Buffer`)**:
    - Every 64th time slice ($t_{64k}$, $\approx 6.4\text{ s}$ at 10 Hz) stores a compact sparse keyframe: `base_bid_tick: i64`, `base_ask_tick: i64`, and two fixed arrays `bids: [u32; D_max]`, `asks: [u32; D_max]`.
    - Intermediate slices store only non-zero book deltas `(tick_offset: i16, side: u8, new_qty: u32)` (8 bytes per changed level).
@@ -340,7 +340,7 @@ Naive 2D float matrices of L2 history cause catastrophic RAM bloat in Java/Elect
 
 ##### C. Minimum Data Fidelity & Graceful L1 Degradation
 - **Required**: `L3_MBO` or `L2_MBP`.
-- **Degraded L1 / No Historical L2**: Cannot synthesize multi-level resting depth from L1. MotiveView renders best-bid/best-ask (BBO) size traces only (if L1 includes BBO sizes) and displays an explicit banner: `UNAVAILABLE: HISTORICAL L2 DEPTH NOT PROVIDED BY FEED (RECORDING LIVE FROM HH:MM:SS)`.
+- **Degraded L1 / No Historical L2**: Cannot synthesize multi-level resting depth from L1. Allegedly renders best-bid/best-ask (BBO) size traces only (if L1 includes BBO sizes) and displays an explicit banner: `UNAVAILABLE: HISTORICAL L2 DEPTH NOT PROVIDED BY FEED (RECORDING LIVE FROM HH:MM:SS)`.
 
 ##### D. User Configuration Schema
 - `sampling_interval_ms`: `50` | `100 (default)` | `250` | `500` | `BarClose`
@@ -374,7 +374,7 @@ Clean-room unification of MotiveWave's 21-column DOM specification [R05-S03] on 
    - `P/L`, `P/L (Price)`, `Notes`, `MM Name` (Level 2 Market Maker ID) [R05-S03].
 
 2. **Queue Position Estimation (`PIQ` — Place In Queue Marker [R05-S03])**:
-   MotiveView supports three mathematically distinct queue models depending on feed fidelity and venue matching algorithm [R05-S12, R05-S13]:
+   Allegedly supports three mathematically distinct queue models depending on feed fidelity and venue matching algorithm [R05-S12, R05-S13]:
    - **Model 1: Exact L3 / MBO Priority Queue (`EXACT: L3-MBO`)**:
      On CME MDP 3.0 MBOFD or Rithmic MBO [R05-S03, R05-S12], every order at price $p$ carries a strictly monotonic `MDOrderPriority` ($u64$) and `MDDisplayQty`. For the user's resting order $o^*$ (or any tracked order):
      $$Q_{\text{ahead}}(o^*) = \sum_{\substack{o \in \text{Book}(p) \\ \text{priority}(o) < \text{priority}(o^*)}} \text{qty}(o)$$
@@ -390,7 +390,7 @@ Clean-room unification of MotiveWave's 21-column DOM specification [R05-S03] on 
          $$c_{\text{behind}} = \min(B(t^-), C), \quad c_{\text{ahead}} = C - c_{\text{behind}}, \quad A(t^+) = \max(0, A(t^-) - c_{\text{ahead}})$$
        - **Proportional Model ($\alpha = 1$)**: Distributes cancellations proportionally:
          $$c_{\text{ahead}} = \left\lfloor \frac{C \cdot A(t^-)}{A(t^-) + B(t^-) + q_{\text{user}}} \right\rfloor, \quad A(t^+) = \max(0, A(t^-) - c_{\text{ahead}})$$
-       MotiveView displays both the **Proportional Estimate** and the **Pessimistic Upper Bound** `[Est / Max]` in the PIQ marker.
+       Allegedly displays both the **Proportional Estimate** and the **Pessimistic Upper Bound** `[Est / Max]` in the PIQ marker.
    - **Model 3: CME Pro-Rata / Threshold Pro-Rata with TOP (`ESTIMATED: PRO-RATA`)**:
      For venues using Pro-Rata matching (e.g., CME Treasury / SOFR / Eurodollar options and futures [R05-S13]), queue priority applies only to the Top Order (`TOP` allocation percentage $\tau_{\text{bps}}$, capped at $Q_{\text{top\_max}}$). Remaining incoming aggressor volume $V_{\text{rem}}$ is allocated proportionally to every order $o_i$ of size $q_i \ge q_{\text{min\_pro\_rata}}$ using integer floor rounding:
      $$\text{Alloc}_{\text{pro\_rata}}(o_i) = \left\lfloor \frac{V_{\text{rem}} \times q_i}{\sum_{k} q_k} \right\rfloor$$
@@ -413,7 +413,7 @@ Clean-room unification of MotiveWave's 21-column DOM specification [R05-S03] on 
    > 3. **Order Fragmentation & Pro-Rata Over-Sizing**: In Pro-Rata markets, traders routinely post oversized quotes to capture a target pro-rata fill fraction and immediately cancel the remainder — a standard venue-sanctioned execution mechanic, not spoofing.
    > 4. **L2 Conflation Artifacts**: Retail L2 feeds conflated to $50\text{--}100\text{ ms}$ batch multiple trades and book updates together, creating phantom `V_traded > Q_visible` events even when limit orders were added normally between trades.
    >
-   > **MotiveView Architectural Mandate**: Every iceberg or liquidity-pull indicator on an L2 feed MUST be labeled `HEURISTIC` in the UI, must expose its false-positive sensitivity sliders (`dwell_ms`, `min_wall_percentile`, `conflation_guard_ms`), and must never claim legal or deterministic "Spoof" attribution.
+   > **Allegedly Architectural Mandate**: Every iceberg or liquidity-pull indicator on an L2 feed MUST be labeled `HEURISTIC` in the UI, must expose its false-positive sensitivity sliders (`dwell_ms`, `min_wall_percentile`, `conflation_guard_ms`), and must never claim legal or deterministic "Spoof" attribution.
 
 ##### B. Data Structures & Memory / CPU Cost
 The DOM uses a pre-allocated circular price array (`Vec<DomRow>` of size $4096$ ticks centered on last trade price) with $O(1)$ tick-to-index lookup (`idx = (p - base_tick) & 4095`). Zero heap allocations occur during live L2/L3 packet processing. Update intervals default to `60 Hz` (`16.6 ms`, faster than MotiveWave's `100 ms` default [R05-S03]) with `< 0.15 ms` layout/render time per frame.
@@ -435,7 +435,7 @@ The DOM uses a pre-allocated circular price array (`Vec<DomRow>` of size $4096$ 
 #### Tool 7: Time & Sales Aggregation & Sweep Reconstruction
 
 ##### A. Mathematical Formulation
-Raw exchange feeds split a single institutional market order sweeping 15 resting limit orders into 15 separate trade packets. Unaggregated Time & Sales (T&S) scrolls unreadable 1-lot fragments at 5,000 prints/sec. MotiveView implements a three-stage deterministic reconstruction pipeline (extending MotiveWave's `Aggregate Period` and `Aggregate By Order` [R05-S05]):
+Raw exchange feeds split a single institutional market order sweeping 15 resting limit orders into 15 separate trade packets. Unaggregated Time & Sales (T&S) scrolls unreadable 1-lot fragments at 5,000 prints/sec. Allegedly implements a three-stage deterministic reconstruction pipeline (extending MotiveWave's `Aggregate Period` and `Aggregate By Order` [R05-S05]):
 
 1. **Level 1: Exact Order-ID Aggregation (`EXACT: ORDER-ID`, Tier A `L3_MBO` / Rithmic [R05-S05])**:
    Consecutive trade packets sharing the exact same `aggressor_order_id` (or identical exchange `MatchEventIndicator` + timestamp burst) are merged into a single reconstructed parent execution:
@@ -524,15 +524,15 @@ Each bar stores `(s_v: i128, s_pv_centered: i128, s_p2v_centered: i128)` (48 byt
 
 ### 2.5 Inventory of MotiveWave Non-Orderflow Strengths Worth Clean-Room Cloning
 
-A comprehensive public-documentation review of MotiveWave's User Guide [R05-S14 through R05-S23] identifies **11 high-value non-orderflow capabilities** where MotiveWave outperforms TradingView for serious technical and multi-timeframe analysts, along with how MotiveView should clean-room re-architect each feature:
+A comprehensive public-documentation review of MotiveWave's User Guide [R05-S14 through R05-S23] identifies **11 high-value non-orderflow capabilities** where MotiveWave outperforms TradingView for serious technical and multi-timeframe analysts, along with how Allegedly should clean-room re-architect each feature:
 
-| # | MotiveWave Feature | Verified Public Capability & Why Traders Value It | MotiveView Clean-Room Architecture & UX Upgrade |
+| # | MotiveWave Feature | Verified Public Capability & Why Traders Value It | Allegedly Clean-Room Architecture & UX Upgrade |
 | :--- | :--- | :--- | :--- |
 | **1** | **Analyses ("Parallel Universes" Layer System)** [R05-S18] | Separates drawings/studies into named `Analysis` files per instrument (`Primary`, `Alt Bullish`, `HTF Context`). Multiple charts can share one Analysis or display independent what-if scenarios on the same symbol without duplicating workspaces. | **Adopt as Git-Friendly Layered Documents (`.mvanalysis.toml`)**: Replace MotiveWave's opaque binary analysis files with composable, stackable layers inside a unified Object & Layer Tree (allowing base HTF support/resistance layers to be overlaid with toggleable scenario layers). |
 | **2** | **Deep Per-Study Settings (Timeframe Override, Visibility Masks & Chaining)** [R05-S15, R05-S17] | Every study has a standardized `Options` tab providing: (a) **Cross-Timeframe Bar Size** (e.g., plot a 15m EMA on a 1m chart without writing code), (b) **Timeframe Visibility Matrix** (checkboxes restricting a study/drawing to `< 15m` or `Daily+`), (c) **Input Chaining** (feed RSI into Bollinger Bands), and (d) **Promote to Toolbar** (`Display in Tool Bar`). | **Adopt 100% into Core Study Runtime**: Eliminate MotiveWave's 5-tab modal dialog by exposing timeframe override, visibility pills (`1m..15m`), and input source chaining directly in a non-blocking side inspector and `Cmd/Ctrl+K`. |
 | **3** | **Study Templates & `Alt+1..9` Instant Hotkeys** [R05-S17] | Saves full study + sub-pane configurations as named templates bound to `Alt+1` through `Alt+9`, switching a chart from a clean candlestick view to a full Footprint + CVD + Volume Profile stack in one keystroke. | **Adopt & Unify with Workspace Presets**: Bind `Alt+1..9` to deterministic `.mvtemplate.toml` files with zero frame stutter via pre-warmed study pipelines. |
 | **4** | **Bar & Tick Replay Mode with Multi-Chart Sync & Replay Account** [R05-S16] | Synchronizes historical replay across all linked charts in a Desktop/Channel while provisioning an isolated **Simulated Replay Account** so live/sim journal stats are never polluted by practice replay trades. | **Adopt with Tick-Accurate L1/L2 Replay**: Support synchronized multi-chart tick/L2 replay (`Space` play/pause, `Right Arrow` step tick/bar) with an isolated ephemeral Replay Account and instant seek via the Zstd keyframe index. |
-| **5** | **Price-Axis Modifier-Key Trading & Drag-and-Drop Exit Strategies** [R05-S19] | Moving the cursor over the vertical price scale previews a live order line (`Buy/Sell Limit` or `Stop` via `Shift`/`Ctrl` modifiers); the `Trade Panel` allows dragging pre-configured multi-leg OCO Bracket Exit Strategies directly onto the price canvas. | **Adopt with Guarded Confirmation Modes**: Implement Price-Axis hover-to-stage (`Alt+Click` or configurable modifier) and visual drag-and-drop [`Bracket Order`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) handles (`Entry + TP1/TP2 + SL`) with live fixed-point Risk/Reward and dollar/tick PnL labels. |
+| **5** | **Price-Axis Modifier-Key Trading & Drag-and-Drop Exit Strategies** [R05-S19] | Moving the cursor over the vertical price scale previews a live order line (`Buy/Sell Limit` or `Stop` via `Shift`/`Ctrl` modifiers); the `Trade Panel` allows dragging pre-configured multi-leg OCO Bracket Exit Strategies directly onto the price canvas. | **Adopt with Guarded Confirmation Modes**: Implement Price-Axis hover-to-stage (`Alt+Click` or configurable modifier) and visual drag-and-drop [`Bracket Order`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) handles (`Entry + TP1/TP2 + SL`) with live fixed-point Risk/Reward and dollar/tick PnL labels. |
 | **6** | **Interactive Profile & Study Components (Drag-and-Drop Canvas Overlays)** [R05-S11] | Allows dragging a standalone `Volume Profile`, `Delta Profile`, or `TPO` from a `Components` palette onto any price-time bounding box and resizing its corners live on the canvas. | **Adopt as First-Class Drawing Tools**: Unify Fixed-Range Volume Profile, Delta Profile, TPO Profile, and Box-Anchored VWAP as interactive bounding-box drawings with 8-handle live resize backed by the Dyadic Segment Tree. |
 | **7** | **Rich Bar Types (Range, Renko, Volume, Tick, Point & Figure, Heikin-Ashi, Reversible)** [R05-S14] | Native first-class non-time bars (`Tick`, `Volume`, `Range`, `Renko`, `Hybrid Renko`) that work seamlessly as the base series for Footprint and Volume Profile studies. | **Adopt in Core Bar Aggregator**: Build deterministic fixed-point bar builders for `Tick(N)`, `Volume(V)`, `Range(R ticks)`, and `Classic/ATR Renko(R ticks)` that emit standard `Bar` events into all downstream studies. |
 | **8** | **Session Templates (RTH / ETH / Multi-Sub-Session Calendars)** [R05-S01, R05-S02] | Granular exchange session calendars allowing users to toggle `RTH Data Only` per chart or study, and define up to 3 colored sub-sessions (Asia / London / NY) for TPO and Volume Profiles. | **Adopt as Canonical Venue Calendars**: Ship built-in IANA-timezone exchange calendars (CME Globex RTH/ETH, Eurex, NYSE, 24/7 Crypto Sessions) with per-chart and per-study `Session` override. |
@@ -544,14 +544,14 @@ A comprehensive public-documentation review of MotiveWave's User Guide [R05-S14 
 
 ## 3. Options Table (Weighted Criteria)
 
-We evaluate four architectural approaches for MotiveView's Order-Flow & Profile Engine against the project constraints in [`01-Charter/Constraints.md`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Constraints.md):
+We evaluate four architectural approaches for Allegedly's Order-Flow & Profile Engine against the project constraints in [`01-Charter/Constraints.md`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Constraints.md):
 
 | Criterion | Weight | **Option A: TradingView-Style Cloud/Intrabar Approx** (JS/Float64, server-computed or 1m intrabar approximations, limited L2/DOM) | **Option B: MotiveWave-Style Monolithic Java/OOP Object Graph** (Rich tools, heap-allocated per-row objects, binary float prices, heavy RAM) | **Option C: Fixed-Point Columnar Rust Engine + Segment Trees + Zstd Ring Buffers (Recommended)** | **Option D: Unbounded Raw Tick & Full L2 Matrix Store in RAM** (Keep all ticks and uncompressed 2D L2 matrices in memory) |
 | :--- | :---: | :--- | :--- | :--- | :--- |
 | **1. Financial Math Determinism** (Zero float drift, exact tick buckets, exact `i128` VWAP) | **25%** | **2 / 5** — `f64` price math; intrabar approximation diverges from real tick prints. | **3 / 5** — Tick-capable, but standard `double` math requires epsilon hacks at tick boundaries. | **5 / 5** — 100% `i64` tick/lot & `i128` variance math; zero rounding drift across platforms. | **4 / 5** — Exact if integer-based, but lacks bounded accumulators. |
 | **2. Hot-Path Frame Budget (`60 fps` Pan/Zoom on `100k+` bars, `60 Hz` DOM)** | **25%** | **4 / 5** — Fast 2D canvas, but stutters on dense multi-pane tick footprints. | **2 / 5** — GC pauses and heap-allocated cell objects stall during high-volatility spikes. | **5 / 5** — Zero-GC flat arrays, $O(\log N)$ Dyadic VRVP Segment Tree (`< 0.25 ms`), `R16Uint` GPU heatmap tiles. | **2 / 5** — Scanning raw ticks on every viewport pan misses the `16.6 ms` budget by $10\times$. |
 | **3. Memory Efficiency (`< 300 MB` Idle, `< 64 MB` 24h Heatmap)** | **20%** | **4 / 5** — Light client footprint by offloading/truncating tick depth. | **2 / 5** — Routinely consumes `2–6 GB` RAM with Footprints + DOM History open. | **5 / 5** — `~23 MB` total for 10k Footprint bars + VRVP + CVD + DOM + 24h Zstd Heatmap. | **1 / 5** — Uncompressed 24h L2 grid + ticks exceeds `1.5 GB` per symbol. |
-| **4. Provenance & Graceful L1 Degradation** | **15%** | **2 / 5** — Mixes intrabar estimates and real ticks with minimal visual distinction. | **3 / 5** — Supports `Use Historical Bars` fallback [R05-S01], but silent on mixed-fidelity charts. | **5 / 5** — 5-tier explicit [`Provenance`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) state machine (`EXACT` vs. `ESTIMATED` vs. `SYNTHETIC`) + honest L2 heuristic warnings. | **3 / 5** — Refuses to render or crashes when only L1/OHLCV is available. |
+| **4. Provenance & Graceful L1 Degradation** | **15%** | **2 / 5** — Mixes intrabar estimates and real ticks with minimal visual distinction. | **3 / 5** — Supports `Use Historical Bars` fallback [R05-S01], but silent on mixed-fidelity charts. | **5 / 5** — 5-tier explicit [`Provenance`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) state machine (`EXACT` vs. `ESTIMATED` vs. `SYNTHETIC`) + honest L2 heuristic warnings. | **3 / 5** — Refuses to render or crashes when only L1/OHLCV is available. |
 | **5. Analytical Depth (All 8 Order-Flow Tools + MW Non-Orderflow Top Features)** | **15%** | **2 / 5** — Missing L2 Heatmap, MBO DOM PIQ, T&S sweep reconstruction, TPO bitmask split/merge. | **5 / 5** — Industry benchmark for comprehensive order-flow + classical technical tooling. | **5 / 5** — Full parity on all 8 order-flow tools + top 10 MotiveWave non-orderflow capabilities. | **4 / 5** — Strong on raw order-flow, weak on classical studies. |
 | **Weighted Total** | **100%** | **2.80 / 5.00** | **2.85 / 5.00** | **5.00 / 5.00** | **2.70 / 5.00** |
 
@@ -565,15 +565,15 @@ We evaluate four architectural approaches for MotiveView's Order-Flow & Profile 
 1. **Strict Integer Coordinate Domain**: Every market event entering the engine is immediately normalized at the adapter boundary into `(price_tick: i64, lot_qty: i64, timestamp_ns: i64, aggressor: AggressorSide, provenance: ProvenanceTier)`. Downstream studies never touch floating-point numbers.
 2. **Pre-Aggregated Dyadic Segment Trees for Profiles**: Both Volume Profile and TPO Profile maintain a base-4 segment tree over bars (`1, 4, 16, 64, 256, 1024, 4096` bars). Visible-Range Volume Profile (VRVP) and interactive drag-and-drop Profile Components query this tree in $< 0.25\text{ ms}$, eliminating the frame drops seen in existing desktop platforms when panning across months of tick data.
 3. **Bitmask TPO Architecture**: Representing 30-minute TPO letters as a single `u64` bitmask per price row reduces TPO memory by $95\%$ and turns interactive `Split TPO`, `Merge TPO`, Initial Balance (`mask & 0b11`), and Single Print detection (`popcnt(mask) == 1`) into single-cycle bitwise operations.
-4. **Tiered Keyframe + Delta L2 Heatmap**: By storing 64-slice keyframes and 8-byte level deltas in a `32 MB` RAM ring buffer backed by asynchronous Zstd disk chunks and a `16 MB` `R16Uint` circular GPU texture, MotiveView achieves Bookmap-class 10–20 Hz liquidity heatmaps inside MotiveView's strict `< 300 MB` process memory envelope.
-5. **Mandatory Provenance Badges & Honest Heuristic Guardrails**: Every study header and bar range carries a machine-verified [`Provenance`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md) tag (`EXACT: L3-MBO`, `EXACT: TICK-AGGR`, `ESTIMATED: L1-QUOTE`, `ESTIMATED: TICK-RULE`, or `SYNTHETIC: 1m-INTRABAR`). L2 Iceberg and Liquidity-Pull markers are explicitly labeled `HEURISTIC` with configurable conflation and dwell filters.
+4. **Tiered Keyframe + Delta L2 Heatmap**: By storing 64-slice keyframes and 8-byte level deltas in a `32 MB` RAM ring buffer backed by asynchronous Zstd disk chunks and a `16 MB` `R16Uint` circular GPU texture, Allegedly achieves Bookmap-class 10–20 Hz liquidity heatmaps inside Allegedly's strict `< 300 MB` process memory envelope.
+5. **Mandatory Provenance Badges & Honest Heuristic Guardrails**: Every study header and bar range carries a machine-verified [`Provenance`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md) tag (`EXACT: L3-MBO`, `EXACT: TICK-AGGR`, `ESTIMATED: L1-QUOTE`, `ESTIMATED: TICK-RULE`, or `SYNTHETIC: 1m-INTRABAR`). L2 Iceberg and Liquidity-Pull markers are explicitly labeled `HEURISTIC` with configurable conflation and dwell filters.
 
 ---
 
 ## 5. Inferences
 
 1. **[INFERENCE — Memory Allocation Bottleneck in Existing Terminals]**: Because MotiveWave runs on the JVM and renders rich per-cell Footprint and DOM History objects [R05-S01, R05-S04], garbage-collection pressure from millions of short-lived cell/tick objects during market opens is the primary root cause of its high RAM footprint and occasional UI hitching. Flattening `FootprintCell` to a 32-byte value struct in a contiguous arena eliminates GC stalls completely.
-2. **[INFERENCE — Value Area Discrepancy Across Platforms]**: Traders frequently report 1–2 tick differences in VAH/VAL between TradingView and desktop order-flow platforms on the exact same symbol. Our mathematical comparison of [R05-S02] and [R05-S07] confirms this arises from three subtle choices: (a) Dual-Row vs. Single-Row step-out, (b) `S_up == S_dn` tie-breaking direction, and (c) integer ceiling vs. float rounding of $0.70 \times V_{\text{total}}$. Exposing `va_algorithm: DualRowSteidlmayer | SingleRow` makes MotiveView reproducible against either reference.
+2. **[INFERENCE — Value Area Discrepancy Across Platforms]**: Traders frequently report 1–2 tick differences in VAH/VAL between TradingView and desktop order-flow platforms on the exact same symbol. Our mathematical comparison of [R05-S02] and [R05-S07] confirms this arises from three subtle choices: (a) Dual-Row vs. Single-Row step-out, (b) `S_up == S_dn` tie-breaking direction, and (c) integer ceiling vs. float rounding of $0.70 \times V_{\text{total}}$. Exposing `va_algorithm: DualRowSteidlmayer | SingleRow` makes Allegedly reproducible against either reference.
 3. **[INFERENCE — L2 Conflation Corrupts Naive Iceberg Detectors]**: On conflated retail L2 feeds (e.g., 100 ms snapshots), multiple trades and limit additions within a 100 ms window arrive out of causal sequence, causing naive `traded > visible` detectors to fire false iceberg alerts on routine trend volume. Adding a `conflation_guard_ms` parameter that requires level dwell continuity across at least 2 book updates suppresses $>80\%$ of conflation false positives.
 
 ---
@@ -582,7 +582,7 @@ We evaluate four architectural approaches for MotiveView's Order-Flow & Profile 
 
 | Risk ID | Description | Severity | Likelihood | Mitigation |
 | :--- | :--- | :---: | :---: | :--- |
-| **R05-RK01** | **Dynamic Tick-Size Tables (Crypto / Equities)**: Some crypto and equity venues change tick size dynamically by price tier (e.g., $\$0.01$ above $\$1.00$, $\$0.0001$ below $\$1.00$). | High | Medium | Normalize `TickIndex` using the [`Instrument`](file:///Users/abelmora/Documents/Obsidian/MotiveView/01-Charter/Glossary.md)'s **finest base atomic tick** $\Delta P_{\min}$, and apply price-tier display step multipliers $G(p)$ at the grouping/rendering layer. |
+| **R05-RK01** | **Dynamic Tick-Size Tables (Crypto / Equities)**: Some crypto and equity venues change tick size dynamically by price tier (e.g., $\$0.01$ above $\$1.00$, $\$0.0001$ below $\$1.00$). | High | Medium | Normalize `TickIndex` using the [`Instrument`](file:///Users/abelmora/Documents/Obsidian/Allegedly/01-Charter/Glossary.md)'s **finest base atomic tick** $\Delta P_{\min}$, and apply price-tier display step multipliers $G(p)$ at the grouping/rendering layer. |
 | **R05-RK02** | **Sparse Price Gaps in Volatile Crypto / Illiquid Contracts**: A flash crash spanning $50,000$ ticks would allocate $50,000$ empty `FootprintCell` structs in a naive dense array. | Medium | Medium | When a single bar's tick span $(b_{\text{high}} - b_{\text{low}}) / G > 512$, automatically switch that bar's storage representation from `DenseVec` to a sorted `SmallSparseVec<(u32, FootprintCell)>` with binary-search/SIMD lookup. |
 | **R05-RK03** | **Historical Tick Backfill Latency**: Loading 30 days of raw tick data over a slow broker API blocks Footprint rendering on initial chart open. | High | High | Progressive rendering: immediately paint bars with `SYNTHETIC: 1m-INTRABAR` badge in $< 150\text{ ms}$, stream historical tick chunks in background workers, and seamlessly hot-swap bars to `EXACT: TICK-AGGR` as chunks complete. |
 | **R05-RK04** | **False Confidence in L2 PIQ & Spoof Heuristics**: Users may over-rely on L2 queue estimates or spoof markers in fast markets. | Medium | High | Display `[Est / Max]` pessimistic queue bounds on L2 feeds, require explicit opt-in to enable `HEURISTIC: L2-ICEBERG / L2-PULL` overlays, and link the inspector help icon directly to the quantitative false-positive disclosure. |

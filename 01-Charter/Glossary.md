@@ -1,5 +1,5 @@
 ---
-title: MotiveView Domain Glossary
+title: Allegedly Domain Glossary
 type: glossary
 status: living
 owner: orchestrator
@@ -7,7 +7,7 @@ updated: 2026-11-24
 code_refs: []
 ---
 
-# MotiveView
+# Allegedly
 
 A local-first, cross-platform trading terminal combining clean charting and scripting with deep order-flow, profile, and execution tooling.
 

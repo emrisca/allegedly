@@ -11,7 +11,7 @@ code_refs: []
 
 ## Question
 
-Which FOSS desktop shell, IPC transport, packaging/signing/updater pipeline, and UI/docking stack best satisfies MotiveView's non-negotiables (`[[Constraints]]`: installer `< 40 MB`, cold start `< 2 s`, idle RAM `< 300 MB`, smooth **DOM Ladder** at `30+` updates/s, zero GC stalls on the hot path, `$0` core, local-first, and first-class macOS Apple Silicon + Windows 10/11 + Linux X11/Wayland multi-distro support under `[[Assumptions]]` A01/A04/A07)?
+Which FOSS desktop shell, IPC transport, packaging/signing/updater pipeline, and UI/docking stack best satisfies Allegedly's non-negotiables (`[[Constraints]]`: installer `< 40 MB`, cold start `< 2 s`, idle RAM `< 300 MB`, smooth **DOM Ladder** at `30+` updates/s, zero GC stalls on the hot path, `$0` core, local-first, and first-class macOS Apple Silicon + Windows 10/11 + Linux X11/Wayland multi-distro support under `[[Assumptions]]` A01/A04/A07)?
 
 ---
 
@@ -43,21 +43,21 @@ All versions, licenses, star counts, and maintenance dates below were verified d
   2. **`OffscreenCanvas` WebGL2 disabled by default:** WebKitGTK disables `AllowWebGLInWorkers`, causing `OffscreenCanvas.getContext('webgl2')` to return `null`; enabling it on NVIDIA + Wayland has triggered UI-process `Error 71 (Protocol error)` crashes [R01-S27].
   3. **DMA-BUF / NVIDIA / Wayland bugs:** Tracked actively in Tauri (`tauri#9304`, `tauri#14924`, `tauri#16226`): explicit-sync `Error 71` kills on Hyprland/KWin with NVIDIA drivers, GBM buffer creation failures in AppImages, and visual artifacts on transparent windows [R02-S04].
   4. **Critical 2026 regression:** Setting the older blanket workaround `WEBKIT_DISABLE_DMABUF_RENDERER=1` causes a **SIGSEGV** in `AcceleratedBackingStore` on WebKitGTK `2.52+`! Safer targeted mitigations are `__NV_DISABLE_EXPLICIT_SYNC=1` (first choice for NVIDIA + Wayland `Error 71`) and `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` (shared-memory fallback without SIGSEGV) [R02-S04].
-  5. **Fingerprinting mask:** WebKitGTK masks `WEBGL_debug_renderer_info` as `"Apple GPU"` on Linux and silently degrades to software GL, requiring a MotiveView frame-time watchdog and user-facing `Auto / WebGL2 / Canvas2D` render setting [R01-S27].
-- **Rule for MotiveView:** Never use transparent window chrome on Linux, never blindly inject `WEBKIT_DISABLE_DMABUF_RENDERER=1`, and detect NVIDIA+Wayland cleanly at startup (or expose a CLI flag/setting for SHM fallback).
+  5. **Fingerprinting mask:** WebKitGTK masks `WEBGL_debug_renderer_info` as `"Apple GPU"` on Linux and silently degrades to software GL, requiring a Allegedly frame-time watchdog and user-facing `Auto / WebGL2 / Canvas2D` render setting [R01-S27].
+- **Rule for Allegedly:** Never use transparent window chrome on Linux, never blindly inject `WEBKIT_DISABLE_DMABUF_RENDERER=1`, and detect NVIDIA+Wayland cleanly at startup (or expose a CLI flag/setting for SHM fallback).
 
 #### 2.2 Windows WebView2 Runtime Distribution
 - Windows 10 (version 1803+) and Windows 11 ship the **Evergreen WebView2** runtime managed and security-patched by Microsoft; **Tauri 2.12** dropped Windows 7 support (matching our Windows 10/11 target) [R02-S02].
 - Verified Tauri v2 `bundle.windows.webviewInstallMode` modes (`v2.tauri.app/distribute/windows-installer/`) [R02-S02]:
   - `downloadBootstrapper` *(default)*: `~0 MB` size impact, downloads Evergreen bootstrapper silently if missing (requires internet).
-  - `embedBootstrapper`: **+`~1.8 MB`**, embeds bootstrapper in `.msi`/NSIS installer — **recommended default** for MotiveView Windows releases (stays well under `< 40 MB` budget).
+  - `embedBootstrapper`: **+`~1.8 MB`**, embeds bootstrapper in `.msi`/NSIS installer — **recommended default** for Allegedly Windows releases (stays well under `< 40 MB` budget).
   - `offlineInstaller`: **+`~127 MB`** (required only if publishing to Microsoft Store).
   - `fixedRuntime`: **+`~180 MB`** (breaks `< 40 MB` budget; loses Microsoft auto-security patches).
 
 #### 2.3 Code Signing, Notarization Costs & `$0` FOSS Alternatives (`[[Assumptions]]` A04)
 | Platform | Paid Standard Path (Verified Cost) | `$0` FOSS Core Strategy (Day-One Plan) | Trade-off / User UX on `$0` Path |
 |---|---|---|---|
-| **macOS** | **Apple Developer Program: `$99 USD / year`** (required for Developer ID certificates & macOS notarization; Enterprise `$299/yr`; fee waivers restricted to nonprofits, schools, and governments — **not** individual OSS devs) [R02-S13] | 1) Ad-hoc signed `.dmg` / `.app` on GitHub Releases + SHA-256 & Sigstore Cosign attestations.<br>2) **Homebrew Cask** distribution (`brew install --cask motiveview --no-quarantine`).<br>3) Documented 1-line Gatekeeper clearing (`xattr -dr com.apple.quarantine /Applications/MotiveView.app`) + reproducible build-from-source. | Without `$99/yr` notarization, direct `.dmg` download triggers macOS Gatekeeper quarantine prompt; Homebrew Cask + clear docs keep `$0` core viable until/unless sponsorships fund a `$99/yr` cert. |
+| **macOS** | **Apple Developer Program: `$99 USD / year`** (required for Developer ID certificates & macOS notarization; Enterprise `$299/yr`; fee waivers restricted to nonprofits, schools, and governments — **not** individual OSS devs) [R02-S13] | 1) Ad-hoc signed `.dmg` / `.app` on GitHub Releases + SHA-256 & Sigstore Cosign attestations.<br>2) **Homebrew Cask** distribution (`brew install --cask allegedly --no-quarantine`).<br>3) Documented 1-line Gatekeeper clearing (`xattr -dr com.apple.quarantine /Applications/Allegedly.app`) + reproducible build-from-source. | Without `$99/yr` notarization, direct `.dmg` download triggers macOS Gatekeeper quarantine prompt; Homebrew Cask + clear docs keep `$0` core viable until/unless sponsorships fund a `$99/yr` cert. |
 | **Windows** | **Azure Artifact Signing** *(formerly Trusted Signing)*: Basic SKU & Premium SKU verified on Microsoft Learn [R02-S14] *(web-reported `$9.99/mo` Basic / `$99.99/mo` Premium, individual public trust limited to US & Canada — exact live USD price marked `UNVERIFIED` below due to dynamic JS pricing widget)*. Traditional OV/EV HSM certs cost more. | 1) **SignPath Foundation (`$0`)**: Free OV HSM code signing for qualifying OSI-licensed public OSS projects via automated GitHub Actions CI provenance (certificate displays **"SignPath Foundation"** as verified publisher; eliminates SmartScreen "Unknown Publisher" warnings once approved) [R02-S15].<br>2) Pre-approval / fallback: **Winget**, **Scoop**, GitHub Releases + SHA-256 & Sigstore. | SignPath requires an active, already-released, pure-OSI repo with documented signing policy (apply immediately at `v0.1` public release; zero proprietary code allowed — aligns 100% with Non-Negotiable #1) [R02-S15]. |
 | **Linux** | `$0` (no commercial CA gatekeeping) | GPG-signed `.deb` / `.rpm`, **Flathub (Flatpak)** signed OSTree repo, signed **AppImage**, and **AUR** `PKGBUILD`. | First-class native `$0` trust chain across Ubuntu/Debian, Fedora, and Arch. |
 
@@ -73,7 +73,7 @@ Verified from Tauri v2 official IPC guides (`v2.tauri.app/develop/calling-rust/`
 1. **Standard JSON `invoke()` & Tauri Events:** Serializes every message as JSON strings (and Events evaluate JS directly). Unsuitable above a few KB or at `30+ Hz` — causes JSON parse latency and JS GC stalls [R02-S17], [R02-S18].
 2. **Tauri v2 `Channel<tauri::ipc::Response>` (Raw Binary Streaming → JS `ArrayBuffer`):** Ordered Rust-to-JS streaming bypassing JSON serialization completely (`tauri::ipc::Response::new(bytes)` → `Channel<ArrayBuffer>` in `@tauri-apps/api/core`) [R02-S18]. **Ideal for live `30–60 Hz` DOM Ladder Book Level deltas, trade ticks, and Footprint updates.**
 3. **Tauri v2 `invoke` returning `tauri::ipc::Response` (Raw Binary Request/Response):** Zero-JSON `ArrayBuffer` return for `100k`-bar historical viewport loads [R02-S17].
-4. **Custom Asynchronous URI Protocol (`register_asynchronous_uri_scheme_protocol`):** Streams binary responses via `fetch('motiveview://bars/...')` with zero extra `NSData` buffer copy on macOS in modern `wry` [R02-S17].
+4. **Custom Asynchronous URI Protocol (`register_asynchronous_uri_scheme_protocol`):** Streams binary responses via `fetch('allegedly://bars/...')` with zero extra `NSData` buffer copy on macOS in modern `wry` [R02-S17].
 5. **Local WebSocket (`ws://127.0.0.1`) / Unix Domain Socket:** Portable fallback that keeps frontend 100% shell-agnostic (works identically in Electron or browser dev mode), but requires per-session random bearer token validation to prevent local cross-origin access.
 6. **Wire Format — Packed Struct-of-Arrays (SoA) Binary vs Apache Arrow IPC (`arrow-ipc 60.2.0` / `apache-arrow 21.2.0`) [R02-S19] vs JSON:**
    - **Hot path (DOM Ladder 30–60 Hz, live ticks, Footprint viewport):** Fixed-layout little-endian **packed SoA binary buffers** viewed directly via JS `BigInt64Array`/`Int32Array`/`Float64Array`/`Uint32Array` — zero parser allocations, zero GC pressure, zero library weight.
@@ -91,7 +91,7 @@ All versions and licenses verified directly via GitHub API, `LICENSE`/`LICENCE.m
 - **Svelte (`v5.59.1`, MIT, 89,845 stars)** [R02-S22]: Clean compiled runes reactivity and strong `shadcn-svelte` (9,265 stars, MIT) [R02-S22], but also lacks first-party Dockview/FlexLayout bindings and requires manual wrappers for complex docking portals.
 
 #### 3.2 Docking & Layout Managers
-- **Dockview (`v8.9.1`, `2026-11-17`, 3,548 stars)** [R02-S23]: Zero dependencies; supports tabs, splitviews, gridviews, floating panels, **popout windows**, and full JSON layout serialization (`toJSON()`/`fromJSON()`) — directly enabling MotiveView **Layouts** & **Workspaces** (`[[Glossary]]`). **CRITICAL LICENSE FINDING:** Inspected `LICENCE.md` directly — `dockview-core`, `dockview`, `dockview-react`, `dockview-vue`, and `dockview-angular` are **MIT**, whereas `dockview-enterprise` is **Proprietary (commercial license)** [R02-S23]. MotiveView MUST strictly depend only on the MIT `dockview` / `dockview-core` packages and explicitly block `dockview-enterprise` in CI license checks.
+- **Dockview (`v8.9.1`, `2026-11-17`, 3,548 stars)** [R02-S23]: Zero dependencies; supports tabs, splitviews, gridviews, floating panels, **popout windows**, and full JSON layout serialization (`toJSON()`/`fromJSON()`) — directly enabling Allegedly **Layouts** & **Workspaces** (`[[Glossary]]`). **CRITICAL LICENSE FINDING:** Inspected `LICENCE.md` directly — `dockview-core`, `dockview`, `dockview-react`, `dockview-vue`, and `dockview-angular` are **MIT**, whereas `dockview-enterprise` is **Proprietary (commercial license)** [R02-S23]. Allegedly MUST strictly depend only on the MIT `dockview` / `dockview-core` packages and explicitly block `dockview-enterprise` in CI license checks.
 - **FlexLayout (`flexlayout-react v0.11.2`, `2026-11-16`, MIT, 1,390 stars)** [R02-S24]: Actively maintained React tabset/border docking with popout windows; solid fallback if Dockview exhibits any WebKitGTK drag/drop quirks.
 - **Golden Layout (`v2.6.0`, `2022-09-26`, MIT, 6,722 stars)** [R02-S25]: Effectively stagnant (no release in 4+ years), awkward React 19 integration. **Disqualified.**
 
@@ -101,7 +101,7 @@ All versions and licenses verified directly via GitHub API, `LICENSE`/`LICENCE.m
 - **State Management:** **Zustand (`v5.1.0`, MIT, 58,988 stars)** as primary state store (supports transient `store.subscribe()` outside React's render cycle for zero-allocation rAF updates + clean undo/redo middleware for Drawings & Layouts); **Jotai (`v3.0.2`, MIT, 21,347 stars)** optional only if atomic fine-grained Study-parameter graphs prove cleaner [R02-S28].
 
 #### 3.4 Accessibility (a11y), HiDPI & Tabular-Numeral FOSS Fonts
-- **Accessibility:** Radix Primitives provide WAI-ARIA roles, roving tabindex, and focus restoration; MotiveView adds a global command palette (`Cmd/Ctrl+K`), remappable keyboard shortcuts persisted in TOML/JSON, WCAG AA high-contrast themes, and `prefers-reduced-motion` support.
+- **Accessibility:** Radix Primitives provide WAI-ARIA roles, roving tabindex, and focus restoration; Allegedly adds a global command palette (`Cmd/Ctrl+K`), remappable keyboard shortcuts persisted in TOML/JSON, WCAG AA high-contrast themes, and `prefers-reduced-motion` support.
 - **HiDPI / Fractional Scaling:** Handle macOS `2×` Retina, Windows `125%/150%`, and Linux Wayland fractional scaling via `window.devicePixelRatio` + `ResizeObserver` (`devicePixelContentBoxSize` with DPR fallback) so hairline borders, **DOM Ladder** rows, and canvas backing stores stay pixel-aligned.
 - **Tabular-Numeral FOSS Fonts (all verified `OFL-1.1`):**
   - **Numeric / DOM Ladder / Footprint / Monospace:** **JetBrains Mono (`v2.304`, OFL-1.1)** [R02-S29] (alternatives: **IBM Plex Mono**, OFL-1.1, or **Geist Mono `v1.9.2`**, OFL-1.1) — guarantees identical glyph advance width so rapid `30+ Hz` price/size updates never jitter horizontally.
@@ -140,7 +140,7 @@ All versions and licenses verified directly via GitHub API, `LICENSE`/`LICENCE.m
 - **Desktop Shell & Backend:** **Tauri v2 (`2.12.x`) + Rust Core** (MIT/Apache-2.0) with `embedBootstrapper` (`+1.8 MB`) for Windows WebView2 and `tauri-plugin-updater` (`v2.14.1`, Minisign Ed25519 + `requireSignedVersion`) hosted on GitHub Releases (`$0`).
 - **IPC Contract (Hot vs Cold Path):**
   - **Hot streaming (`30–60 Hz` DOM Ladder, trade ticks, Footprint updates):** `tauri::ipc::Channel<tauri::ipc::Response>` carrying **packed little-endian SoA binary frames** (fixed-point `i64` ticks & quantities → `ArrayBuffer`, zero JSON, zero per-tick object churn).
-  - **Bulk reads (`100k` historical bars, Volume/TPO profiles):** `invoke` returning `tauri::ipc::Response` (or custom async URI scheme `motiveview://`) with packed SoA binary (or Arrow IPC if aligned with R07).
+  - **Bulk reads (`100k` historical bars, Volume/TPO profiles):** `invoke` returning `tauri::ipc::Response` (or custom async URI scheme `allegedly://`) with packed SoA binary (or Arrow IPC if aligned with R07).
   - **Abstraction Rule:** Wrap all IPC behind a thin TypeScript `TransportAdapter` interface so the UI never couples directly to `@tauri-apps/api` internals — preserving a clean pivot path to Electron if needed.
 - **UI & Workspace Layer:** **React `19.3` + TypeScript + Vite + Tailwind CSS `v4.3` + shadcn/ui (Radix Primitives) + Lucide (`ISC`) + Dockview (`dockview` MIT only) + Zustand `v5.1` + TanStack Table/Virtual/Query + JetBrains Mono & Inter (`OFL-1.1`)**.
 - **DOM Ladder Architecture:** Render the `30+ Hz` **DOM Ladder** via a **Canvas2D widget** (or rAF-batched imperative cell refs inside a virtualized viewport) subscribed directly to Zustand's non-React transient listener — guaranteeing zero React VDOM re-renders per Book Level update and `0` GC stalls.
@@ -162,7 +162,7 @@ All versions and licenses verified directly via GitHub API, `LICENSE`/`LICENCE.m
 - **Benchmarks Measured:**
   1. **Bundle Size:** Release `.dmg` (macOS), `.msi`/NSIS with `embedBootstrapper` (Windows), and `.deb`/AppImage (Linux) including JetBrains Mono + Inter font subsets.
   2. **Cold Start & Full-Process-Tree Idle RAM:** Measure **entire process tree** (main Rust binary + all WebView/GPU/network helper processes!) — never just the main process PID.
-  3. **IPC Throughput:** Compare (a) JSON `invoke`, (b) `tauri::ipc::Response` raw packed SoA binary, (c) custom URI protocol (`motiveview://`), and (d) `Channel<tauri::ipc::Response>` streaming `60 Hz` DOM deltas (plus optional Arrow IPC comparison).
+  3. **IPC Throughput:** Compare (a) JSON `invoke`, (b) `tauri::ipc::Response` raw packed SoA binary, (c) custom URI protocol (`allegedly://`), and (d) `Channel<tauri::ipc::Response>` streaming `60 Hz` DOM deltas (plus optional Arrow IPC comparison).
   4. **DOM Ladder Stress Test:** Compare rAF-batched imperative DOM cells vs Canvas2D DOM Ladder at `30 Hz` and `60 Hz` for 5 minutes.
   5. **Linux WebKitGTK Multi-Distro / Compositor Smoke Test:** Test X11 + Wayland (and NVIDIA/Mesa if available) for `Error 71`, resize glitches, and `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` fallback behavior.
 - **Pass Thresholds:**
@@ -178,7 +178,7 @@ All versions and licenses verified directly via GitHub API, `LICENSE`/`LICENCE.m
 
 ## Inferences
 
-- **Real-world RAM parity nuance:** 2025–2026 full-process-tree benchmarks show Tauri v2 and Electron are nearly tied on single-window Windows idle RAM (`~142 MB` vs `~149 MB`) because both run Chromium/WebView2 [R02-S03]. Tauri's decisive advantages for MotiveView are (1) **`10×–30×` smaller installers** (easily meeting `< 40 MB`), (2) **`~58%` lower multi-window RAM on macOS** (crucial for multi-monitor trading layouts), and (3) **native Rust backend execution** with zero Node.js heap or JS-bridge overhead for order-book/storage/scripting engines.
+- **Real-world RAM parity nuance:** 2025–2026 full-process-tree benchmarks show Tauri v2 and Electron are nearly tied on single-window Windows idle RAM (`~142 MB` vs `~149 MB`) because both run Chromium/WebView2 [R02-S03]. Tauri's decisive advantages for Allegedly are (1) **`10×–30×` smaller installers** (easily meeting `< 40 MB`), (2) **`~58%` lower multi-window RAM on macOS** (crucial for multi-monitor trading layouts), and (3) **native Rust backend execution** with zero Node.js heap or JS-bridge overhead for order-book/storage/scripting engines.
 - **React + non-VDOM hot path:** Combining React (for Dockview layouts, Radix modals, command palette, virtualized settings trees, and blotters) with imperative/Canvas hot-path widgets (Charts + DOM Ladder) delivers both top-tier UI velocity and zero-GC trading latency.
 
 ---

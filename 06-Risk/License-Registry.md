@@ -1,5 +1,5 @@
 ---
-title: "MotiveView Dependency License & Linkage Registry"
+title: "Allegedly Dependency License & Linkage Registry"
 type: risk-registry
 status: verified
 owner: legal-licensing
@@ -17,7 +17,7 @@ code_refs: []
 
 ## 1. Complete Dependency License & Linkage Compatibility Table
 
-### 1A. Approved Core Dependencies (Statically / Bundled Linked into MotiveView Core)
+### 1A. Approved Core Dependencies (Statically / Bundled Linked into Allegedly Core)
 
 | Dependency | License (Verified from `LICENSE` / `Cargo.toml`) | Linkage | Obligations | Compatibility Verdict (with `Apache-2.0`) | Source ID |
 |---|---|---|---|---|---|
@@ -52,12 +52,12 @@ code_refs: []
 | Dependency | License (Verified from `LICENSE`) | Linkage | Obligations | Compatibility Verdict (with `Apache-2.0`) | Source ID |
 |---|---|---|---|---|---|
 | **`duckdb/duckdb` (`v2.0.1`)** | **`MIT`** | **Process-sidecar** (or optional dynamic plugin; avoids `18.4–26.9 MB` core bloat) | Retain MIT notice if distributed; zero obligation if user brings own DuckDB CLI | **COMPATIBLE (APPROVED AS OPTIONAL SIDECAR)** | `R07-S07`, `R08-S17` |
-| **`nautechsystems/nautilus_trader` (`v1.231.0`)** | **`LGPL-3.0-only`** (`Cargo.toml` + `LICENSE`) + **`TRADEMARK.md`** + **`CLA.md`** | **Process-sidecar ONLY** (shared Parquet vault + JSON-RPC/Arrow IPC; **NEVER statically link crates**) | Never statically link into MotiveView binary; never use `NautilusTrader` mark as prefix/package name; keep process boundary cleanly decoupled `[ATTORNEY REVIEW REQUIRED]` | **COMPATIBLE ONLY AS OUT-OF-PROCESS SIDECAR (STATIC LINK BANNED)** | `R04-S35`, `R07-S20`, `R08-S05` |
+| **`nautechsystems/nautilus_trader` (`v1.231.0`)** | **`LGPL-3.0-only`** (`Cargo.toml` + `LICENSE`) + **`TRADEMARK.md`** + **`CLA.md`** | **Process-sidecar ONLY** (shared Parquet vault + JSON-RPC/Arrow IPC; **NEVER statically link crates**) | Never statically link into Allegedly binary; never use `NautilusTrader` mark as prefix/package name; keep process boundary cleanly decoupled `[ATTORNEY REVIEW REQUIRED]` | **COMPATIBLE ONLY AS OUT-OF-PROCESS SIDECAR (STATIC LINK BANNED)** | `R04-S35`, `R07-S20`, `R08-S05` |
 | **`QuantConnect/Lean`** | **`Apache-2.0`** | **Process-sidecar** (external Docker/.NET CLI over Parquet) | Retain notice if integration adapter ships | **COMPATIBLE (OPTIONAL SIDECAR)** | `R07-S22`, `R08-S04` |
 | **`nkaz001/hftbacktest` (`rust-v0.9.4`)** | **`MIT`** | Reference / optional Static Rust crate | Retain MIT notice if crate or adapted code is used | **COMPATIBLE (APPROVED REFERENCE / OPTIONAL CRATE)** | `R07-S21`, `R08-S17` |
 | **`electron/electron` (`v45.5.0`)** *(Fallback if `KC-02` trips)* | **`MIT`** (Chromium components BSD/MIT/Apache/LGPL-dynamic) | Shell fallback | Retain Electron/Chromium third-party notices if pivoted | **COMPATIBLE (FALLBACK SHELL)** | `R02-S05`, `R08-S17` |
 | **`emilk/egui` (`v0.37.0`)** + **`gfx-rs/wgpu` (`v30.0.2`)** *(Native fallback)* | **`MIT OR Apache-2.0`** | Static (Rust, fallback only) | Retain notices | **COMPATIBLE (FALLBACK RENDERER)** | `R01-S23`, `R02-S08`, `R08-S17` |
-| **`ferranbt/pinecone` (`v0.2.6`)** *(v0.4+ watchlist)* | **`MPL-2.0`** | Conditional Static (file-level weak copyleft) | Under MPL-2.0 §3.3, any edits to `pinecone`'s own files must remain MPL-2.0 & source made available; rest of MotiveView remains `Apache-2.0` | **COMPATIBLE (CONDITIONAL WATCHLIST — Keep Files Isolated)** | `R06-S14`, `R09-S03` |
+| **`ferranbt/pinecone` (`v0.2.6`)** *(v0.4+ watchlist)* | **`MPL-2.0`** | Conditional Static (file-level weak copyleft) | Under MPL-2.0 §3.3, any edits to `pinecone`'s own files must remain MPL-2.0 & source made available; rest of Allegedly remains `Apache-2.0` | **COMPATIBLE (CONDITIONAL WATCHLIST — Keep Files Isolated)** | `R06-S14`, `R09-S03` |
 | **`dxFeed/dxLink`** *(Post-v0.2 partner plugin)* | **`MPL-2.0`** | Conditional Static/Bundled | Same MPL-2.0 §3.3 file-level obligation | **COMPATIBLE (OPTIONAL PLUGIN)** | `R03-S28`, `R09-S03` |
 | **`OpenBB-finance/OpenBB` (`V5 ODP`)** | **`Apache-2.0`** *(since `2026-09-29`; V4 & `openbb-forecast` remain `AGPL-3.0`!)* | Optional external Python sidecar / reference | **Pin strictly to V5+ (`>= 5.0.0`)**; never pull V4 `AGPL-3.0` packages | **COMPATIBLE (V5+ SIDECAR ONLY; V4 BANNED)** | `R08-S02`, `R08-S03` |
 | **`ccxt/ccxt` (`v4.5.94`)**, **`hummingbot/hummingbot` (`v2.18.0`)**, **`alpacahq/alpaca-py`**, **`alpacahq/alpaca-trade-api-js`**, **`tastyware/tastytrade`**, **`tastytrade-api-js`**, **`massive-com/client-python`**, **`ib-api-reloaded/ib_async`** | `MIT` / `Apache-2.0` / `BSD-2-Clause` | Protocol reference / optional external scripts | Retain notices if adapted; inspect & strip default exchange broker IDs if referencing `ccxt` | **COMPATIBLE (APPROVED REFERENCES)** | `R03-S30`, `R04-S32`–`S34`, `R08-S17` |
