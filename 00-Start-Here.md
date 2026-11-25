@@ -2,7 +2,7 @@
 title: Allegedly — Research & Plan of Record (Home)
 type: index
 status: active
-phase: Phase 3 Complete — Advancing to Phase 4 (Roadmap)
+phase: Phase 4 Complete — Advancing to Phase 5 (Plan of Record)
 owner: orchestrator
 updated: 2026-11-25
 ---
@@ -21,8 +21,8 @@ updated: 2026-11-25
 | **Phase 1** | 10 Research Tracks (`R01`–`R10`), Principles (`P1`–`P10`), Risks, Legal/Licenses | **COMPLETE** (`b0b3d97`) |
 | **Phase 2** | 8 Verified Proof-of-Concept Spikes (`S01`–`S08`) | **COMPLETE** (`f7ad53d`) |
 | **Phase 3** | Architecture Specs (9 docs), ADRs (`0001`–`0010`), `Architecture.canvas`, Red-Team Audit | **COMPLETE — Red-Team `PASS` (`18/18` closed)** |
-| **Phase 4** | Roadmap, Milestones (`v0.1`–`v1.0`), Epics/Stories, `v0.1` Sprint Plan & DoD | **NEXT (In Progress)** |
-| **Phase 5** | Final Holistic Red-Team Audit & `Plan-of-Record.md` | Queued |
+| **Phase 4** | Roadmap, Milestones (`v0.1`–`v1.0`), Epics/Stories, `v0.1` Sprint Plan & DoD | **COMPLETE — Red-Team `PASS` (`12/12` closed)** |
+| **Phase 5** | Final Holistic Red-Team Audit & `Plan-of-Record.md` | **NEXT (In Progress)** |
 | **v0.1 Build** | Rust Cargo Workspace (`allegedly-*`) + Tauri v2 / React 19 / `ui-sdk` Desktop Shell | Queued after Phase 5 `PASS` |
 
 ---
@@ -64,8 +64,11 @@ updated: 2026-11-25
   - [[0001-license-brand-and-platform-scope|ADR-0001]] | [[0002-desktop-shell-and-binary-ipc|ADR-0002]] | [[0003-chart-base-and-viewport-windowing|ADR-0003]] | [[0004-orderflow-gpu-and-hotpath-renderer|ADR-0004]] | [[0005-study-runtime-and-scripting-language|ADR-0005]]
   - [[0006-tiered-storage-and-replay|ADR-0006]] | [[0007-backtest-engine-adopt-vs-build|ADR-0007]] | [[0008-market-data-provider-abstraction-and-provenance|ADR-0008]] | [[0009-oms-broker-and-prop-firm-strategy|ADR-0009]] | [[0010-ui-kit-docking-and-settings-as-code|ADR-0010]]
 
-## 05 — Roadmap (Phase 4 — In Progress)
-- `05-Roadmap/Milestones.md`, `05-Roadmap/Epics-and-Stories.md`, `05-Roadmap/Sprint-Plan-v0.1.md`, `05-Roadmap/v0.1-Definition-of-Done.md`
+## 05 — Roadmap (Phase 4 — Red-Team `PASS`)
+- [[Milestones]] — Canonical `v0.1`, `v0.2`, `v0.5`, `v1.0`, `Post-v1.0` releases (macOS + Windows first; Linux deferred)
+- [[Epics-and-Stories]] — 10 Epics (`E01`–`E10`), 42 vertical-slice stories (`ST-01`–`ST-42`), 20-row `SV-01`–`SV-20` matrix
+- [[Sprint-Plan-v0.1]] — 4 two-week sprints, Mermaid DAG & critical path, `UV-01`–`UV-10` schedule, kickoff tasks `T01`–`T10a`/`T10b`
+- [[v0.1-Definition-of-Done]] — Tier A (`v0.1-dev`) & Tier B (`v0.1.0` unsigned Alpha) binary release gates
 
 ## 06 — Risk, Licensing & Compliance
 - [[Risk-Register]] — Active risks (`RK-01` deferred post-v1.0; `RK-02`–`RK-10` tracked)
@@ -75,7 +78,7 @@ updated: 2026-11-25
 
 ## 07 — Reviews & Plan of Record
 - [[Red-Team-Phase3]] — **Verdict: `PASS`** (`18/18` findings verified closed on `2026-11-25`)
-- `07-Reviews/Red-Team-Phase4.md` — Planned after Phase 4 drafting
+- [[Red-Team-Phase4]] — **Verdict: `PASS`** (`12/12` findings verified closed on `2026-11-25`)
 - `07-Reviews/Red-Team-Phase5.md` & `Plan-of-Record.md` — Phase 5 final consolidation
 
 ## 08 — Dashboards & Visual Maps

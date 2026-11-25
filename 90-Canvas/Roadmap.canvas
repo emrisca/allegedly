@@ -1,101 +1,248 @@
 {
 	"nodes": [
 		{
-			"id": "p0",
-			"type": "text",
-			"text": "## Phase 0: Charter & Questions\nStatus: Complete (Defaults Logged)",
-			"x": -400,
-			"y": 0,
-			"width": 250,
+			"id": "f-sprints",
+			"type": "file",
+			"file": "05-Roadmap/Sprint-Plan-v0.1.md",
+			"x": -460,
+			"y": -340,
+			"width": 300,
 			"height": 110,
-			"color": "4"
+			"color": "3"
 		},
 		{
-			"id": "p1",
-			"type": "text",
-			"text": "## Phase 1: Research R01\u2013R10\nStatus: VERIFIED (Gate Passed)\n15 docs \u00b7 279 primary sources",
+			"id": "f-epics",
+			"type": "file",
+			"file": "05-Roadmap/Epics-and-Stories.md",
 			"x": -100,
-			"y": 0,
-			"width": 260,
-			"height": 120,
-			"color": "4"
-		},
-		{
-			"id": "p2",
-			"type": "text",
-			"text": "## Phase 2: Spikes S01\u2013S08\nStatus: VERIFIED (Gate Ready)\n8/8 spikes measured \u00b7 0 FAIL-PIVOT",
-			"x": 210,
-			"y": 0,
-			"width": 260,
-			"height": 120,
-			"color": "4"
-		},
-		{
-			"id": "p3",
-			"type": "text",
-			"text": "## Phase 3: Architecture & ADRs\nStatus: Awaiting Abel Approval\n9 ADRs queued + Red Team",
-			"x": 520,
-			"y": 0,
-			"width": 250,
+			"y": -340,
+			"width": 300,
 			"height": 110,
 			"color": "5"
 		},
 		{
-			"id": "p4",
-			"type": "text",
-			"text": "## Phase 4: Roadmap & Stories\nGate: Abel Approval + Red Team",
-			"x": 820,
-			"y": 0,
-			"width": 250,
+			"id": "f-dod",
+			"type": "file",
+			"file": "05-Roadmap/v0.1-Definition-of-Done.md",
+			"x": 620,
+			"y": -340,
+			"width": 300,
 			"height": 110,
+			"color": "1"
+		},
+		{
+			"id": "sp1",
+			"type": "text",
+			"text": "## Sprint 1 (Weeks 1–2)\n**Workspace, Binary IPC & Shell**\n- 9-crate `allegedly-*` + dev-only `allegedly-docgen` + CI (`cargo-deny`, npm SPDX, zero-float, zero legacy prefix)\n- Fixed-point `i64`/`i128` + aligned binary IPC + `state_rev: u64` hub\n- Tauri v2 + React 19 + `ui-sdk` `\"0.1.0-beta.17\"` + MIT `dockview` `8.9.1`\n- **Epics:** `E01`, `E02`, `E07` *(Shell)*",
+			"x": -460,
+			"y": -100,
+			"width": 300,
+			"height": 230,
+			"color": "5"
+		},
+		{
+			"id": "sp2",
+			"type": "text",
+			"text": "## Sprint 2 (Weeks 3–4)\n**Ingest, Vault, Order-Flow, TOML & Paper OMS**\n- Kraken WS v2 (`CRC32`) + Coinbase WS (inversion) + Sim (`rtrb` SPSC)\n- `.atvault` + Hive Parquet 2.0 + `FootprintSlabArena` + `16`-ary VRVP + `u128` TPO\n- 5-level TOML cascade (`SV-06`/`SV-07`) + Paper OMS 12-state WAL + Kill-Switch + Risk-Reduction Bypass\n- **`KC-07` Checkpoint (Week 4)** · **Epics:** `E03`, `E04` *(Vault)*, `E05`, `E07` *(TOML)*, `E09`",
+			"x": -100,
+			"y": -100,
+			"width": 300,
+			"height": 230,
+			"color": "5"
+		},
+		{
+			"id": "sp3",
+			"type": "text",
+			"text": "## Sprint 3 (Weeks 5–6)\n**GPU Chart, DOM/Chrome & Luau Studies**\n- LWC v5.3 (`5k`/`6k` window) + WebGL2 `ISeriesPrimitive` (`0.000 px`) + VP/TPO `SV-17` snap\n- Canvas2D `DOM Ladder` (`SV-11` `[Est/Max]` PIQ, `SV-14`) & 3-Tier Chrome (`SV-02`–`SV-05`)\n- Native + Luau (`mlua`) `ByteView` Studies + `<= 64 MiB` pool + `12/12` traps\n- **Early `UV-03` Windows `WebView2` Smoke (Week 5)** · **Epics:** `E06`, `E07` *(DOM/Chrome)*, `E08`",
+			"x": 260,
+			"y": -100,
+			"width": 300,
+			"height": 230,
+			"color": "5"
+		},
+		{
+			"id": "sp4",
+			"type": "text",
+			"text": "## Sprint 4 (Weeks 7–8)\n**Replay, Diagnostics & Cross-OS Alpha Cut**\n- `allegedly-replay` deterministic streaming + Active 5-Tier Provenance Ledger\n- macOS + Windows `WebView2` CI parity (`UNVERIFIED` until CI); `< 40 MB` `.dmg`/`.msi`, `< 2.0 s` cold start, `< 300 MB` RAM\n- `SV-01` zero-packet offline boot (`updates.checkOnStartup = false`) + `SHA256SUMS.txt` + `THIRD_PARTY_NOTICES.md`\n- **`KC-07` Final Gate (Week 8)** · **Epics:** `E04` *(Replay)*, `E10`, `E01`–`E10` Qualification",
+			"x": 620,
+			"y": -100,
+			"width": 300,
+			"height": 230,
+			"color": "3"
+		},
+		{
+			"id": "f-milestones",
+			"type": "file",
+			"file": "05-Roadmap/Milestones.md",
+			"x": 260,
+			"y": 335,
+			"width": 300,
+			"height": 120,
+			"color": "4"
+		},
+		{
+			"id": "m-v01",
+			"type": "text",
+			"text": "## v0.1 — Local-First Sovereign Core & Order-Flow Alpha\n**Unsigned/ad-hoc Alpha tag** *(not publicly marketed)* · **macOS + Windows · 8 wks**\n**Epics:** `E01`–`E10` · **ADRs:** `0001`–`0010` · **Gates:** `20/20` `SV-01`–`SV-20`\n- 9-crate `allegedly-*` + dev-only `allegedly-docgen` (`~6.2 MB` core w/o Wasmtime)\n- LWC v5.3 + WebGL2 Footprint/VP/`u128` TPO (`SV-17`) + Canvas2D DOM (`SV-11` `[Est/Max]` PIQ)\n- Kraken/Coinbase/Sim + `.atvault` Parquet + 16-ary VRVP + Luau `ByteView` (`<= 64 MiB`)\n- Paper OMS (`allow-live-trading` OFF, 4 prop firms `DO-NOT-BUILD`) · Tier A `< 60 MiB` arena / Tier B `< 300 MB` RAM (`SV-13`)",
+			"x": 620,
+			"y": 260,
+			"width": 320,
+			"height": 270,
+			"color": "4"
+		},
+		{
+			"id": "m-v02",
+			"type": "text",
+			"text": "## v0.2 — Pro Historical Data, Pop-Outs & Sandbox Brokers\n**Platforms:** macOS + Windows 10/11 · **6 wks**\n**Epics:** `E02`, `E03`, `E04`, `E07`, `E08`, `E09`, `E10`\n- `ST-12`: Databento `.dbn.zst` (incl. real human fixture) + Dukascopy `.bi5` (`OtcIndicative`)\n- `ST-30`: Native Tauri `WebviewWindow` pop-outs with monotonic `state_rev: u64`\n- `ST-33`: Wasmtime `v51.0.0` (`.cwasm`, `~8.0 MB` core w/ `2.21 MiB` S07) + WIT eval (`UNVERIFIED`)\n- `ST-37` / `ST-16`: Opt-in Alpaca Paper & tastytrade Cert (`keyring-rs`) + optional DuckDB (`MIT`) sidecar\n- `ST-41`: Developer ID / SignPath Authenticode + Minisign `.sig` `requireSignedVersion` + opt-in updater (`updates.checkOnStartup = false`)",
+			"x": 1000,
+			"y": 260,
+			"width": 320,
+			"height": 270,
+			"color": "6"
+		},
+		{
+			"id": "m-v05",
+			"type": "text",
+			"text": "## v0.5 — Live Retail Execution, Advanced Profiles & Ecosystem\n**Platforms:** macOS + Windows 10/11 · **8 wks**\n**Epics:** `E03`, `E04`, `E05`, `E06`, `E07`, `E08`, `E09`, `E10`\n- `ST-38`: Opt-in Live Retail (Alpaca, tastytrade, IBKR Client Portal Web API — `0` `GPL-3.0` TWS), Bracket/OCO, macOS APFS batched `fullfsync`\n- `ST-20` / `ST-21`: Multi-day `CompositeTpoRow` (`SV-17`), 24h `.atdepth` heatmap (`< 64 MB` RAM / `< 30 MB` disk, `SV-13`), Absorption/Unfinished Auction & L2 Iceberg/Pull heuristic detectors (`SV-10`/`SV-11`)\n- `ST-17`: Optional `nautilus_trader` (`LGPL-3.0-only`) out-of-process sidecar (`[ATTORNEY REVIEW]`)\n- `ST-34`: Signed Study packages & clean-room scripting docs",
+			"x": 1380,
+			"y": 260,
+			"width": 320,
+			"height": 270,
 			"color": "2"
 		},
 		{
-			"id": "p5",
+			"id": "m-v10",
 			"type": "text",
-			"text": "## Phase 5: Red Team & Plan of Record\nFinal Deliverable",
-			"x": 1120,
-			"y": 0,
-			"width": 250,
-			"height": 110,
+			"text": "## v1.0 — Production Trading Terminal GA\n**Platforms:** macOS (`arm64`+`x86_64`) + Windows 10/11 · **6 wks**\n**Epics:** `E01`–`E10` GA Hardening · **Gates:** `20/20` `SV-01`–`SV-20` VERIFIED\n- Verified `< 300 MB` full process-tree idle RAM, `< 2.0 s` signed cold start, `< 40 MB` installer\n- 30-min peak-volatility dual-venue + 10-chart + 24h `.atdepth` heatmap (`UV-07`) GA re-cert\n- `ST-42`: Reproducible builds, CycloneDX 1.5 / SPDX 2.3 SBOMs, Sigstore Cosign OIDC & WCAG AA / Okabe-Ito a11y\n- `RK-04`: Formal attorney trademark clearance & CFTC Rule 4.41 disclaimers prior to public binary launch",
+			"x": 1760,
+			"y": 260,
+			"width": 320,
+			"height": 270,
+			"color": "4"
+		},
+		{
+			"id": "m-post",
+			"type": "text",
+			"text": "## Post-v1.0 (Deferred)\n**Platforms:** + **Linux (X11 + Wayland)** (`RK-01`, `ST-04`)\n- Activate portable Rust core, WebGL2 baseline & `TransportAdapter` on Linux once `WebKitGTK` Wayland/NVIDIA regressions clear (or via alt runtime); Flatpak/AppImage `< 40 MB`\n- Optional EULA-compliant futures gateways strictly via isolated external sidecars\n- **Permanently Excluded:** 4 `DO-NOT-BUILD` prop firms (Apex, TPT, Bulenox, ETF), Rithmic/CQG, Sierra `.scid`/DTC export, `GPL-3.0` IBKR TWS",
+			"x": 2140,
+			"y": 260,
+			"width": 320,
+			"height": 270,
 			"color": "1"
 		}
 	],
 	"edges": [
 		{
-			"id": "ep01",
-			"fromNode": "p0",
-			"fromSide": "right",
-			"toNode": "p1",
-			"toSide": "left"
+			"id": "ef-es",
+			"fromNode": "f-epics",
+			"fromSide": "left",
+			"toNode": "f-sprints",
+			"toSide": "right",
+			"label": "Schedules v0.1"
 		},
 		{
-			"id": "ep12",
-			"fromNode": "p1",
+			"id": "ef-ed",
+			"fromNode": "f-epics",
 			"fromSide": "right",
-			"toNode": "p2",
-			"toSide": "left"
+			"toNode": "f-dod",
+			"toSide": "left",
+			"label": "v0.1 Exit Criteria"
 		},
 		{
-			"id": "ep23",
-			"fromNode": "p2",
-			"fromSide": "right",
-			"toNode": "p3",
-			"toSide": "left"
+			"id": "ef-s-sp1",
+			"fromNode": "f-sprints",
+			"fromSide": "bottom",
+			"toNode": "sp1",
+			"toSide": "top",
+			"label": "Sprint Cadence"
 		},
 		{
-			"id": "ep34",
-			"fromNode": "p3",
-			"fromSide": "right",
-			"toNode": "p4",
-			"toSide": "left"
+			"id": "ef-e-sp2",
+			"fromNode": "f-epics",
+			"fromSide": "bottom",
+			"toNode": "sp2",
+			"toSide": "top",
+			"label": "Epics E01–E10 / ST-01..42"
 		},
 		{
-			"id": "ep45",
-			"fromNode": "p4",
+			"id": "ef-d-sp4",
+			"fromNode": "f-dod",
+			"fromSide": "bottom",
+			"toNode": "sp4",
+			"toSide": "top",
+			"label": "v0.1 Hard DoD"
+		},
+		{
+			"id": "esp-12",
+			"fromNode": "sp1",
 			"fromSide": "right",
-			"toNode": "p5",
-			"toSide": "left"
+			"toNode": "sp2",
+			"toSide": "left",
+			"label": "Wks 3–4"
+		},
+		{
+			"id": "esp-23",
+			"fromNode": "sp2",
+			"fromSide": "right",
+			"toNode": "sp3",
+			"toSide": "left",
+			"label": "Wks 5–6"
+		},
+		{
+			"id": "esp-34",
+			"fromNode": "sp3",
+			"fromSide": "right",
+			"toNode": "sp4",
+			"toSide": "left",
+			"label": "Wks 7–8"
+		},
+		{
+			"id": "esp4-v01",
+			"fromNode": "sp4",
+			"fromSide": "bottom",
+			"toNode": "m-v01",
+			"toSide": "top",
+			"label": "Ships v0.1 Alpha"
+		},
+		{
+			"id": "ef-m-v01",
+			"fromNode": "f-milestones",
+			"fromSide": "right",
+			"toNode": "m-v01",
+			"toSide": "left",
+			"label": "Governs v0.1–Post-v1.0"
+		},
+		{
+			"id": "em-0102",
+			"fromNode": "m-v01",
+			"fromSide": "right",
+			"toNode": "m-v02",
+			"toSide": "left",
+			"label": "Pro Data & Sandbox"
+		},
+		{
+			"id": "em-0205",
+			"fromNode": "m-v02",
+			"fromSide": "right",
+			"toNode": "m-v05",
+			"toSide": "left",
+			"label": "Live Retail & Ecosystem"
+		},
+		{
+			"id": "em-0510",
+			"fromNode": "m-v05",
+			"fromSide": "right",
+			"toNode": "m-v10",
+			"toSide": "left",
+			"label": "GA Qualification"
+		},
+		{
+			"id": "em-10post",
+			"fromNode": "m-v10",
+			"fromSide": "right",
+			"toNode": "m-post",
+			"toSide": "left",
+			"label": "Deferred Post-v1.0"
 		}
 	]
 }
