@@ -44,9 +44,10 @@ import {
   type VolumeProfileSummary,
 } from "@allegedly/ipc-client";
 import {
+  DEFAULT_FAVORITE_TOOLS,
   DRAWING_TOOL_META,
   DrawingEngine,
-  FIB_LEVELS,
+  getDrawingToolMeta,
   snapTickToMagnet,
   type AnchorPoint,
   type DrawingObject,
@@ -54,6 +55,8 @@ import {
   type MagnetTarget,
   type PlacedDrawingKind,
 } from "../drawings/drawing-engine";
+import { drawRulerOverlay, drawVectorDrawing } from "../drawings/render-drawings";
+import { DrawingToolIcon } from "../components/drawing-tool-icons";
 import { getSymbolMeta } from "../data/symbols";
 import {
   ChartContextMenu,
@@ -88,6 +91,7 @@ export interface ChartHistoryActions {
   clear: () => void;
   addAlert?: () => void;
   takeSnapshot?: () => void;
+  resetZoom?: () => void;
 }
 
 export interface ChartOrderOverlay {
@@ -113,6 +117,11 @@ export interface ChartPanelProps {
   magnetEnabled?: boolean;
   onToggleMagnet?: () => void;
   showFloatingBar?: boolean;
+  stayInDrawingMode?: boolean;
+  drawingsLocked?: boolean;
+  drawingsHidden?: boolean;
+  favoriteTools?: readonly PlacedDrawingKind[];
+  activeIconStamp?: string;
   candleStyle?: "monochrome" | "classic";
   autoScale?: boolean;
   onAutoScaleChange?: (auto: boolean) => void;
@@ -316,7 +325,17 @@ export function ChartOverlayToolbar({
         <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400">
           Draw
         </span>
-        {DRAWING_TOOL_META.map((tool) => (
+        {DRAWING_TOOL_META.filter((t) =>
+          [
+            "cursor",
+            "trendline",
+            "horizontal_ray",
+            "fib_retracement",
+            "box_zone",
+            "price_range",
+            "anchored_vwap",
+          ].includes(t.kind),
+        ).map((tool) => (
           <Toggle
             key={tool.kind}
             pressed={activeTool === tool.kind}
@@ -445,128 +464,6 @@ function seedInitialCandles(symbol: string): {
   return { candles, volumes, buyVolumes, sellVolumes };
 }
 
-function drawVectorDrawing(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  kind: PlacedDrawingKind,
-  anchors: readonly AnchorPoint[],
-  color: string,
-  tickFloat: number,
-  bridge: CoordinateBridge,
-  candles: readonly CandlestickData<UTCTimestamp>[],
-  volumes: readonly HistogramData<UTCTimestamp>[],
-): void {
-  const pts = anchors.map((a) => ({
-    x: bridge.timeToX(a.timeSec),
-    y: bridge.priceToY(Number(a.priceTick) * tickFloat),
-    anchor: a,
-  }));
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 1.5;
-
-  if (kind === "horizontal_ray" && pts[0]?.y !== null) {
-    const startX = pts[0].x ?? 0;
-    ctx.beginPath();
-    ctx.moveTo(startX, pts[0].y);
-    ctx.lineTo(w, pts[0].y);
-    ctx.stroke();
-  } else if (kind === "trendline" && pts.length >= 2) {
-    const [a, b] = pts;
-    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    }
-  } else if (kind === "box_zone" && pts.length >= 2) {
-    const [a, b] = pts;
-    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
-      const rx = Math.min(a.x, b.x);
-      const ry = Math.min(a.y, b.y);
-      const rw = Math.abs(b.x - a.x);
-      const rh = Math.abs(b.y - a.y);
-      ctx.save();
-      ctx.globalAlpha = 0.16;
-      ctx.fillRect(rx, ry, rw, rh);
-      ctx.restore();
-      ctx.strokeRect(rx, ry, rw, rh);
-    }
-  } else if (kind === "price_range" && pts.length >= 2) {
-    const [a, b] = pts;
-    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
-      const rx = Math.min(a.x, b.x);
-      const ry = Math.min(a.y, b.y);
-      const rw = Math.abs(b.x - a.x);
-      const rh = Math.abs(b.y - a.y);
-      ctx.save();
-      ctx.globalAlpha = 0.14;
-      ctx.fillRect(rx, ry, rw, rh);
-      ctx.restore();
-      ctx.strokeRect(rx, ry, rw, rh);
-      const deltaTicks = b.anchor.priceTick - a.anchor.priceTick;
-      const deltaPrice = Number(deltaTicks) * tickFloat;
-      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.fillText(
-        `${deltaPrice >= 0 ? "+" : ""}${deltaPrice.toFixed(2)} (${deltaTicks.toString()}t)`,
-        rx + 4,
-        Math.max(14, ry + 12),
-      );
-    }
-  } else if (kind === "fib_retracement" && pts.length >= 2) {
-    const [a, b] = pts;
-    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
-      const leftX = Math.min(a.x, b.x);
-      const rightX = Math.max(a.x, b.x, leftX + 80);
-      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
-      for (const lvl of FIB_LEVELS) {
-        const y = a.y + (b.y - a.y) * lvl;
-        ctx.beginPath();
-        ctx.moveTo(leftX, y);
-        ctx.lineTo(rightX, y);
-        ctx.stroke();
-        ctx.fillText(`${(lvl * 100).toFixed(1)}%`, rightX + 4, y + 3);
-      }
-    }
-  } else if (kind === "anchored_vwap" && pts[0]) {
-    const startSec = pts[0].anchor.timeSec;
-    let cpv = 0;
-    let cv = 0;
-    ctx.beginPath();
-    let started = false;
-    for (let i = 0; i < candles.length; i++) {
-      const c = candles[i];
-      if (Number(c.time) < startSec) continue;
-      const vol = volumes[i]?.value ?? 1;
-      const typ = (c.high + c.low + c.close) / 3;
-      cpv += typ * vol;
-      cv += vol;
-      if (cv <= 0) continue;
-      const vx = bridge.timeToX(Number(c.time));
-      const vy = bridge.priceToY(cpv / cv);
-      if (vx !== null && vy !== null && vy >= 0 && vy <= h) {
-        if (!started) {
-          ctx.moveTo(vx, vy);
-          started = true;
-        } else {
-          ctx.lineTo(vx, vy);
-        }
-      }
-    }
-    ctx.stroke();
-  }
-
-  // Anchor handles
-  for (const p of pts) {
-    if (p.x !== null && p.y !== null) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-}
-
 /**
  * Genuine Lightweight Charts v5 ISeriesPrimitive (ADR-0004 / S01).
  * Executes orderflow (WebGL2 offscreen instanced pass composited synchronously) and
@@ -576,11 +473,17 @@ function drawVectorDrawing(
 interface PrimitiveDrawContext {
   getOverlayData: () => OverlayRenderData;
   getDrawings: () => readonly DrawingObject[];
+  getDrawingsHidden: () => boolean;
+  getDrawingsLocked: () => boolean;
   getDraftPreview: () => {
     tool: DrawingToolKind;
     anchors: readonly AnchorPoint[];
     hover: AnchorPoint | null;
   };
+  getRulerPreview: () => { start: AnchorPoint; end: AnchorPoint } | null;
+  getZoomBox: () => { x1: number; y1: number; x2: number; y2: number } | null;
+  getTickSizeE9: () => bigint;
+  getPrecisionDigits: () => number;
   getCandles: () => readonly CandlestickData<UTCTimestamp>[];
   getVolumes: () => readonly HistogramData<UTCTimestamp>[];
 }
@@ -623,41 +526,84 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
           // 1. Orderflow layers (Footprint, VRVP, u128 TPO) composited synchronously
           this.overlay.compositeIntoContext(context, w, h, dpr, data, bridge);
 
-          // 2. Clean-room vector drawings + active draft preview
+          // 2. Clean-room vector drawings + active draft preview + ruler + zoom box
           const candles = this.source.getCandles();
           const volumes = this.source.getVolumes();
+          const hidden = this.source.getDrawingsHidden();
+          const locked = this.source.getDrawingsLocked();
           context.save();
-          for (const d of this.source.getDrawings()) {
-            drawVectorDrawing(
-              context,
-              w,
-              h,
-              d.kind,
-              d.anchors,
-              d.color,
-              data.tickSizeFloat,
-              bridge,
-              candles,
-              volumes,
-            );
+          if (!hidden) {
+            for (const d of this.source.getDrawings()) {
+              drawVectorDrawing(
+                context,
+                w,
+                h,
+                d.kind,
+                d.anchors,
+                d.color,
+                data.tickSizeFloat,
+                bridge,
+                candles,
+                volumes,
+                d.label,
+                !locked,
+              );
+            }
+            const draft = this.source.getDraftPreview();
+            if (
+              draft.tool !== "cursor" &&
+              draft.tool !== "ruler" &&
+              draft.tool !== "zoom_in" &&
+              draft.anchors.length > 0
+            ) {
+              const preview = draft.hover ? [...draft.anchors, draft.hover] : [...draft.anchors];
+              const meta = getDrawingToolMeta(draft.tool);
+              context.setLineDash([4, 3]);
+              drawVectorDrawing(
+                context,
+                w,
+                h,
+                draft.tool as PlacedDrawingKind,
+                preview,
+                meta.defaultColor ?? "#f59e0b",
+                data.tickSizeFloat,
+                bridge,
+                candles,
+                volumes,
+                undefined,
+                true,
+              );
+            }
           }
-          const draft = this.source.getDraftPreview();
-          if (draft.tool !== "cursor" && draft.anchors.length > 0) {
-            const preview = draft.hover ? [...draft.anchors, draft.hover] : [...draft.anchors];
-            const meta = DRAWING_TOOL_META.find((m) => m.kind === draft.tool);
-            context.setLineDash([4, 3]);
-            drawVectorDrawing(
-              context,
+
+          const ruler = this.source.getRulerPreview();
+          if (ruler) {
+            drawRulerOverlay({
+              ctx: context,
               w,
               h,
-              draft.tool as PlacedDrawingKind,
-              preview,
-              meta?.defaultColor ?? "#f59e0b",
-              data.tickSizeFloat,
+              start: ruler.start,
+              end: ruler.end,
+              tickSizeE9: this.source.getTickSizeE9(),
               bridge,
               candles,
               volumes,
-            );
+              decimals: this.source.getPrecisionDigits(),
+            });
+          }
+
+          const zBox = this.source.getZoomBox();
+          if (zBox) {
+            const zx = Math.min(zBox.x1, zBox.x2);
+            const zy = Math.min(zBox.y1, zBox.y2);
+            const zw = Math.abs(zBox.x2 - zBox.x1);
+            const zh = Math.abs(zBox.y2 - zBox.y1);
+            context.fillStyle = "rgba(56, 189, 248, 0.14)";
+            context.fillRect(zx, zy, zw, zh);
+            context.strokeStyle = "#38bdf8";
+            context.lineWidth = 1.25;
+            context.setLineDash([4, 3]);
+            context.strokeRect(zx, zy, zw, zh);
           }
           context.restore();
         });
@@ -712,6 +658,11 @@ export function ChartPanel({
   magnetEnabled: controlledMagnet,
   onToggleMagnet,
   showFloatingBar = true,
+  stayInDrawingMode = false,
+  drawingsLocked = false,
+  drawingsHidden = false,
+  favoriteTools,
+  activeIconStamp = "★",
   candleStyle = "monochrome",
   autoScale: controlledAutoScale,
   onAutoScaleChange,
@@ -737,9 +688,43 @@ export function ChartPanel({
   showInlineToolbar = false,
 }: ChartPanelProps) {
   const effectiveSettings = chartSettings ?? DEFAULT_CHART_SETTINGS;
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const floatingBarRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const pointerSurfaceRef = useRef<HTMLDivElement | null>(null);
   const ohlcRef = useRef<HTMLSpanElement | null>(null);
+
+  const [floatingBarPos, setFloatingBarPos] = useState<{ x: number; y: number } | null>(() => {
+    if (typeof window === "undefined" || !window.localStorage) return null;
+    try {
+      const raw = window.localStorage.getItem("allegedly.floating_bar_pos.v1");
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown };
+      if (typeof parsed.x === "number" && typeof parsed.y === "number") {
+        return { x: parsed.x, y: parsed.y };
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  });
+  const [isDraggingBar, setIsDraggingBar] = useState<boolean>(false);
+  const barDragRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  const [pendingTextAnnotation, setPendingTextAnnotation] = useState<{
+    kind: PlacedDrawingKind;
+    anchors: AnchorPoint[];
+    x: number;
+    y: number;
+    value: string;
+  } | null>(null);
+  const pendingTextInputRef = useRef<HTMLInputElement | null>(null);
 
   const [visibility, setVisibility] = useState<OverlayVisibility>({
     footprint: false,
@@ -796,6 +781,20 @@ export function ChartPanel({
 
   const magnetRef = useRef<boolean>(magnetEnabled);
   magnetRef.current = magnetEnabled;
+
+  const stayInDrawingModeRef = useRef<boolean>(stayInDrawingMode);
+  stayInDrawingModeRef.current = stayInDrawingMode;
+
+  const drawingsLockedRef = useRef<boolean>(drawingsLocked);
+  drawingsLockedRef.current = drawingsLocked;
+
+  const drawingsHiddenRef = useRef<boolean>(drawingsHidden);
+  drawingsHiddenRef.current = drawingsHidden;
+
+  const activeIconStampRef = useRef<string>(activeIconStamp);
+  activeIconStampRef.current = activeIconStamp;
+
+  const shiftPressedRef = useRef<boolean>(false);
 
   const candleStyleRef = useRef<"monochrome" | "classic">(candleStyle);
   candleStyleRef.current = candleStyle;
@@ -855,6 +854,10 @@ export function ChartPanel({
   };
 
   const handleClear = () => {
+    if (drawingsLockedRef.current) {
+      showToast("Drawings are locked — unlock to remove");
+      return;
+    }
     drawingEngineRef.current.clear(symbol);
     syncHistoryMeta();
   };
@@ -895,6 +898,7 @@ export function ChartPanel({
       clear: handleClear,
       addAlert: handleAddAlert,
       takeSnapshot: handleTakeSnapshot,
+      resetZoom: () => handleResetView(),
     };
   }
 
@@ -909,7 +913,7 @@ export function ChartPanel({
 
   useEffect(() => {
     redrawTriggerRef.current();
-  }, [visibility]);
+  }, [visibility, drawingsHidden, drawingsLocked]);
 
   // Sync volume histogram visibility with Status line Volume checkbox
   useEffect(() => {
@@ -1408,6 +1412,13 @@ export function ChartPanel({
     let pendingPrimitiveDirty = true;
     let draftAnchors: AnchorPoint[] = [];
     let hoverAnchor: AnchorPoint | null = null;
+    let isFreehandDrawing = false;
+    let lastFreehandPx: { x: number; y: number } | null = null;
+    let rulerStart: AnchorPoint | null = null;
+    let rulerEnd: AnchorPoint | null = null;
+    let rulerPinned = false;
+    let rulerDragOrigin: { x: number; y: number } | null = null;
+    let zoomBox: { x1: number; y1: number; x2: number; y2: number } | null = null;
     let rafId = 0;
     let lastWatchlistNotifyMs = 0;
 
@@ -1422,11 +1433,17 @@ export function ChartPanel({
         visibility: visibilityRef.current,
       }),
       getDrawings: (): readonly DrawingObject[] => drawingEngineRef.current.list(symbol),
+      getDrawingsHidden: () => drawingsHiddenRef.current,
+      getDrawingsLocked: () => drawingsLockedRef.current,
       getDraftPreview: () => ({
         tool: activeToolRef.current,
         anchors: draftAnchors,
         hover: hoverAnchor,
       }),
+      getRulerPreview: () => (rulerStart && rulerEnd ? { start: rulerStart, end: rulerEnd } : null),
+      getZoomBox: () => zoomBox,
+      getTickSizeE9: () => tickSizeE9,
+      getPrecisionDigits: () => getPrecisionDigits(chartSettingsRef.current, symMeta.decimals),
       getCandles: () => activeCandles,
       getVolumes: () => activeVolumes,
     });
@@ -1625,32 +1642,305 @@ export function ChartPanel({
       return { timeSec, priceTick };
     };
 
+    const finishDrawing = (toolKind: PlacedDrawingKind, anchors: AnchorPoint[], label?: string) => {
+      drawingEngineRef.current.add(toolKind, symbol, anchors, undefined, label);
+      draftAnchors = [];
+      hoverAnchor = null;
+      isFreehandDrawing = false;
+      lastFreehandPx = null;
+      syncHistoryMeta();
+      if (!stayInDrawingModeRef.current) {
+        setActiveTool("cursor");
+      }
+    };
+
     const onPointerDown = (ev: PointerEvent) => {
-      const tool = activeToolRef.current;
+      if (ev.button !== 0) return;
+      const rect = el.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      const tool = ev.shiftKey && activeToolRef.current === "cursor" ? "ruler" : activeToolRef.current;
       if (tool === "cursor") return;
+
+      if (tool === "zoom_in") {
+        zoomBox = { x1: px, y1: py, x2: px, y2: py };
+        try {
+          pointerSurface.setPointerCapture(ev.pointerId);
+        } catch {
+          // ignore
+        }
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+
       const anchor = toAnchorFromPointer(ev.clientX, ev.clientY);
       if (!anchor) return;
-      const meta = DRAWING_TOOL_META.find((m) => m.kind === tool);
-      const required = meta?.requiredAnchors ?? 2;
+
+      if (tool === "ruler") {
+        if (!rulerStart || rulerPinned) {
+          rulerStart = anchor;
+          rulerEnd = anchor;
+          rulerPinned = false;
+          rulerDragOrigin = { x: ev.clientX, y: ev.clientY };
+          try {
+            pointerSurface.setPointerCapture(ev.pointerId);
+          } catch {
+            // ignore
+          }
+        } else {
+          rulerEnd = anchor;
+          rulerPinned = true;
+          rulerDragOrigin = null;
+        }
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+
+      if (drawingsLockedRef.current) {
+        showToast("Drawings are locked — unlock to add or edit");
+        return;
+      }
+
+      const meta = getDrawingToolMeta(tool);
+      if (meta.interaction === "freehand") {
+        isFreehandDrawing = true;
+        draftAnchors = [anchor];
+        lastFreehandPx = { x: px, y: py };
+        try {
+          pointerSurface.setPointerCapture(ev.pointerId);
+        } catch {
+          // ignore
+        }
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+
+      if (meta.interaction === "multipoint") {
+        draftAnchors.push(anchor);
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+
       draftAnchors.push(anchor);
-      if (draftAnchors.length >= required) {
-        drawingEngineRef.current.add(tool as PlacedDrawingKind, symbol, draftAnchors);
-        draftAnchors = [];
-        hoverAnchor = null;
-        syncHistoryMeta();
+      if (draftAnchors.length >= meta.requiredAnchors) {
+        if (meta.interaction === "text") {
+          const captured = [...draftAnchors];
+          draftAnchors = [];
+          hoverAnchor = null;
+          pendingPrimitiveDirty = true;
+          scheduleFlush();
+          setPendingTextAnnotation({
+            kind: tool as PlacedDrawingKind,
+            anchors: captured,
+            x: Math.max(12, Math.min(rect.width - 230, px)),
+            y: Math.max(12, Math.min(rect.height - 64, py)),
+            value: "",
+          });
+          return;
+        }
+        const stamp = tool === "icon_stamp" ? activeIconStampRef.current : undefined;
+        finishDrawing(tool as PlacedDrawingKind, draftAnchors, stamp);
       } else {
+        pendingPrimitiveDirty = true;
         scheduleFlush();
       }
     };
 
     const onPointerMove = (ev: PointerEvent) => {
-      if (activeToolRef.current === "cursor" || draftAnchors.length === 0) return;
+      const rect = el.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+
+      if (zoomBox) {
+        zoomBox = { ...zoomBox, x2: px, y2: py };
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+
+      if (rulerStart && !rulerPinned) {
+        const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+        if (nextAnchor) {
+          rulerEnd = nextAnchor;
+          pendingPrimitiveDirty = true;
+          scheduleFlush();
+        }
+        return;
+      }
+
+      const tool = activeToolRef.current;
+      if (tool === "cursor" || draftAnchors.length === 0) return;
+
+      const meta = getDrawingToolMeta(tool);
+      if (meta.interaction === "freehand" && isFreehandDrawing) {
+        if (lastFreehandPx && Math.hypot(px - lastFreehandPx.x, py - lastFreehandPx.y) < 4) {
+          return;
+        }
+        const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+        if (nextAnchor) {
+          draftAnchors.push(nextAnchor);
+          lastFreehandPx = { x: px, y: py };
+          pendingPrimitiveDirty = true;
+          scheduleFlush();
+        }
+        return;
+      }
+
       hoverAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+      pendingPrimitiveDirty = true;
       scheduleFlush();
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      if (zoomBox) {
+        const x1 = Math.min(zoomBox.x1, zoomBox.x2);
+        const x2 = Math.max(zoomBox.x1, zoomBox.x2);
+        zoomBox = null;
+        if (x2 - x1 > 12) {
+          const l1 = chart.timeScale().coordinateToLogical(x1);
+          const l2 = chart.timeScale().coordinateToLogical(x2);
+          if (l1 !== null && l2 !== null && l2 > l1) {
+            chart.timeScale().setVisibleLogicalRange({ from: l1, to: l2 });
+          }
+          if (!stayInDrawingModeRef.current) {
+            setActiveTool("cursor");
+          }
+        }
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+
+      if (rulerStart && !rulerPinned && rulerDragOrigin) {
+        const moved = Math.hypot(ev.clientX - rulerDragOrigin.x, ev.clientY - rulerDragOrigin.y);
+        if (moved > 8) {
+          const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+          if (nextAnchor) rulerEnd = nextAnchor;
+          rulerPinned = true;
+          rulerDragOrigin = null;
+          pendingPrimitiveDirty = true;
+          scheduleFlush();
+        }
+        return;
+      }
+
+      if (isFreehandDrawing) {
+        isFreehandDrawing = false;
+        lastFreehandPx = null;
+        const tool = activeToolRef.current;
+        if (draftAnchors.length >= 2 && tool !== "cursor" && tool !== "ruler" && tool !== "zoom_in") {
+          finishDrawing(tool as PlacedDrawingKind, draftAnchors);
+        } else {
+          draftAnchors = [];
+          pendingPrimitiveDirty = true;
+          scheduleFlush();
+        }
+      }
+    };
+
+    const onDoubleClick = () => {
+      const tool = activeToolRef.current;
+      const meta = getDrawingToolMeta(tool);
+      if (meta.interaction === "multipoint" && draftAnchors.length >= 2) {
+        finishDrawing(tool as PlacedDrawingKind, draftAnchors);
+      }
+    };
+
+    const onWindowKeyDown = (ev: KeyboardEvent) => {
+      const target = ev.target as HTMLElement | null;
+      const isTyping =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+      if (ev.key === "Shift") {
+        shiftPressedRef.current = true;
+        if (activeToolRef.current === "cursor") {
+          pointerSurface.style.pointerEvents = "auto";
+          pointerSurface.style.cursor = "crosshair";
+        }
+      }
+      if (isTyping) return;
+
+      if (ev.key === "Escape") {
+        draftAnchors = [];
+        hoverAnchor = null;
+        isFreehandDrawing = false;
+        rulerStart = null;
+        rulerEnd = null;
+        rulerPinned = false;
+        zoomBox = null;
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        setActiveTool("cursor");
+        return;
+      }
+
+      if (ev.key === "Enter") {
+        const tool = activeToolRef.current;
+        const meta = getDrawingToolMeta(tool);
+        if (meta.interaction === "multipoint" && draftAnchors.length >= 2) {
+          finishDrawing(tool as PlacedDrawingKind, draftAnchors);
+          return;
+        }
+      }
+
+      if ((ev.metaKey || ev.ctrlKey) && ev.code === "KeyZ") {
+        ev.preventDefault();
+        if (ev.shiftKey) handleRedo();
+        else handleUndo();
+        return;
+      }
+      if (ev.ctrlKey && ev.code === "KeyY") {
+        ev.preventDefault();
+        handleRedo();
+        return;
+      }
+
+      if (ev.altKey && !ev.metaKey && !ev.ctrlKey) {
+        if (ev.code === "KeyT" && !ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("trendline");
+        } else if (ev.code === "KeyH" && !ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("horizontal_line");
+        } else if (ev.code === "KeyJ" && !ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("horizontal_ray");
+        } else if (ev.code === "KeyV" && !ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("vertical_line");
+        } else if (ev.code === "KeyC" && !ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("crossline");
+        } else if (ev.code === "KeyF" && !ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("fib_retracement");
+        } else if (ev.code === "KeyR" && ev.shiftKey) {
+          ev.preventDefault();
+          setActiveTool("box_zone");
+        }
+      }
+    };
+
+    const onWindowKeyUp = (ev: KeyboardEvent) => {
+      if (ev.key === "Shift") {
+        shiftPressedRef.current = false;
+        pointerSurface.style.pointerEvents = "";
+        pointerSurface.style.cursor = "";
+      }
     };
 
     pointerSurface.addEventListener("pointerdown", onPointerDown);
     pointerSurface.addEventListener("pointermove", onPointerMove);
+    pointerSurface.addEventListener("pointerup", onPointerUp);
+    pointerSurface.addEventListener("dblclick", onDoubleClick);
+    window.addEventListener("keydown", onWindowKeyDown);
+    window.addEventListener("keyup", onWindowKeyUp);
 
     const ro = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -1670,6 +1960,10 @@ export function ChartPanel({
       ro.disconnect();
       pointerSurface.removeEventListener("pointerdown", onPointerDown);
       pointerSurface.removeEventListener("pointermove", onPointerMove);
+      pointerSurface.removeEventListener("pointerup", onPointerUp);
+      pointerSurface.removeEventListener("dblclick", onDoubleClick);
+      window.removeEventListener("keydown", onWindowKeyDown);
+      window.removeEventListener("keyup", onWindowKeyUp);
       if (rafId !== 0) cancelAnimationFrame(rafId);
       candleSeries.detachPrimitive(primitive);
       priceLinesRef.current = [];
@@ -1782,6 +2076,111 @@ export function ChartPanel({
     showToast("Chart view reset");
   };
 
+  const clampBarCoords = (x: number, y: number): { x: number; y: number } => {
+    const container = chartContainerRef.current;
+    const bar = floatingBarRef.current;
+    const cw = container?.clientWidth ?? 960;
+    const ch = container?.clientHeight ?? 600;
+    const bw = bar?.offsetWidth ?? 420;
+    const bh = bar?.offsetHeight ?? 40;
+    return {
+      x: Math.max(8, Math.min(Math.max(8, cw - bw - 8), Math.round(x))),
+      y: Math.max(8, Math.min(Math.max(8, ch - bh - 8), Math.round(y))),
+    };
+  };
+
+  useEffect(() => {
+    if (!floatingBarPos) return;
+    const onResize = () => {
+      setFloatingBarPos((curr) => (curr ? clampBarCoords(curr.x, curr.y) : null));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [floatingBarPos !== null]);
+
+  useEffect(() => {
+    if (pendingTextAnnotation) {
+      pendingTextInputRef.current?.focus();
+    }
+  }, [pendingTextAnnotation]);
+
+  const handleBarGripPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const container = chartContainerRef.current;
+    const bar = floatingBarRef.current;
+    if (!container || !bar) return;
+    const cRect = container.getBoundingClientRect();
+    const bRect = bar.getBoundingClientRect();
+    const currentX = floatingBarPos ? floatingBarPos.x : bRect.left - cRect.left;
+    const currentY = floatingBarPos ? floatingBarPos.y : bRect.top - cRect.top;
+    barDragRef.current = {
+      pointerId: e.pointerId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startX: currentX,
+      startY: currentY,
+    };
+    setIsDraggingBar(true);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleBarGripPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = barDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const dx = e.clientX - drag.startClientX;
+    const dy = e.clientY - drag.startClientY;
+    setFloatingBarPos(clampBarCoords(drag.startX + dx, drag.startY + dy));
+  };
+
+  const handleBarGripPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = barDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    barDragRef.current = null;
+    setIsDraggingBar(false);
+    const dx = e.clientX - drag.startClientX;
+    const dy = e.clientY - drag.startClientY;
+    const finalPos = clampBarCoords(drag.startX + dx, drag.startY + dy);
+    setFloatingBarPos(finalPos);
+    try {
+      window.localStorage?.setItem("allegedly.floating_bar_pos.v1", JSON.stringify(finalPos));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleBarGripKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const step = e.shiftKey ? 32 : 12;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === "ArrowLeft") dx = -step;
+    else if (e.key === "ArrowRight") dx = step;
+    else if (e.key === "ArrowUp") dy = -step;
+    else if (e.key === "ArrowDown") dy = step;
+    else return;
+    e.preventDefault();
+    const container = chartContainerRef.current;
+    const bar = floatingBarRef.current;
+    const cRect = container?.getBoundingClientRect();
+    const bRect = bar?.getBoundingClientRect();
+    const baseX = floatingBarPos ? floatingBarPos.x : cRect && bRect ? bRect.left - cRect.left : 200;
+    const baseY = floatingBarPos ? floatingBarPos.y : cRect && bRect ? bRect.top - cRect.top : 12;
+    const next = clampBarCoords(baseX + dx, baseY + dy);
+    setFloatingBarPos(next);
+    try {
+      window.localStorage?.setItem("allegedly.floating_bar_pos.v1", JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
+  const activeFavorites = favoriteTools ?? DEFAULT_FAVORITE_TOOLS;
+
   const showWatermark =
     effectiveSettings.canvas.watermark === "always" ||
     (effectiveSettings.canvas.watermark === "replay" && replayOpen);
@@ -1822,6 +2221,7 @@ export function ChartPanel({
       )}
 
       <div
+        ref={chartContainerRef}
         className="relative flex-1 overflow-hidden"
         onContextMenu={handleChartContextMenu}
       >
@@ -1992,39 +2392,70 @@ export function ChartPanel({
           )}
         </div>
 
-        {/* Floating Glass Favorites Drawing & Orderflow Pill */}
+        {/* Draggable Floating Favorites Drawing & Orderflow Toolbar */}
         {showFloatingBar && (
           <div
+            ref={floatingBarRef}
             role="toolbar"
             aria-label="Quick drawing and orderflow favorites"
-            className="absolute left-1/2 top-2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border border-[#2c3140] bg-[#14171f]/92 px-1.5 py-1 shadow-2xl backdrop-blur-md select-none"
+            style={
+              floatingBarPos
+                ? { left: `${floatingBarPos.x}px`, top: `${floatingBarPos.y}px` }
+                : undefined
+            }
+            className={
+              floatingBarPos
+                ? "absolute z-25 flex items-center gap-0.5 rounded-xl border border-[#2a2f3d] bg-[#12141a]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
+                : "absolute left-1/2 top-2 z-25 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-[#2a2f3d] bg-[#12141a]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
+            }
           >
-            <span
-              aria-hidden="true"
-              className="mr-0.5 px-1 font-mono text-[10px] tracking-tighter text-[#5c6375]"
+            <button
+              type="button"
+              aria-label="Drag favorites toolbar"
+              title="Drag to move toolbar (or use Arrow keys)"
+              onPointerDown={handleBarGripPointerDown}
+              onPointerMove={handleBarGripPointerMove}
+              onPointerUp={handleBarGripPointerUp}
+              onPointerCancel={handleBarGripPointerUp}
+              onKeyDown={handleBarGripKeyDown}
+              className={
+                isDraggingBar
+                  ? "mr-0.5 flex h-7 w-5 cursor-grabbing items-center justify-center rounded text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+                  : "mr-0.5 flex h-7 w-5 cursor-grab items-center justify-center rounded text-[#62697a] hover:text-[#b2b8c7] focus-visible:outline-2 focus-visible:outline-sky-400"
+              }
             >
-              ⋮⋮
-            </span>
-            {DRAWING_TOOL_META.map((tool) => {
-              const active = activeTool === tool.kind;
+              <svg aria-hidden="true" viewBox="0 0 12 16" className="h-3.5 w-2.5" fill="currentColor">
+                <circle cx="3.5" cy="3" r="1.1" />
+                <circle cx="8.5" cy="3" r="1.1" />
+                <circle cx="3.5" cy="8" r="1.1" />
+                <circle cx="8.5" cy="8" r="1.1" />
+                <circle cx="3.5" cy="13" r="1.1" />
+                <circle cx="8.5" cy="13" r="1.1" />
+              </svg>
+            </button>
+
+            {activeFavorites.map((toolKind) => {
+              const meta = getDrawingToolMeta(toolKind);
+              const active = activeTool === toolKind;
               return (
                 <button
-                  key={tool.kind}
+                  key={toolKind}
                   type="button"
-                  title={tool.label}
-                  aria-label={`Quick select ${tool.label}`}
+                  title={meta.shortcut ? `${meta.label} (${meta.shortcut})` : meta.label}
+                  aria-label={`Quick select ${meta.label}`}
                   aria-pressed={active}
-                  onClick={() => setActiveTool(tool.kind)}
+                  onClick={() => setActiveTool(active ? "cursor" : toolKind)}
                   className={
                     active
-                      ? "rounded px-2 py-1 font-mono text-[10px] font-semibold bg-[#292e3b] text-white"
-                      : "rounded px-2 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white"
+                      ? "flex h-7 w-7 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                      : "flex h-7 w-7 items-center justify-center rounded-md text-[#b8becd] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
                   }
                 >
-                  {tool.label}
+                  <DrawingToolIcon kind={toolKind} className="h-[17px] w-[17px]" />
                 </button>
               );
             })}
+
             <span className="mx-1 h-4 w-px bg-[#2a2f3d]" aria-hidden="true" />
             <button
               type="button"
@@ -2033,8 +2464,8 @@ export function ChartPanel({
               onClick={() => handleToggleVisibility("footprint")}
               className={
                 visibility.footprint
-                  ? "rounded bg-emerald-500/20 px-2 py-1 font-mono text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-500/40"
-                  : "rounded px-2 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white"
+                  ? "rounded bg-emerald-500/20 px-1.5 py-1 font-mono text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
+                  : "rounded px-1.5 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
               }
             >
               FP
@@ -2046,8 +2477,8 @@ export function ChartPanel({
               onClick={() => handleToggleVisibility("vrvp")}
               className={
                 visibility.vrvp
-                  ? "rounded bg-sky-500/20 px-2 py-1 font-mono text-[10px] font-semibold text-sky-300 ring-1 ring-sky-500/40"
-                  : "rounded px-2 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white"
+                  ? "rounded bg-sky-500/20 px-1.5 py-1 font-mono text-[10px] font-semibold text-sky-300 ring-1 ring-sky-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
+                  : "rounded px-1.5 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
               }
             >
               VP
@@ -2059,13 +2490,75 @@ export function ChartPanel({
               onClick={() => handleToggleVisibility("tpo")}
               className={
                 visibility.tpo
-                  ? "rounded bg-amber-500/20 px-2 py-1 font-mono text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/40"
-                  : "rounded px-2 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white"
+                  ? "rounded bg-amber-500/20 px-1.5 py-1 font-mono text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
+                  : "rounded px-1.5 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
               }
             >
               TPO
             </button>
           </div>
+        )}
+
+        {/* Inline Annotation Text Input Popover */}
+        {pendingTextAnnotation && (
+          <form
+            style={{
+              left: `${pendingTextAnnotation.x}px`,
+              top: `${pendingTextAnnotation.y}px`,
+            }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const label =
+                pendingTextAnnotation.value.trim() ||
+                getDrawingToolMeta(pendingTextAnnotation.kind).shortLabel;
+              drawingEngineRef.current.add(
+                pendingTextAnnotation.kind,
+                symbol,
+                pendingTextAnnotation.anchors,
+                undefined,
+                label,
+              );
+              syncHistoryMeta();
+              setPendingTextAnnotation(null);
+              if (!stayInDrawingModeRef.current) {
+                setActiveTool("cursor");
+              }
+            }}
+            className="absolute z-40 flex items-center gap-1.5 rounded-lg border border-[#343a4c] bg-[#14171f]/98 p-1.5 shadow-2xl"
+          >
+            <input
+              ref={pendingTextInputRef}
+              type="text"
+              aria-label="Annotation text"
+              placeholder={`Enter ${getDrawingToolMeta(pendingTextAnnotation.kind).label.toLowerCase()}...`}
+              value={pendingTextAnnotation.value}
+              onChange={(e) =>
+                setPendingTextAnnotation((curr) =>
+                  curr ? { ...curr, value: e.target.value } : null,
+                )
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setPendingTextAnnotation(null);
+                }
+              }}
+              className="h-7 w-44 rounded border border-[#2c3140] bg-[#0e1015] px-2 text-xs text-[#e6e8ee] placeholder-[#6c7385] focus:border-sky-400 focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="h-7 rounded bg-[#e6e8ee] px-2.5 text-xs font-medium text-[#0c0d11] hover:bg-white"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingTextAnnotation(null)}
+              className="h-7 rounded px-2 text-xs text-[#9aa1b2] hover:bg-[#222633] hover:text-white"
+            >
+              Cancel
+            </button>
+          </form>
         )}
 
         <div ref={hostRef} className="h-full w-full" />

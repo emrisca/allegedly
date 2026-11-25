@@ -12,6 +12,8 @@ import axe from "axe-core";
 import { BookState, ProvenanceTier } from "@allegedly/ipc-client";
 import { ChromeToolbar, StatusBar } from "@allegedly/ui-chrome";
 import { ReplayBar } from "./components/replay-bar";
+import { DEFAULT_FAVORITE_TOOLS } from "./drawings/drawing-engine";
+import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { ChartOverlayToolbar } from "./panels/chart-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
 
@@ -317,5 +319,71 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
     expect(onOpenProvenance).toHaveBeenCalledTimes(1);
 
     await expectZeroCriticalOrSeriousAxe(container);
+  });
+
+  it("opens LeftDrawingRail category flyouts, toggles favorites/ruler/zoom/lock/hide, and passes axe-core", async () => {
+    const onSelectTool = vi.fn();
+    const onToggleFavoriteTool = vi.fn();
+    const onToggleStayInDrawingMode = vi.fn();
+    const onToggleDrawingsLocked = vi.fn();
+    const onToggleDrawingsHidden = vi.fn();
+    const onToggleFloatingBar = vi.fn();
+
+    const { container } = render(
+      <LeftDrawingRail
+        activeTool="cursor"
+        magnetEnabled={true}
+        showFloatingBar={true}
+        stayInDrawingMode={false}
+        drawingsLocked={false}
+        drawingsHidden={false}
+        favoriteTools={DEFAULT_FAVORITE_TOOLS}
+        drawingCount={2}
+        onSelectTool={onSelectTool}
+        onToggleMagnet={() => {}}
+        onToggleFloatingBar={onToggleFloatingBar}
+        onToggleStayInDrawingMode={onToggleStayInDrawingMode}
+        onToggleDrawingsLocked={onToggleDrawingsLocked}
+        onToggleDrawingsHidden={onToggleDrawingsHidden}
+        onToggleFavoriteTool={onToggleFavoriteTool}
+        onClearDrawings={() => {}}
+      />,
+    );
+
+    // Open Forecasting, Volume & Measurers flyout drawer
+    fireEvent.click(screen.getByRole("button", { name: "Open Forecasting, Volume & Measurers menu" }));
+    expect(screen.getByRole("dialog", { name: "Forecasting, Volume & Measurers" })).toBeTruthy();
+    expect(container.textContent).toContain("FORECASTING");
+    expect(container.textContent).toContain("VOLUME-BASED");
+    expect(container.textContent).toContain("MEASURERS");
+
+    await expectZeroCriticalOrSeriousAxe(container);
+
+    // Toggle favorite on Position forecast
+    fireEvent.click(screen.getByRole("button", { name: "Add Position forecast to favorites" }));
+    expect(onToggleFavoriteTool).toHaveBeenCalledWith("position_forecast");
+
+    // Pick Fixed range volume profile from drawer
+    fireEvent.click(screen.getByRole("button", { name: /^Fixed range volume profile$/i }));
+    expect(onSelectTool).toHaveBeenCalledWith("fixed_range_vp");
+
+    // Toggle Ruler, Zoom In, Stay in Drawing Mode, Lock, Hide, and Favorites Star
+    fireEvent.click(screen.getByRole("button", { name: "Measure ruler" }));
+    expect(onSelectTool).toHaveBeenCalledWith("ruler");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom In" }));
+    expect(onSelectTool).toHaveBeenCalledWith("zoom_in");
+
+    fireEvent.click(screen.getByRole("button", { name: "Stay in Drawing Mode" }));
+    expect(onToggleStayInDrawingMode).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Lock All Drawing Tools" }));
+    expect(onToggleDrawingsLocked).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide All Drawings" }));
+    expect(onToggleDrawingsHidden).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle floating favorites drawing toolbar" }));
+    expect(onToggleFloatingBar).toHaveBeenCalledTimes(1);
   });
 });

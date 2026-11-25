@@ -38,7 +38,12 @@ import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { ReplayBar } from "./components/replay-bar";
 import { RightIconRail, type RightDrawerTab } from "./components/right-icon-rail";
 import { getSymbolMeta, WATCHLIST_SYMBOLS } from "./data/symbols";
-import type { DrawingToolKind } from "./drawings/drawing-engine";
+import {
+  loadStoredFavorites,
+  saveStoredFavorites,
+  type DrawingToolKind,
+  type PlacedDrawingKind,
+} from "./drawings/drawing-engine";
 import {
   ChartPanel,
   type ChartHistoryActions,
@@ -196,6 +201,11 @@ export function App({ transport: providedTransport }: AppProps) {
   const [activeTool, setActiveTool] = useState<DrawingToolKind>("cursor");
   const [magnetEnabled, setMagnetEnabled] = useState<boolean>(true);
   const [showFloatingBar, setShowFloatingBar] = useState<boolean>(true);
+  const [stayInDrawingMode, setStayInDrawingMode] = useState<boolean>(false);
+  const [drawingsLocked, setDrawingsLocked] = useState<boolean>(false);
+  const [drawingsHidden, setDrawingsHidden] = useState<boolean>(false);
+  const [favoriteTools, setFavoriteTools] = useState<PlacedDrawingKind[]>(loadStoredFavorites);
+  const [activeIconStamp, setActiveIconStamp] = useState<string>("★");
   const [activeRange, setActiveRange] = useState<QuickRangePreset>("1Y");
   const [autoScale, setAutoScale] = useState<boolean>(true);
   const [logScale, setLogScale] = useState<boolean>(false);
@@ -603,6 +613,15 @@ export function App({ transport: providedTransport }: AppProps) {
     setRightTab((curr) => (curr === tab ? null : tab));
   }, []);
 
+  const handleToggleFavoriteTool = useCallback((tool: PlacedDrawingKind) => {
+    setFavoriteTools((prev) => {
+      const exists = prev.includes(tool);
+      const next = exists ? prev.filter((k) => k !== tool) : [...prev, tool];
+      saveStoredFavorites(next);
+      return next;
+    });
+  }, []);
+
   const studyOverlays = useMemo<StudyOverlaySeries[]>(
     () =>
       activeStudies
@@ -713,10 +732,21 @@ export function App({ transport: providedTransport }: AppProps) {
               activeTool={activeTool}
               magnetEnabled={magnetEnabled}
               showFloatingBar={showFloatingBar}
+              stayInDrawingMode={stayInDrawingMode}
+              drawingsLocked={drawingsLocked}
+              drawingsHidden={drawingsHidden}
+              favoriteTools={favoriteTools}
+              activeIconStamp={activeIconStamp}
               drawingCount={historyMeta.count}
               onSelectTool={setActiveTool}
               onToggleMagnet={() => setMagnetEnabled((v) => !v)}
               onToggleFloatingBar={() => setShowFloatingBar((v) => !v)}
+              onToggleStayInDrawingMode={() => setStayInDrawingMode((v) => !v)}
+              onToggleDrawingsLocked={() => setDrawingsLocked((v) => !v)}
+              onToggleDrawingsHidden={() => setDrawingsHidden((v) => !v)}
+              onToggleFavoriteTool={handleToggleFavoriteTool}
+              onSelectIconStamp={setActiveIconStamp}
+              onResetZoom={() => chartHistoryActionsRef.current?.resetZoom?.()}
               onClearDrawings={() => chartHistoryActionsRef.current?.clear()}
             />
 
@@ -736,6 +766,11 @@ export function App({ transport: providedTransport }: AppProps) {
                 magnetEnabled={magnetEnabled}
                 onToggleMagnet={() => setMagnetEnabled((v) => !v)}
                 showFloatingBar={showFloatingBar}
+                stayInDrawingMode={stayInDrawingMode}
+                drawingsLocked={drawingsLocked}
+                drawingsHidden={drawingsHidden}
+                favoriteTools={favoriteTools}
+                activeIconStamp={activeIconStamp}
                 candleStyle={candleStyle}
                 autoScale={autoScale}
                 onAutoScaleChange={setAutoScale}
@@ -845,6 +880,11 @@ export function App({ transport: providedTransport }: AppProps) {
                   magnetEnabled={magnetEnabled}
                   onToggleMagnet={() => setMagnetEnabled((v) => !v)}
                   showFloatingBar={showFloatingBar}
+                  stayInDrawingMode={stayInDrawingMode}
+                  drawingsLocked={drawingsLocked}
+                  drawingsHidden={drawingsHidden}
+                  favoriteTools={favoriteTools}
+                  activeIconStamp={activeIconStamp}
                   candleStyle={candleStyle}
                   autoScale={autoScale}
                   onAutoScaleChange={setAutoScale}

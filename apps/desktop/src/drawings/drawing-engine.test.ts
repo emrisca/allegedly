@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DrawingEngine, snapTickToMagnet, type PlacedDrawingKind } from "./drawing-engine";
+import {
+  DEFAULT_FAVORITE_TOOLS,
+  DRAWING_SLOTS,
+  DrawingEngine,
+  computeRulerMetrics,
+  snapTickToMagnet,
+  type PlacedDrawingKind,
+} from "./drawing-engine";
 
 describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
   it("supports all 6 v0.1 tools, Undo/Redo stack, and exact BigInt .atanalysis.toml round-trip", () => {
@@ -100,5 +107,60 @@ describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
     const miss = snapTickToMagnet(190_100n, [{ priceTick: 190_000n, source: "tpo_poc" }], 5n);
     expect(miss.snappedTick).toBe(190_100n);
     expect(miss.target).toBeNull();
+  });
+
+  it("computes exact BigInt ruler metrics (delta, %, ticks, bars, duration, cumulative volume)", () => {
+    const start = { timeSec: 1_700_000_000, priceTick: 29_394n }; // 7348.50 at $0.25 tick
+    const end = { timeSec: 1_700_000_000 + 29 * 86400, priceTick: 28_427n }; // -967 ticks (-241.75)
+    const bars = Array.from({ length: 20 }, (_, i) => ({
+      timeSec: 1_700_000_000 + Math.round((i * 29 * 86400) / 19),
+      volume: 3_870_500_000,
+    }));
+    const metrics = computeRulerMetrics({
+      start,
+      end,
+      tickSizeE9: 250_000_000n,
+      bars,
+    });
+    expect(metrics.deltaTicks).toBe(-967n);
+    expect(metrics.deltaPrice).toBeCloseTo(-241.75, 2);
+    expect(metrics.pctChange).toBeCloseTo(-3.29, 2);
+    expect(metrics.barCount).toBe(20);
+    expect(metrics.durationLabel).toBe("29d");
+    expect(metrics.volumeLabel).toBe("77.41 B");
+    expect(metrics.isNegative).toBe(true);
+  });
+
+  it("exposes all 7 categorized sidebar slots, 12 default favorites, and TOML round-trip for new tools", () => {
+    expect(DRAWING_SLOTS).toHaveLength(7);
+    expect(DEFAULT_FAVORITE_TOOLS).toEqual([
+      "box_zone",
+      "path",
+      "trendline",
+      "horizontal_ray",
+      "fixed_range_vp",
+      "fib_retracement",
+      "short_position",
+      "long_position",
+      "anchored_vwap",
+      "brush",
+      "text",
+      "anchored_vp",
+    ]);
+
+    const engine = new DrawingEngine();
+    engine.add("long_position", "ES1!", [
+      { timeSec: 1000, priceTick: 28_000n },
+      { timeSec: 2000, priceTick: 28_200n },
+    ]);
+    engine.add("fixed_range_vp", "ES1!", [
+      { timeSec: 1000, priceTick: 28_000n },
+      { timeSec: 3000, priceTick: 28_300n },
+    ]);
+    engine.add("icon_stamp", "ES1!", [{ timeSec: 1500, priceTick: 28_100n }], "#e6e8ee", "🎯");
+
+    const reloaded = new DrawingEngine();
+    expect(reloaded.loadFromAtAnalysisToml(engine.toAtAnalysisToml())).toBe(3);
+    expect(reloaded.list("ES1!")[2].label).toBe("🎯");
   });
 });
