@@ -1,16 +1,20 @@
 use crate::framing::{
     LiveTradeRecord, StreamStatusFrame, encode_live_trade_batch, encode_stream_status,
 };
+use std::collections::VecDeque;
 
 pub const DEFAULT_COALESCE_INTERVAL_NS: u64 = 16_000_000; // 16 ms
 pub const MAX_TRADES_PER_FRAME: usize = 4_096;
+/// Hard ceiling on queued trades if a consumer stalls without flushing (RTSD-14 / SV-13).
+pub const MAX_PENDING_TRADES: usize = 65_536;
 
 /// 16 ms coalescing frame batcher with immediate bypass for STREAM_STATUS_FRAME (IPC-Contract §5).
 #[derive(Debug, Default)]
 pub struct FrameBatcher {
     stream_id: u32,
     last_flush_ns: u64,
-    pending_trades: Vec<LiveTradeRecord>,
+    pending_trades: VecDeque<LiveTradeRecord>,
+    dropped_overflow: u64,
 }
 
 impl FrameBatcher {
@@ -18,12 +22,25 @@ impl FrameBatcher {
         Self {
             stream_id,
             last_flush_ns: 0,
-            pending_trades: Vec::with_capacity(256),
+            pending_trades: VecDeque::with_capacity(256),
+            dropped_overflow: 0,
         }
     }
 
-    pub fn push_trade(&mut self, trade: LiveTradeRecord) {
-        self.pending_trades.push(trade);
+    /// Enqueue a trade; drops oldest record and increments `dropped_overflow` if `MAX_PENDING_TRADES` is hit.
+    pub fn push_trade(&mut self, trade: LiveTradeRecord) -> bool {
+        if self.pending_trades.len() >= MAX_PENDING_TRADES {
+            self.pending_trades.pop_front();
+            self.dropped_overflow = self.dropped_overflow.saturating_add(1);
+            self.pending_trades.push_back(trade);
+            return false;
+        }
+        self.pending_trades.push_back(trade);
+        true
+    }
+
+    pub fn dropped_overflow(&self) -> u64 {
+        self.dropped_overflow
     }
 
     /// Immediately emit a 16 B STREAM_STATUS_FRAME bypassing the 16 ms coalescing timer.

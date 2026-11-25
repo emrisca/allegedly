@@ -83,4 +83,35 @@ mod tests {
         assert_eq!(tpo.magnet_snap(PriceTicks(502), 2), Some(PriceTicks(502)));
         assert_eq!(tpo.magnet_snap(PriceTicks(505), 2), Some(sum.vah_tick));
     }
+
+    #[test]
+    fn rtsd15_evict_zero_and_out_of_order_tick_guard() {
+        let mut arena = FootprintSlabArena::new(60_000_000_000, 1_000_000_000, Bps(30_000));
+        let make_tick = |ts: i64, px: i64| {
+            NormalizedTick::new(
+                TimestampNs(ts),
+                TimestampNs(ts),
+                InstrumentId(1),
+                1,
+                PriceE9(px),
+                QtyE9(1_000_000_000),
+                PriceE9(px),
+                PriceE9(px),
+                AggressorSide::Buy,
+                ProvenanceTier::ExactTickAggr,
+                ProvenanceModifiers::NONE,
+            )
+        };
+        arena.ingest_tick(&make_tick(120_000_000_000, 100_000_000_000));
+        // Backwards out-of-order tick must not rewind active_bar_ts_ns
+        arena.ingest_tick(&make_tick(60_000_000_000, 99_000_000_000));
+        assert_eq!(arena.late_ticks_dropped, 1);
+        assert_eq!(arena.active_bar_ts_ns(), Some(120_000_000_000));
+        arena.seal_active_bar();
+        assert_eq!(arena.bars.len(), 1);
+        // evict_oldest_bars(0) must clear cleanly without panicking
+        arena.evict_oldest_bars(0);
+        assert!(arena.bars.is_empty());
+        assert!(arena.cells.is_empty());
+    }
 }

@@ -18,3 +18,4 @@ allegedly-replay.workspace = true
 allegedly-storage.workspace = true
 allegedly-studies.workspace = true
 serde.workspace = true
+uuid.workspace = true

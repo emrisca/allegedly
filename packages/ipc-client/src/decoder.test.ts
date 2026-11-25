@@ -4,6 +4,7 @@ import {
   BIT_POC,
   BookState,
   decodeFootprintDelta,
+  decodeFrameHeader,
   decodeLiveBarUpdateBatch,
   decodeLiveL2BookBatch,
   decodeLiveTradeBatch,
@@ -334,5 +335,76 @@ describe("Stage D Slice 4 JSON IPC commands (Studies, Replay, Settings-as-Code)"
     expect(toml).toContain("orderflow.imbalance_ratio_bps = 35000");
 
     adapter.dispose();
+  });
+});
+
+
+import { TauriTransportAdapter, unpackRawFrameBatch } from "./tauri-adapter.js";
+
+describe("RTSD-02 & RTSD-14 Binary IPC Hardening & Tauri Raw Binary Batch", () => {
+  it("unpacks length-prefixed raw binary batches and rejects truncated/malformed frames", () => {
+    const f1 = encodeStreamStatusFrame(1, 100n, {
+      seq: 1n,
+      droppedTotal: 0,
+      reasonCode: 0,
+      bookState: BookState.Live,
+      provenanceTier: ProvenanceTier.ExactTickAggr,
+    });
+    const f2 = encodeStreamStatusFrame(1, 200n, {
+      seq: 2n,
+      droppedTotal: 1,
+      reasonCode: 2,
+      bookState: BookState.Stale,
+      provenanceTier: ProvenanceTier.ExactTickAggr,
+    });
+
+    const packed = new Uint8Array(4 + f1.byteLength + 4 + f2.byteLength);
+    const dv = new DataView(packed.buffer);
+    dv.setUint32(0, f1.byteLength, true);
+    packed.set(new Uint8Array(f1), 4);
+    dv.setUint32(4 + f1.byteLength, f2.byteLength, true);
+    packed.set(new Uint8Array(f2), 8 + f1.byteLength);
+
+    const frames = unpackRawFrameBatch(packed.buffer);
+    expect(frames).toHaveLength(2);
+    expect(decodeStreamStatusFrame(frames[0]).status.seq).toBe(1n);
+    expect(decodeStreamStatusFrame(frames[1]).status.bookState).toBe(BookState.Stale);
+
+    // Truncated length prefix fails closed
+    expect(() => unpackRawFrameBatch(packed.buffer.slice(0, packed.byteLength - 3))).toThrow(
+      /truncated/i,
+    );
+
+    // Invalid frameType fails closed
+    const badType = new Uint8Array(f1.slice(0));
+    new DataView(badType.buffer).setUint16(6, 0x9999, true);
+    expect(() => decodeFrameHeader(badType.buffer)).toThrow(/Unknown ALG2 frameType/i);
+
+    // STREAM_STATUS_FRAME with recordCount != 1 fails closed
+    const badStatusCount = new Uint8Array(f1.slice(0));
+    new DataView(badStatusCount.buffer).setUint32(12, 2, true);
+    expect(() => decodeStreamStatusFrame(badStatusCount.buffer)).toThrow(/recordCount/i);
+  });
+
+  it("emits fail-closed BookState.Disconnected status when Tauri raw binary poll errors", async () => {
+    const adapter = new TauriTransportAdapter(async <T,>(cmd: string): Promise<T> => {
+      if (cmd === "poll_binary_frames") {
+        throw new Error("simulated IPC failure");
+      }
+      return {} as T;
+    });
+
+    const received: ArrayBuffer[] = [];
+    const unsub = adapter.subscribeBinary(1, (buf) => {
+      received.push(buf);
+    });
+
+    await new Promise((r) => setTimeout(r, 40));
+    unsub();
+    adapter.dispose();
+
+    expect(received.length).toBeGreaterThanOrEqual(1);
+    const { status } = decodeStreamStatusFrame(received[0]);
+    expect(status.bookState).toBe(BookState.Disconnected);
   });
 });

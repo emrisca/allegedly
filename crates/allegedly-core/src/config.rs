@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// 5-Level Settings-as-Code TOML Delta Cascade (SV-06, SV-07, ADR-0010):
-/// Hardcoded Defaults -> Global -> Workspace -> Template -> Instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ConfigLayerKind {
     Defaults,
     Global,
@@ -13,15 +11,58 @@ pub enum ConfigLayerKind {
     Instance,
 }
 
-impl ConfigLayerKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Defaults => "defaults",
-            Self::Global => "global",
-            Self::Workspace => "workspace",
-            Self::Template => "template",
-            Self::Instance => "instance",
+/// Escape an arbitrary string for safe TOML basic string serialization (prevents newline/section injection).
+fn escape_toml_basic_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 || c == '\x7f' => {
+                out.push_str(&format!("\\u{:04X}", c as u32));
+            }
+            c => out.push(c),
         }
+    }
+    out
+}
+
+/// Sanitize a TOML value literal so raw newlines/carriage returns can never inject new keys or headers.
+fn sanitize_toml_value(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.contains('\n') || trimmed.contains('\r') {
+        format!("\"{}\"", escape_toml_basic_string(trimmed))
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn is_valid_config_key(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigLayer {
+    pub values: BTreeMap<String, String>,
+}
+
+impl ConfigLayer {
+    pub fn export_toml(&self) -> String {
+        let mut out = String::new();
+        for (k, v) in &self.values {
+            if !is_valid_config_key(k) {
+                continue;
+            }
+            let safe_v = sanitize_toml_value(v);
+            out.push_str(&format!("{k} = {safe_v}\n"));
+        }
+        out
     }
 }
 
@@ -35,45 +76,9 @@ pub struct ResolvedSetting {
     pub locked: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct ConfigLayer {
-    pub values: BTreeMap<String, String>,
-}
-
-impl ConfigLayer {
-    /// Parse a deterministic flat `key = value` TOML layer (comments `#` and blank lines ignored).
-    pub fn parse_toml(input: &str) -> Self {
-        let mut values = BTreeMap::new();
-        for raw_line in input.lines() {
-            let line = raw_line.trim();
-            if line.is_empty() || line.starts_with('#') || line.starts_with('[') {
-                continue;
-            }
-            if let Some((k, v)) = line.split_once('=') {
-                let key = k.trim();
-                let val = v.trim();
-                if !key.is_empty() && !val.is_empty() {
-                    values.insert(key.to_string(), val.to_string());
-                }
-            }
-        }
-        Self { values }
-    }
-
-    /// Export sorted `key = value\n` TOML lines for SV-06 byte-exact round-trip & minimal git diffs.
-    pub fn export_toml(&self) -> String {
-        let mut out = String::new();
-        for (k, v) in &self.values {
-            out.push_str(k);
-            out.push_str(" = ");
-            out.push_str(v);
-            out.push('\n');
-        }
-        out
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+/// 5-level Git-friendly Settings-as-Code cascade:
+/// Defaults -> Global -> Workspace -> Template -> Instance.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigCascade {
     pub defaults: ConfigLayer,
     pub global: ConfigLayer,
@@ -102,7 +107,19 @@ impl ConfigCascade {
     }
 
     pub fn is_safety_locked_key(key: &str) -> bool {
-        matches!(key, "updates.checkOnStartup" | "execution.live_armed")
+        matches!(
+            key,
+            "updates.checkOnStartup" | "execution.live_armed" | "execution.mode"
+        )
+    }
+
+    pub fn is_safety_locked_value_allowed(key: &str, value: &str) -> bool {
+        let v = value.trim();
+        match key {
+            "updates.checkOnStartup" | "execution.live_armed" => v == "false",
+            "execution.mode" => v == "\"paper_sim\"",
+            _ => true,
+        }
     }
 
     pub fn resolve(&self, key: &str) -> Option<&str> {
@@ -145,8 +162,9 @@ impl ConfigCascade {
             .map(|v| (ConfigLayerKind::Defaults, v.as_str()))
     }
 
+    /// Instance override enforcing SV-01 / ADR-0009 safety locks (cannot bypass safety-locked keys).
     pub fn set_instance_override(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.instance.values.insert(key.into(), value.into());
+        let _ = self.try_set_instance_override(key, value);
     }
 
     /// Safety-checked instance override rejecting attempts to unlock SV-01 / ADR-0009 locks in v0.1.
@@ -156,13 +174,35 @@ impl ConfigCascade {
         value: impl Into<String>,
     ) -> Result<(), String> {
         let k = key.into();
-        let v = value.into();
-        if Self::is_safety_locked_key(&k) && v.trim() != "false" {
+        let v = sanitize_toml_value(&value.into());
+        if !is_valid_config_key(&k) {
+            return Err(format!("Invalid config key: '{k}'"));
+        }
+        if Self::is_safety_locked_key(&k) && !Self::is_safety_locked_value_allowed(&k, &v) {
             return Err(format!(
-                "Safety invariant lock: '{k}' is fixed to false in v0.1 (SV-01 / ADR-0009)"
+                "Safety invariant lock: '{k}' cannot be changed to '{v}' in v0.1 (SV-01 / ADR-0009)"
             ));
         }
         self.instance.values.insert(k, v);
+        Ok(())
+    }
+
+    pub fn try_set_workspace_override(
+        &mut self,
+        key: impl Into<String>,
+        value: impl Into<String>,
+    ) -> Result<(), String> {
+        let k = key.into();
+        let v = sanitize_toml_value(&value.into());
+        if !is_valid_config_key(&k) {
+            return Err(format!("Invalid config key: '{k}'"));
+        }
+        if Self::is_safety_locked_key(&k) && !Self::is_safety_locked_value_allowed(&k, &v) {
+            return Err(format!(
+                "Safety invariant lock: '{k}' cannot be changed to '{v}' in v0.1 (SV-01 / ADR-0009)"
+            ));
+        }
+        self.workspace.values.insert(k, v);
         Ok(())
     }
 
@@ -214,14 +254,17 @@ impl ConfigCascade {
         let mut out = String::new();
         out.push_str("# Allegedly Workspace Settings-as-Code (.atworkspace.toml)\n");
         out.push_str("schema_version = 1\n");
-        out.push_str(&format!("workspace_name = \"{}\"\n", name.replace('"', "")));
+        out.push_str(&format!(
+            "workspace_name = \"{}\"\n",
+            escape_toml_basic_string(name)
+        ));
         out.push_str(&format!(
             "active_symbol = \"{}\"\n",
-            symbol.replace('"', "")
+            escape_toml_basic_string(symbol)
         ));
         out.push_str(&format!(
             "active_timeframe = \"{}\"\n\n",
-            timeframe.replace('"', "")
+            escape_toml_basic_string(timeframe)
         ));
 
         out.push_str("[workspace]\n");
@@ -263,8 +306,13 @@ impl ConfigCascade {
             }
             if let (Some(section), Some((k, v))) = (active, line.split_once('=')) {
                 let key = k.trim().to_string();
-                let val = v.trim().to_string();
-                if Self::is_safety_locked_key(&key) && val != "false" {
+                let val = sanitize_toml_value(v);
+                if !is_valid_config_key(&key) {
+                    continue;
+                }
+                if Self::is_safety_locked_key(&key)
+                    && !Self::is_safety_locked_value_allowed(&key, &val)
+                {
                     continue;
                 }
                 match section {

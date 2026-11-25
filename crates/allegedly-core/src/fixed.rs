@@ -69,6 +69,9 @@ pub struct Bps(pub i32);
 
 /// Parse an exact ASCII decimal or scientific-notation string (e.g., "67234.50", "-0.000125", "1.5e-5")
 /// into scaled 1e9 i64 without ever touching binary floating-point parsing (SV-08).
+///
+/// Hardened against CPU-DoS exponents (e.g., "0e2000000000") and tiny-mantissa scientific
+/// notation (e.g., "0.0000000000000000005e20" == 50_000_000_000) in O(input.len()) time.
 pub fn parse_decimal_e9(input: &str) -> Result<i64, FixedError> {
     let s = input.trim();
     if s.is_empty() {
@@ -85,12 +88,15 @@ pub fn parse_decimal_e9(input: &str) -> Result<i64, FixedError> {
         return Err(FixedError::InvalidDecimal(input.to_string()));
     }
 
-    // Optional ASCII exponent (e.g. "5e-5" from Kraken WS v2 JSON numbers)
-    let (mantissa, exp10): (&str, i32) = if let Some(idx) = rest.find(['e', 'E']) {
+    // Optional ASCII exponent (e.g., "5e-5" from Kraken WS v2 JSON numbers)
+    let (mantissa, exp10): (&str, i64) = if let Some(idx) = rest.find(['e', 'E']) {
         let (m, e_part) = rest.split_at(idx);
         let e_str = &e_part[1..];
+        if e_str.is_empty() {
+            return Err(FixedError::InvalidDecimal(input.to_string()));
+        }
         let parsed_exp = e_str
-            .parse::<i32>()
+            .parse::<i64>()
             .map_err(|_| FixedError::InvalidDecimal(input.to_string()))?;
         (m, parsed_exp)
     } else {
@@ -107,56 +113,67 @@ pub fn parse_decimal_e9(input: &str) -> Result<i64, FixedError> {
         return Err(FixedError::InvalidDecimal(input.to_string()));
     }
 
-    // Collect significant digits in pure integer i128 without floats
-    let mut digits_val: i128 = 0;
-    let mut frac_digits: i32 = 0;
+    // Validate all digits first and extract significant digits with their base-10 exponent.
+    let mut all_digits: Vec<u8> = Vec::with_capacity(mantissa.len());
     for b in int_part.bytes() {
         if !b.is_ascii_digit() {
             return Err(FixedError::InvalidDecimal(input.to_string()));
         }
-        digits_val = digits_val
-            .checked_mul(10)
-            .and_then(|v| v.checked_add(i128::from(b - b'0')))
-            .ok_or(FixedError::Overflow)?;
+        all_digits.push(b - b'0');
     }
+    let int_len = all_digits.len();
     if let Some(f) = frac_part {
         for b in f.bytes() {
             if !b.is_ascii_digit() {
                 return Err(FixedError::InvalidDecimal(input.to_string()));
             }
-            // Keep up to 18 fractional digits before scaling so tiny scientific values stay exact
-            if frac_digits < 18 {
-                digits_val = digits_val
-                    .checked_mul(10)
-                    .and_then(|v| v.checked_add(i128::from(b - b'0')))
-                    .ok_or(FixedError::Overflow)?;
-                frac_digits += 1;
-            }
+            all_digits.push(b - b'0');
         }
     }
 
-    // Target scale is 10^9: net shift = 9 + exp10 - frac_digits
-    let shift = 9i32
-        .checked_add(exp10)
-        .and_then(|v| v.checked_sub(frac_digits))
+    // Strip leading zeros
+    let Some(first_nz) = all_digits.iter().position(|&d| d != 0) else {
+        // Exact zero regardless of exponent (prevents 2-billion-iteration DoS on "0e2000000000").
+        return Ok(0);
+    };
+    let last_nz = all_digits.iter().rposition(|&d| d != 0).unwrap_or(first_nz);
+    let sig = &all_digits[first_nz..=last_nz];
+
+    // Value = (integer formed by `sig`) * 10^(lsb_exp), where:
+    // digit at index `i` in `all_digits` has weight 10^((int_len as i64) - 1 - (i as i64) + exp10).
+    let msb_exp = (int_len as i64)
+        .checked_sub(1)
+        .and_then(|v| v.checked_sub(first_nz as i64))
+        .and_then(|v| v.checked_add(exp10))
         .ok_or(FixedError::Overflow)?;
 
-    let mag = if shift >= 0 {
-        let mut v = digits_val;
-        for _ in 0..shift {
-            v = v.checked_mul(10).ok_or(FixedError::Overflow)?;
-        }
-        v
-    } else {
-        let mut v = digits_val;
-        for _ in 0..shift.unsigned_abs() {
-            v /= 10;
-            if v == 0 {
-                break;
-            }
-        }
-        v
-    };
+    // Scaled by 10^9: MSB sits at 10^(msb_exp + 9).
+    // i64::MAX = 9.223372036854775807e18 -> msb_exp + 9 > 18 always overflows.
+    let scaled_msb_exp = msb_exp.checked_add(9).ok_or(FixedError::Overflow)?;
+    if scaled_msb_exp > 18 {
+        return Err(FixedError::Overflow);
+    }
+    if scaled_msb_exp < 0 {
+        // Strictly smaller than 1e-9 -> truncates to 0 in e9 fixed-point.
+        return Ok(0);
+    }
+
+    // Keep only digits whose scaled exponent >= 0 (at most 19 digits: positions scaled_msb_exp down to 0).
+    let max_kept = (scaled_msb_exp as usize) + 1;
+    let take = sig.len().min(max_kept);
+    let mut mag: i128 = 0;
+    for &d in &sig[..take] {
+        mag = mag
+            .checked_mul(10)
+            .and_then(|v| v.checked_add(i128::from(d)))
+            .ok_or(FixedError::Overflow)?;
+    }
+
+    // Scale remaining trailing zeros up to 10^0 (at most 18 multiplications — O(1) bounded!).
+    let pad_zeros = max_kept - take;
+    for _ in 0..pad_zeros {
+        mag = mag.checked_mul(10).ok_or(FixedError::Overflow)?;
+    }
 
     let signed = if neg { -mag } else { mag };
     i64::try_from(signed).map_err(|_| FixedError::Overflow)
@@ -191,6 +208,17 @@ impl PriceE9 {
         parse_decimal_e9(s).map(Self)
     }
 
+    pub fn from_decimal_str(input: &str) -> Result<Self, FixedError> {
+        parse_decimal_e9(input).map(Self)
+    }
+
+    pub fn to_ticks(self, tick_size_e9: i64) -> Result<PriceTicks, FixedError> {
+        if tick_size_e9 <= 0 {
+            return Err(FixedError::InvalidTickSize(tick_size_e9));
+        }
+        Ok(PriceTicks(self.0.div_euclid(tick_size_e9)))
+    }
+
     pub fn from_ticks(ticks: PriceTicks, tick_size_e9: i64) -> Result<Self, FixedError> {
         if tick_size_e9 <= 0 {
             return Err(FixedError::InvalidTickSize(tick_size_e9));
@@ -200,13 +228,6 @@ impl PriceE9 {
             .checked_mul(tick_size_e9)
             .map(Self)
             .ok_or(FixedError::Overflow)
-    }
-
-    pub fn to_ticks(self, tick_size_e9: i64) -> Result<PriceTicks, FixedError> {
-        if tick_size_e9 <= 0 {
-            return Err(FixedError::InvalidTickSize(tick_size_e9));
-        }
-        Ok(PriceTicks(self.0.div_euclid(tick_size_e9)))
     }
 
     pub fn checked_add(self, rhs: Self) -> Result<Self, FixedError> {
@@ -222,6 +243,14 @@ impl PriceE9 {
             .map(Self)
             .ok_or(FixedError::Overflow)
     }
+
+    /// Multiply PriceE9 * QtyE9 -> MoneyMicros (10^6 scale) without floats.
+    pub fn notional_micros(self, qty: QtyE9) -> Result<MoneyMicros, FixedError> {
+        let prod = i128::from(self.0)
+            .checked_mul(i128::from(qty.0))
+            .ok_or(FixedError::Overflow)?;
+        Ok(MoneyMicros(prod / 1_000_000_000_000))
+    }
 }
 
 impl fmt::Display for PriceE9 {
@@ -233,6 +262,10 @@ impl fmt::Display for PriceE9 {
 impl QtyE9 {
     pub fn parse(s: &str) -> Result<Self, FixedError> {
         parse_decimal_e9(s).map(Self)
+    }
+
+    pub fn from_decimal_str(input: &str) -> Result<Self, FixedError> {
+        parse_decimal_e9(input).map(Self)
     }
 
     pub fn checked_add(self, rhs: Self) -> Result<Self, FixedError> {
@@ -250,7 +283,6 @@ impl QtyE9 {
     }
 
     /// Compute notional currency value in MoneyMicros (1e6) using exact i128 math.
-    /// (price_e9 * qty_e9) / 1e12 = micros (1e6).
     pub fn notional_micros(self, price: PriceE9) -> Result<MoneyMicros, FixedError> {
         let prod = i128::from(price.0)
             .checked_mul(i128::from(self.0))

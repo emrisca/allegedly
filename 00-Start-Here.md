@@ -81,6 +81,7 @@ updated: 2026-11-25
 - [[Red-Team-Phase4]] — **Verdict: `PASS`** (`12/12` findings verified closed on `2026-11-25`)
 - [[Plan-of-Record]] — Canonical executive Plan of Record & Stage D `v0.1` kickoff guide
 - [[Red-Team-Phase5]] — Final holistic Red-Team audit (**Verdict: `PASS`**)
+- [[Red-Team-StageD-M2]] — Stage D Apple M2 implementation adversarial audit (17 findings remediated; awaiting re-verification)
 
 ## 08 — Dashboards & Visual Maps
 - [[Open-Questions]] | [[Unverified-Claims]] | [[Blocked-Items]] | [[ADR-Status]]

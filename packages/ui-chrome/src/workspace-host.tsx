@@ -29,6 +29,8 @@ interface MountedPortal {
  * MIT dockview 8.9.1 WorkspaceHost (ADR-0010 / T08).
  * Uses framework-free `createDockview` with React 19 `createPortal` so docking,
  * resizing, and tab dragging run outside React reconciliation.
+ * Panel title changes update imperatively via `api.getPanel(id)?.setTitle(...)`
+ * so switching symbol or timeframe never tears down Dockview layout state.
  */
 export function WorkspaceHost({
   chartPanel,
@@ -37,6 +39,21 @@ export function WorkspaceHost({
   onReady,
 }: WorkspaceHostProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const apiRef = useRef<DockviewApi | null>(null);
+  const onReadyRef = useRef<WorkspaceHostProps["onReady"]>(onReady);
+  onReadyRef.current = onReady;
+
+  const initialTitlesRef = useRef({
+    chart: chartPanel.title,
+    dom: domPanel.title,
+    execution: executionPanel.title,
+  });
+  initialTitlesRef.current = {
+    chart: chartPanel.title,
+    dom: domPanel.title,
+    execution: executionPanel.title,
+  };
+
   const [portals, setPortals] = useState<MountedPortal[]>([]);
 
   useEffect(() => {
@@ -64,18 +81,20 @@ export function WorkspaceHost({
       },
     });
 
+    apiRef.current = api;
+
     // Canonical v0.1 3-panel trading terminal layout (T08):
     // Left-center: Chart (70%) | Right-top: DOM Ladder & Tape | Right-bottom: Paper OMS & Provenance
     api.addPanel({
       id: chartPanel.id,
       component: chartPanel.id,
-      title: chartPanel.title,
+      title: initialTitlesRef.current.chart,
     });
 
     api.addPanel({
       id: domPanel.id,
       component: domPanel.id,
-      title: domPanel.title,
+      title: initialTitlesRef.current.dom,
       position: { referencePanel: chartPanel.id, direction: "right" },
       initialWidth: 360,
     });
@@ -83,18 +102,34 @@ export function WorkspaceHost({
     api.addPanel({
       id: executionPanel.id,
       component: executionPanel.id,
-      title: executionPanel.title,
+      title: initialTitlesRef.current.execution,
       position: { referencePanel: domPanel.id, direction: "below" },
       initialHeight: 280,
     });
 
-    onReady?.(api);
+    onReadyRef.current?.(api);
 
     return () => {
+      apiRef.current = null;
       api.dispose();
       setPortals([]);
     };
-  }, [chartPanel.id, chartPanel.title, domPanel.id, domPanel.title, executionPanel.id, executionPanel.title, onReady]);
+  }, [chartPanel.id, domPanel.id, executionPanel.id]);
+
+  useEffect(() => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.getPanel(chartPanel.id)?.setTitle(chartPanel.title);
+    api.getPanel(domPanel.id)?.setTitle(domPanel.title);
+    api.getPanel(executionPanel.id)?.setTitle(executionPanel.title);
+  }, [
+    chartPanel.id,
+    chartPanel.title,
+    domPanel.id,
+    domPanel.title,
+    executionPanel.id,
+    executionPanel.title,
+  ]);
 
   const panelLookup: Record<string, WorkspacePanelSpec> = {
     [chartPanel.id]: chartPanel,

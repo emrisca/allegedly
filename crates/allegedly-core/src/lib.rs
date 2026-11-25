@@ -135,4 +135,46 @@ mod tests {
         assert!(BookState::Live.is_live());
         assert!(!BookState::Stale.is_live());
     }
+
+    #[test]
+    fn rtsd06_parse_decimal_e9_dos_and_scientific_precision() {
+        // Must return Ok(0) in O(1) without 2-billion-iteration hang
+        assert_eq!(parse_decimal_e9("0e2000000000").unwrap(), 0);
+        assert_eq!(parse_decimal_e9("0.00000e999999999").unwrap(), 0);
+        assert_eq!(parse_decimal_e9("-0e123456789").unwrap(), 0);
+        // Tiny mantissa with large positive exponent must not zero out
+        assert_eq!(
+            parse_decimal_e9("0.0000000000000000005e20").unwrap(),
+            50_000_000_000
+        );
+        assert_eq!(parse_decimal_e9("5e-5").unwrap(), 50_000);
+        assert_eq!(parse_decimal_e9("+1.25e2").unwrap(), 125_000_000_000);
+        assert_eq!(parse_decimal_e9("1e-30").unwrap(), 0);
+        assert!(parse_decimal_e9("1e30").is_err());
+    }
+
+    #[test]
+    fn rtsd16_safety_lock_enforcement_and_toml_injection_escape() {
+        let mut cascade = ConfigCascade::with_v01_defaults();
+        // set_instance_override cannot bypass safety locks
+        cascade.set_instance_override("execution.live_armed", "true");
+        assert_eq!(cascade.resolve("execution.live_armed"), Some("false"));
+        cascade.set_instance_override("execution.mode", "\"live\"");
+        assert_eq!(cascade.resolve("execution.mode"), Some("\"paper_sim\""));
+        assert!(
+            cascade
+                .try_set_instance_override("execution.mode", "\"live\"")
+                .is_err()
+        );
+        assert!(
+            cascade
+                .try_set_workspace_override("updates.checkOnStartup", "true")
+                .is_err()
+        );
+        // Newline injection in workspace name must be escaped on single line
+        let exported =
+            cascade.export_atworkspace_toml("Desk\n[instance]\nfoo = 1", "BTC/USD", "1m");
+        assert!(exported.contains("workspace_name = \"Desk\\n[instance]\\nfoo = 1\""));
+        assert!(!exported.contains("\nfoo = 1\n"));
+    }
 }

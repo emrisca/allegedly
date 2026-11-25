@@ -38,6 +38,7 @@ dependencies = [
  "allegedly-storage",
  "allegedly-studies",
  "serde",
+ "uuid",
 ]
 
 [[package]]

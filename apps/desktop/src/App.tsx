@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { UTCTimestamp } from "lightweight-charts";
 import {
   BookState,
+  isTauriRuntime,
+  OfflineSimTransportAdapter,
+  TauriTransportAdapter,
   decodeFrameHeader,
   decodeStreamStatusFrame,
   FrameType,
-  isTauriRuntime,
-  OfflineSimTransportAdapter,
   ProvenanceTier,
-  TauriTransportAdapter,
   type BootConfig,
   type BuiltinStudyKind,
   type PaperAccountSnapshot,
@@ -23,7 +22,11 @@ import {
 } from "@allegedly/ipc-client";
 import { ChromeToolbar, StatusBar, WorkspaceHost } from "@allegedly/ui-chrome";
 import { ReplayBar } from "./components/replay-bar";
-import { ChartPanel, type StudyOverlaySeries } from "./panels/chart-panel";
+import {
+  ChartPanel,
+  type ChartSeriesSnapshot,
+  type StudyOverlaySeries,
+} from "./panels/chart-panel";
 import { DomLadderPanel } from "./panels/dom-ladder-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
 
@@ -43,38 +46,50 @@ const DEFAULT_PAPER_ACCOUNT: PaperAccountSnapshot = {
 const DEFAULT_REPLAY_STATUS: ReplayStatusSnapshot = {
   playing: false,
   speed: "1x",
-  cursor: 64,
+  cursor: 0,
   total_ticks: 2000,
-  bars_sealed: 1,
+  bars_sealed: 0,
   final_vwap_e9: null,
-  sha256_hex: "0000000000000000000000000000000000000000000000000000000000000000",
+  sha256_hex: "0".repeat(64),
   determinism_verified: false,
 };
 
 const SYMBOL_TICK_E9: Record<string, bigint> = {
-  "BTC/USD": 500_000_000n,
-  "ETH/USD": 100_000_000n,
-  "SOL/USD": 10_000_000n,
+  "BTC/USD": 500_000_000n, // $0.50
+  "ETH/USD": 100_000_000n, // $0.10
+  "SOL/USD": 10_000_000n, // $0.01
+};
+
+const SYMBOL_FALLBACK_PRICE: Record<string, number> = {
+  "BTC/USD": 95_000,
+  "ETH/USD": 3_500,
+  "SOL/USD": 185,
 };
 
 const STUDY_COLORS: Record<string, string> = {
   sma: "#38bdf8",
   ema: "#f59e0b",
   vwap: "#a78bfa",
-  luau: "#34d399",
+  wilder_rsi: "#34d399",
+  cvd: "#22d3ee",
+  footprint_delta: "#e879f9",
+  luau: "#fb7185",
 };
 
-export function App() {
+export interface AppProps {
+  transport?: TransportAdapter;
+}
+
+export function App({ transport: providedTransport }: AppProps) {
   const transport = useMemo<TransportAdapter>(
-    () => (isTauriRuntime() ? new TauriTransportAdapter() : new OfflineSimTransportAdapter()),
-    [],
+    () => providedTransport ?? (isTauriRuntime() ? new TauriTransportAdapter() : new OfflineSimTransportAdapter()),
+    [providedTransport],
   );
 
   const [bootConfig, setBootConfig] = useState<BootConfig>(DEFAULT_BOOT_CONFIG);
   const [symbol, setSymbol] = useState<string>("BTC/USD");
   const [timeframe, setTimeframe] = useState<string>("1m");
   const [stateRev, setStateRev] = useState<number>(0);
-  const [layoutEpoch, setLayoutEpoch] = useState<number>(0);
   const [bookState, setBookState] = useState<number>(BookState.Live);
   const [provenanceTier, setProvenanceTier] = useState<number>(ProvenanceTier.ExactTickAggr);
   const [droppedTotal, setDroppedTotal] = useState<number>(0);
@@ -84,21 +99,48 @@ export function App() {
   const [studyError, setStudyError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ResolvedSetting[]>([]);
   const [exportedToml, setExportedToml] = useState<string | null>(null);
+  const [layoutEpoch, setLayoutEpoch] = useState<number>(0);
+  const [compactDensity, setCompactDensity] = useState<boolean>(true);
+  const [showProvenanceOverlay, setShowProvenanceOverlay] = useState<boolean>(true);
 
-  const seriesSnapshotRef = useRef<{
-    times: UTCTimestamp[];
-    closes: number[];
-    volumes: number[];
-  }>({ times: [], closes: [], volumes: [] });
+  const seriesSnapshotRef = useRef<ChartSeriesSnapshot>({
+    times: [],
+    closes: [],
+    volumes: [],
+    buyVolumes: [],
+    sellVolumes: [],
+  });
 
-  // Async post-paint initialization (SV-01: zero blocking network I/O on startup)
+  // Notify Tauri desktop host after genuine React mount + first animation frame paint (RTSD-05)
+  useEffect(() => {
+    if (transport.kind !== "tauri") return;
+    let cancelled = false;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled) return;
+        const firstPaintMs = Math.max(0, Math.round(performance.now()));
+        void transport
+          .invokeJson<{ first_paint_ms: number }, void>("report_ui_ready", {
+            first_paint_ms: firstPaintMs,
+          })
+          .catch(() => {});
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf1);
+      if (raf2 !== 0) cancelAnimationFrame(raf2);
+    };
+  }, [transport]);
+
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
         const [cfg, ws, acct, rep, cfgCascade] = await Promise.all([
           transport.invokeJson<Record<string, never>, BootConfig>("get_boot_config", {}),
-          transport.invokeJson<Record<string, never>, WorkspaceState>("get_workspace_snapshot", {}),
+          transport.invokeJson<Record<string, never>, WorkspaceState>("get_workspace_state", {}),
           transport.invokeJson<Record<string, never>, PaperAccountSnapshot>("get_paper_account", {}),
           transport.invokeJson<Record<string, never>, ReplayStatusSnapshot>("get_replay_status", {}),
           transport.invokeJson<Record<string, never>, ResolvedSetting[]>("get_settings_cascade", {}),
@@ -154,10 +196,21 @@ export function App() {
 
   const handleSubmitOrder = useCallback(
     (side: "buy" | "sell", orderType: "market" | "limit") => {
-      const limitPrice =
-        orderType === "limit"
-          ? ((SYMBOL_TICK_E9[symbol] ?? 10_000_000n) * 190_000n).toString()
-          : undefined;
+      let limitPrice: string | undefined;
+      if (orderType === "limit") {
+        const tickE9 = SYMBOL_TICK_E9[symbol] ?? 500_000_000n;
+        const closes = seriesSnapshotRef.current.closes;
+        const lastClose =
+          closes.length > 0 && Number.isFinite(closes[closes.length - 1])
+            ? closes[closes.length - 1]
+            : (SYMBOL_FALLBACK_PRICE[symbol] ?? 95_000);
+        const tickFloat = Number(tickE9) / 1e9;
+        const baseTicks = BigInt(Math.max(1, Math.round(lastClose / tickFloat)));
+        // Place resting limit slightly passive (2 ticks inside bid/ask)
+        const offsetTicks = side === "buy" ? -2n : 2n;
+        const limitTicks = baseTicks + offsetTicks > 0n ? baseTicks + offsetTicks : 1n;
+        limitPrice = (limitTicks * tickE9).toString();
+      }
       void transport
         .invokeJson<unknown, PaperAccountSnapshot>("submit_paper_order", {
           symbol,
@@ -200,6 +253,8 @@ export function App() {
         period,
         closes: snap.closes,
         volumes: snap.volumes,
+        buy_volumes: snap.buyVolumes,
+        sell_volumes: snap.sellVolumes,
       };
       void transport
         .invokeJson<StudyRunRequest, StudyRunResponse>("run_study", req)
@@ -222,6 +277,8 @@ export function App() {
         luau_script: script,
         closes: snap.closes,
         volumes: snap.volumes,
+        buy_volumes: snap.buyVolumes,
+        sell_volumes: snap.sellVolumes,
       };
       void transport
         .invokeJson<StudyRunRequest, StudyRunResponse>("run_study", req)
@@ -305,6 +362,10 @@ export function App() {
         onTimeframeChange={setTimeframe}
         onKillSwitch={handleKillSwitch}
         onResetLayout={handleResetLayout}
+        compactDensity={compactDensity}
+        onCompactDensityChange={setCompactDensity}
+        showProvenanceOverlay={showProvenanceOverlay}
+        onShowProvenanceOverlayChange={setShowProvenanceOverlay}
       />
       <main className="flex min-h-0 flex-1 flex-col">
         <WorkspaceHost
@@ -326,7 +387,13 @@ export function App() {
           domPanel={{
             id: "dom-ladder",
             title: "DOM Ladder & Tape",
-            render: () => <DomLadderPanel transport={transport} symbol={symbol} />,
+            render: () => (
+              <DomLadderPanel
+                transport={transport}
+                symbol={symbol}
+                compactDensity={compactDensity}
+              />
+            ),
           }}
           executionPanel={{
             id: "paper-oms",
@@ -362,6 +429,7 @@ export function App() {
         provenanceTier={provenanceTier}
         stateRev={stateRev}
         droppedTotal={droppedTotal}
+        showProvenance={showProvenanceOverlay}
       />
     </div>
   );

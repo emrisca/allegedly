@@ -22,11 +22,20 @@ jobs:
         run: bash scripts/ci/check-no-floats.sh
       - name: Zero retired legacy prefix gate (ADR-0001)
         run: bash scripts/ci/check-no-legacy-prefix.sh
-      - name: npm SPDX, dockview-enterprise ban & @ui-sdk pin gate
+      - name: npm SPDX, dockview-enterprise ban, lockfile & exact pins gate
         run: node scripts/ci/check-npm-policy.mjs
 
+  cargo-deny:
+    name: Cargo Deny License & Advisory Gate (SC-02)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+
   rust-workspace:
-    name: Rust Workspace (${{ matrix.os }})
+    name: Rust Workspace & Tauri Shell (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -38,12 +47,18 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Clippy (-D warnings)
-        run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Run workspace unit & integration tests
-        run: cargo test --workspace --release
+      - name: Check formatting (workspace + Tauri shell)
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+      - name: Clippy (-D warnings, workspace + Tauri shell)
+        run: |
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Run workspace & Tauri shell tests
+        run: |
+          cargo test --workspace --release
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
 
   frontend-workspace:
     name: Frontend & UV-01 A11y (${{ matrix.os }})

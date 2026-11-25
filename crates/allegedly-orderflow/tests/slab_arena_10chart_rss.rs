@@ -4,8 +4,29 @@ use allegedly_core::{
 };
 use allegedly_orderflow::FootprintSlabArena;
 
-/// UV-04 / SV-13 Tier A: Measure live FootprintSlabArena memory across 10 concurrent
-/// multi-timeframe charts totaling 100,000 sealed bars (target: < 60 MiB vs 260.77 MiB S08 Vec baseline).
+#[cfg(unix)]
+fn current_process_rss_bytes() -> Option<usize> {
+    let pid = std::process::id().to_string();
+    let out = std::process::Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let kb: usize = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
+    Some(kb * 1024)
+}
+
+#[cfg(not(unix))]
+fn current_process_rss_bytes() -> Option<usize> {
+    None
+}
+
+/// UV-04 / SV-13 Tier A (Arena OS RSS Bench — partial until 10 mounted desktop charts are profiled):
+/// Measures live FootprintSlabArena heap capacity AND OS process RSS delta (without artificial
+/// `shrink_to_fit()`) across 10 concurrent multi-timeframe charts totaling 100,000 sealed bars
+/// (target: < 60 MiB vs 260.77 MiB S08 Vec baseline).
 #[test]
 fn slab_arena_10chart_100k_bars_stays_under_60_mib() {
     const CHARTS: usize = 10;
@@ -25,6 +46,7 @@ fn slab_arena_10chart_100k_bars_stays_under_60_mib() {
         300_000_000_000,   // 5m (instrument 3)
     ];
 
+    let rss_before = current_process_rss_bytes();
     let mut arenas: Vec<FootprintSlabArena> = Vec::with_capacity(CHARTS);
     let tick_size_e9: i64 = 500_000_000; // $0.50
 
@@ -65,11 +87,10 @@ fn slab_arena_10chart_100k_bars_stays_under_60_mib() {
             }
         }
         arena.seal_active_bar();
-        arena.bars.shrink_to_fit();
-        arena.cells.shrink_to_fit();
         arenas.push(arena);
     }
 
+    let rss_after = current_process_rss_bytes();
     let total_bars: usize = arenas.iter().map(|a| a.bars.len()).sum();
     let total_cells: usize = arenas.iter().map(|a| a.cells.len()).sum();
     let total_bytes: usize = arenas
@@ -78,20 +99,42 @@ fn slab_arena_10chart_100k_bars_stays_under_60_mib() {
         .sum();
     let mib_x100 = (total_bytes as u128 * 100) / (1024 * 1024);
 
-    println!(
-        "UV-04 10-chart FootprintSlabArena: charts={} bars={} cells={} total_bytes={} ({}.{:02} MiB)",
-        arenas.len(),
-        total_bars,
-        total_cells,
-        total_bytes,
-        mib_x100 / 100,
-        mib_x100 % 100
-    );
+    if let (Some(before), Some(after)) = (rss_before, rss_after) {
+        let rss_delta = after.saturating_sub(before);
+        let rss_mib_x100 = (rss_delta as u128 * 100) / (1024 * 1024);
+        println!(
+            "UV-04 (Arena OS RSS Bench) 10-chart FootprintSlabArena (no shrink_to_fit): charts={} bars={} cells={} capacity_bytes={} ({}.{:02} MiB) os_rss_delta_bytes={} ({}.{:02} MiB)",
+            arenas.len(),
+            total_bars,
+            total_cells,
+            total_bytes,
+            mib_x100 / 100,
+            mib_x100 % 100,
+            rss_delta,
+            rss_mib_x100 / 100,
+            rss_mib_x100 % 100,
+        );
+        assert!(
+            rss_delta < 60 * 1024 * 1024,
+            "UV-04 OS RSS delta exceeded 60 MiB: {} bytes",
+            rss_delta
+        );
+    } else {
+        println!(
+            "UV-04 (Arena Bench) 10-chart FootprintSlabArena (no shrink_to_fit): charts={} bars={} cells={} capacity_bytes={} ({}.{:02} MiB)",
+            arenas.len(),
+            total_bars,
+            total_cells,
+            total_bytes,
+            mib_x100 / 100,
+            mib_x100 % 100,
+        );
+    }
 
     assert_eq!(total_bars, CHARTS * BARS_PER_CHART);
     assert!(
         total_bytes < 60 * 1024 * 1024,
-        "UV-04 budget exceeded: {} bytes >= 60 MiB",
+        "UV-04 capacity budget exceeded: {} bytes >= 60 MiB",
         total_bytes
     );
 

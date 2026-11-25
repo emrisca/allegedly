@@ -4,7 +4,7 @@ pub mod luau_sandbox;
 pub use builtins::{cvd_series, ema, footprint_delta_series, sma, vwap_series, wilder_rsi};
 pub use luau_sandbox::{
     DEFAULT_INSTRUCTION_BUDGET, GLOBAL_STUDY_MEMORY_CAP_BYTES, GlobalStudyMemoryPool,
-    LuauStudyRunner, PER_STUDY_DEFAULT_CAP_BYTES, StudySandboxError,
+    LuauStudyRunner, PER_STUDY_DEFAULT_CAP_BYTES, PoolReservation, StudySandboxError,
 };
 
 use serde::{Deserialize, Serialize};
@@ -40,27 +40,29 @@ pub struct StudyRunResponse {
     pub id: String,
     pub label: String,
     pub overlay: bool,
+    /// `None` encodes warm-up NaN values cleanly over JSON.
     pub values: Vec<Option<f64>>,
     pub memory_pool_reserved_bytes: usize,
+    pub memory_pool_peak_bytes: usize,
     pub memory_pool_cap_bytes: usize,
 }
 
-fn sanitize_series(vals: Vec<f64>) -> Vec<Option<f64>> {
-    vals.into_iter()
+fn sanitize_series(raw: Vec<f64>) -> Vec<Option<f64>> {
+    raw.into_iter()
         .map(|v| if v.is_finite() { Some(v) } else { None })
         .collect()
 }
 
-/// Evaluate either a clean-room built-in Study or a sandboxed Luau Study under the 64 MiB global pool cap.
 pub fn evaluate_study_request(
     pool: &GlobalStudyMemoryPool,
     req: &StudyRunRequest,
 ) -> Result<StudyRunResponse, String> {
     if let Some(script) = &req.luau_script {
-        let runner = LuauStudyRunner::new(PER_STUDY_DEFAULT_CAP_BYTES, DEFAULT_INSTRUCTION_BUDGET)
-            .map_err(|e| e.to_string())?;
+        let cap = PER_STUDY_DEFAULT_CAP_BYTES;
+        let runner =
+            LuauStudyRunner::new(cap, DEFAULT_INSTRUCTION_BUDGET).map_err(|e| e.to_string())?;
         let raw = runner
-            .eval_study_series(pool, 2 * 1024 * 1024, script, &req.closes)
+            .eval_study_series(pool, cap, script, &req.closes)
             .map_err(|e| e.to_string())?;
         return Ok(StudyRunResponse {
             id: req.id.clone(),
@@ -68,6 +70,7 @@ pub fn evaluate_study_request(
             overlay: true,
             values: sanitize_series(raw),
             memory_pool_reserved_bytes: pool.reserved_bytes(),
+            memory_pool_peak_bytes: pool.peak_reserved_bytes(),
             memory_pool_cap_bytes: GLOBAL_STUDY_MEMORY_CAP_BYTES,
         });
     }
@@ -112,6 +115,7 @@ pub fn evaluate_study_request(
         overlay,
         values: sanitize_series(raw),
         memory_pool_reserved_bytes: pool.reserved_bytes(),
+        memory_pool_peak_bytes: pool.peak_reserved_bytes(),
         memory_pool_cap_bytes: GLOBAL_STUDY_MEMORY_CAP_BYTES,
     })
 }
@@ -133,41 +137,79 @@ mod tests {
     }
 
     #[test]
-    fn luau_sandbox_blocks_hostile_escapes_and_enforces_64mib_pool() {
+    fn luau_sandbox_blocks_escapes_nondeterminism_stale_interrupt_and_64mib_pool() {
         let pool = GlobalStudyMemoryPool::default();
         let runner = LuauStudyRunner::new(PER_STUDY_DEFAULT_CAP_BYTES, 10_000).unwrap();
 
-        // 1. Valid study runs cleanly
+        // 1. Valid study runs cleanly over zero-copy FloatSeriesView (`close`)
         let out = runner
             .eval_study_series(
                 &pool,
-                1024 * 1024,
+                PER_STUDY_DEFAULT_CAP_BYTES,
                 "local o = {}; for i = 1, #close do o[i] = close[i] * 2 end; return o",
                 &[10.0, 20.0, 30.0],
             )
             .unwrap();
         assert_eq!(out, vec![20.0, 40.0, 60.0]);
         assert_eq!(pool.reserved_bytes(), 0);
+        assert_eq!(pool.peak_reserved_bytes(), PER_STUDY_DEFAULT_CAP_BYTES);
 
         // 2. Hostile os/io escape blocked
         assert!(
             runner
-                .eval_study_series(&pool, 1024 * 1024, "return os.execute('echo pwn')", &[1.0])
+                .eval_study_series(
+                    &pool,
+                    PER_STUDY_DEFAULT_CAP_BYTES,
+                    "return os.execute('echo pwn')",
+                    &[1.0]
+                )
                 .is_err()
         );
 
-        // 3. Infinite loop terminated by instruction budget
+        // 3. Non-deterministic math.random is stripped for SV-09 replay determinism (RTSD-07)
         assert!(
             runner
-                .eval_study_series(&pool, 1024 * 1024, "while true do end", &[1.0])
+                .eval_study_series(
+                    &pool,
+                    PER_STUDY_DEFAULT_CAP_BYTES,
+                    "return { math.random() }",
+                    &[1.0]
+                )
                 .is_err()
         );
 
-        // 4. Global 64 MiB pool cap enforced
-        let err = pool.try_reserve(GLOBAL_STUDY_MEMORY_CAP_BYTES + 1);
+        // 4. Infinite loop terminated by instruction budget AND RAII drop guard restores clean runner reuse
+        assert!(
+            runner
+                .eval_study_series(
+                    &pool,
+                    PER_STUDY_DEFAULT_CAP_BYTES,
+                    "while true do end",
+                    &[1.0]
+                )
+                .is_err()
+        );
+        let after_timeout = runner
+            .eval_study_series(
+                &pool,
+                PER_STUDY_DEFAULT_CAP_BYTES,
+                "return { close[1] + 5 }",
+                &[7.0],
+            )
+            .unwrap();
+        assert_eq!(after_timeout, vec![12.0]);
+
+        // 5. Global 64 MiB pool strictly allows at most 8 concurrent 8 MiB VMs (zero 4x bypass)
+        let mut guards = Vec::new();
+        for _ in 0..8 {
+            guards.push(pool.try_reserve(PER_STUDY_DEFAULT_CAP_BYTES).unwrap());
+        }
+        assert_eq!(pool.reserved_bytes(), GLOBAL_STUDY_MEMORY_CAP_BYTES);
         assert!(matches!(
-            err,
+            pool.try_reserve(1),
             Err(StudySandboxError::GlobalPoolExceeded { .. })
         ));
+        drop(guards);
+        assert_eq!(pool.reserved_bytes(), 0);
     }
 }

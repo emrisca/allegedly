@@ -2,26 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import {
   CandlestickSeries,
   ColorType,
+  createChart,
   HistogramSeries,
   LineSeries,
-  createChart,
   type CandlestickData,
   type HistogramData,
   type IChartApi,
+  type IPrimitivePaneRenderer,
+  type IPrimitivePaneView,
   type ISeriesApi,
+  type ISeriesPrimitive,
   type LineData,
+  type PrimitivePaneViewZOrder,
+  type SeriesAttachedParameter,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { Button } from "@ui-sdk/react/button";
 import { Toggle } from "@ui-sdk/react/toggle";
 import { Toolbar } from "@ui-sdk/react/toolbar";
 import {
-  FrameType,
   decodeFootprintDelta,
   decodeFrameHeader,
   decodeLiveBarUpdateBatch,
   decodeTpoProfileBitmask,
   decodeVolumeProfile,
+  FrameType,
   type FootprintCell,
   type TpoRow128,
   type TransportAdapter,
@@ -34,6 +40,7 @@ import {
   FIB_LEVELS,
   snapTickToMagnet,
   type AnchorPoint,
+  type DrawingObject,
   type DrawingToolKind,
   type MagnetTarget,
   type PlacedDrawingKind,
@@ -41,6 +48,8 @@ import {
 import { applyBarHysteresis } from "../render/hysteresis";
 import {
   WebGl2OrderflowOverlay,
+  type CoordinateBridge,
+  type OverlayRenderData,
   type OverlayVisibility,
 } from "../render/webgl2-orderflow-overlay";
 
@@ -51,13 +60,21 @@ export interface StudyOverlaySeries {
   values: Array<number | null>;
 }
 
+export interface ChartSeriesSnapshot {
+  times: UTCTimestamp[];
+  closes: number[];
+  volumes: number[];
+  buyVolumes: number[];
+  sellVolumes: number[];
+}
+
 export interface ChartPanelProps {
   transport: TransportAdapter;
   symbol: string;
   timeframe: string;
   tickSizeE9: bigint;
   studyOverlays?: readonly StudyOverlaySeries[];
-  seriesSnapshotRef?: { current: { times: UTCTimestamp[]; closes: number[]; volumes: number[] } };
+  seriesSnapshotRef?: { current: ChartSeriesSnapshot };
 }
 
 export interface ChartOverlayToolbarProps {
@@ -189,12 +206,17 @@ export function ChartOverlayToolbar({
 function seedInitialCandles(symbol: string): {
   candles: CandlestickData<UTCTimestamp>[];
   volumes: HistogramData<UTCTimestamp>[];
+  buyVolumes: number[];
+  sellVolumes: number[];
 } {
-  const base = symbol.startsWith("ETH") ? 3500 : symbol.startsWith("SOL") ? 185 : 50000;
-  const step = symbol.startsWith("ETH") ? 4 : symbol.startsWith("SOL") ? 0.5 : 35;
+  // Align initial historical seed scale with backend sim/OMS ($95,000 BTC/USD, $3,500 ETH/USD, $185 SOL/USD)
+  const base = symbol.startsWith("ETH") ? 3500 : symbol.startsWith("SOL") ? 185 : 95000;
+  const step = symbol.startsWith("ETH") ? 4 : symbol.startsWith("SOL") ? 0.5 : 45;
   const nowSec = Math.floor(Date.now() / 60_000) * 60;
   const candles: CandlestickData<UTCTimestamp>[] = [];
   const volumes: HistogramData<UTCTimestamp>[] = [];
+  const buyVolumes: number[] = [];
+  const sellVolumes: number[] = [];
   let price = base - step * 12;
   let state = 0x51a7c3d1;
 
@@ -207,19 +229,276 @@ function seedInitialCandles(symbol: string): {
     const high = Math.max(open, close) + wick;
     const low = Math.max(step * 0.5, Math.min(open, close) - wick);
     const t = (nowSec - i * 60) as UTCTimestamp;
+    const totalVol = 15 + ((state >>> 16) % 85);
+    const upRatio = close >= open ? 0.62 : 0.38;
+    const buyVol = totalVol * upRatio;
+    const sellVol = totalVol - buyVol;
     candles.push({ time: t, open, high, low, close });
     volumes.push({
       time: t,
-      value: 15 + ((state >>> 16) % 85),
+      value: totalVol,
       color: close >= open ? "rgba(16, 185, 129, 0.35)" : "rgba(244, 63, 94, 0.35)",
     });
+    buyVolumes.push(buyVol);
+    sellVolumes.push(sellVol);
     price = close;
   }
-  return { candles, volumes };
+  return { candles, volumes, buyVolumes, sellVolumes };
+}
+
+interface PrimitiveDrawContext {
+  getOverlayData: () => OverlayRenderData;
+  getDrawings: () => readonly DrawingObject[];
+  getDraftPreview: () => {
+    tool: DrawingToolKind;
+    anchors: readonly AnchorPoint[];
+    hover: AnchorPoint | null;
+  };
+  getCandles: () => readonly CandlestickData<UTCTimestamp>[];
+  getVolumes: () => readonly HistogramData<UTCTimestamp>[];
+}
+
+function drawVectorDrawing(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  kind: PlacedDrawingKind,
+  anchors: readonly AnchorPoint[],
+  color: string,
+  tickFloat: number,
+  bridge: CoordinateBridge,
+  candles: readonly CandlestickData<UTCTimestamp>[],
+  volumes: readonly HistogramData<UTCTimestamp>[],
+): void {
+  const pts = anchors.map((a) => ({
+    x: bridge.timeToX(a.timeSec),
+    y: bridge.priceToY(Number(a.priceTick) * tickFloat),
+    anchor: a,
+  }));
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.5;
+
+  if (kind === "horizontal_ray" && pts[0]?.y !== null) {
+    const startX = pts[0].x ?? 0;
+    ctx.beginPath();
+    ctx.moveTo(startX, pts[0].y);
+    ctx.lineTo(w, pts[0].y);
+    ctx.stroke();
+  } else if (kind === "trendline" && pts.length >= 2) {
+    const [a, b] = pts;
+    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+  } else if (kind === "box_zone" && pts.length >= 2) {
+    const [a, b] = pts;
+    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
+      const rx = Math.min(a.x, b.x);
+      const ry = Math.min(a.y, b.y);
+      const rw = Math.abs(b.x - a.x);
+      const rh = Math.abs(b.y - a.y);
+      ctx.save();
+      ctx.globalAlpha = 0.16;
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.restore();
+      ctx.strokeRect(rx, ry, rw, rh);
+    }
+  } else if (kind === "price_range" && pts.length >= 2) {
+    const [a, b] = pts;
+    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
+      const rx = Math.min(a.x, b.x);
+      const ry = Math.min(a.y, b.y);
+      const rw = Math.abs(b.x - a.x);
+      const rh = Math.abs(b.y - a.y);
+      ctx.save();
+      ctx.globalAlpha = 0.14;
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.restore();
+      ctx.strokeRect(rx, ry, rw, rh);
+      const deltaTicks = b.anchor.priceTick - a.anchor.priceTick;
+      const deltaPrice = Number(deltaTicks) * tickFloat;
+      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillText(
+        `${deltaPrice >= 0 ? "+" : ""}${deltaPrice.toFixed(2)} (${deltaTicks.toString()}t)`,
+        rx + 4,
+        Math.max(14, ry + 12),
+      );
+    }
+  } else if (kind === "fib_retracement" && pts.length >= 2) {
+    const [a, b] = pts;
+    if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
+      const leftX = Math.min(a.x, b.x);
+      const rightX = Math.max(a.x, b.x, leftX + 80);
+      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+      for (const lvl of FIB_LEVELS) {
+        const y = a.y + (b.y - a.y) * lvl;
+        ctx.beginPath();
+        ctx.moveTo(leftX, y);
+        ctx.lineTo(rightX, y);
+        ctx.stroke();
+        ctx.fillText(`${(lvl * 100).toFixed(1)}%`, rightX + 4, y + 3);
+      }
+    }
+  } else if (kind === "anchored_vwap" && pts[0]) {
+    const startSec = pts[0].anchor.timeSec;
+    let cpv = 0;
+    let cv = 0;
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < candles.length; i++) {
+      const c = candles[i];
+      if (Number(c.time) < startSec) continue;
+      const vol = volumes[i]?.value ?? 1;
+      const typ = (c.high + c.low + c.close) / 3;
+      cpv += typ * vol;
+      cv += vol;
+      if (cv <= 0) continue;
+      const vx = bridge.timeToX(Number(c.time));
+      const vy = bridge.priceToY(cpv / cv);
+      if (vx !== null && vy !== null && vy >= 0 && vy <= h) {
+        if (!started) {
+          ctx.moveTo(vx, vy);
+          started = true;
+        } else {
+          ctx.lineTo(vx, vy);
+        }
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Anchor handles
+  for (const p of pts) {
+    if (p.x !== null && p.y !== null) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 /**
- * 60 fps Chart Panel (Lightweight Charts v5.3.0 + WebGL2 Orderflow Overlay + Clean-Room Drawing Engine).
+ * Genuine Lightweight Charts v5 ISeriesPrimitive (ADR-0004 / S01).
+ * Executes orderflow (WebGL2 offscreen instanced pass composited synchronously) and
+ * vector drawings INSIDE Lightweight Charts' own pane render callback, guaranteeing
+ * 0.000 CSS px coordinate drift during pan, zoom, and resize.
+ */
+class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
+  private chart: IChartApi | null = null;
+  private series: ISeriesApi<"Candlestick"> | null = null;
+  private requestUpdateCb: (() => void) | null = null;
+  private readonly paneView: IPrimitivePaneView;
+
+  constructor(
+    private readonly overlay: WebGl2OrderflowOverlay,
+    private readonly source: PrimitiveDrawContext,
+  ) {
+    const renderer: IPrimitivePaneRenderer = {
+      draw: (target) => {
+        const chart = this.chart;
+        const series = this.series;
+        if (!chart || !series) return;
+
+        const bridge: CoordinateBridge = {
+          timeToX: (timeSec: number): number | null => {
+            const coord = chart.timeScale().timeToCoordinate(timeSec as UTCTimestamp);
+            return coord === null ? null : Number(coord);
+          },
+          priceToY: (price: number): number | null => {
+            const coord = series.priceToCoordinate(price);
+            return coord === null ? null : Number(coord);
+          },
+        };
+
+        target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+          const w = mediaSize.width;
+          const h = mediaSize.height;
+          if (w <= 0 || h <= 0) return;
+
+          const data = this.source.getOverlayData();
+          const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+
+          // 1. Orderflow layers (Footprint, VRVP, u128 TPO) composited synchronously
+          this.overlay.compositeIntoContext(context, w, h, dpr, data, bridge);
+
+          // 2. Clean-room vector drawings + active draft preview
+          const candles = this.source.getCandles();
+          const volumes = this.source.getVolumes();
+          context.save();
+          for (const d of this.source.getDrawings()) {
+            drawVectorDrawing(
+              context,
+              w,
+              h,
+              d.kind,
+              d.anchors,
+              d.color,
+              data.tickSizeFloat,
+              bridge,
+              candles,
+              volumes,
+            );
+          }
+          const draft = this.source.getDraftPreview();
+          if (draft.tool !== "cursor" && draft.anchors.length > 0) {
+            const preview = draft.hover ? [...draft.anchors, draft.hover] : [...draft.anchors];
+            const meta = DRAWING_TOOL_META.find((m) => m.kind === draft.tool);
+            context.setLineDash([4, 3]);
+            drawVectorDrawing(
+              context,
+              w,
+              h,
+              draft.tool as PlacedDrawingKind,
+              preview,
+              meta?.defaultColor ?? "#f59e0b",
+              data.tickSizeFloat,
+              bridge,
+              candles,
+              volumes,
+            );
+          }
+          context.restore();
+        });
+      },
+    };
+
+    this.paneView = {
+      zOrder: (): PrimitivePaneViewZOrder => "top",
+      renderer: () => renderer,
+    };
+  }
+
+  public attached(param: SeriesAttachedParameter<Time>): void {
+    this.chart = param.chart as IChartApi;
+    this.series = param.series as ISeriesApi<"Candlestick">;
+    this.requestUpdateCb = param.requestUpdate;
+  }
+
+  public detached(): void {
+    this.chart = null;
+    this.series = null;
+    this.requestUpdateCb = null;
+  }
+
+  public updateAllViews(): void {
+    // Coordinates are read synchronously from LWC scales during draw()
+  }
+
+  public paneViews(): readonly IPrimitivePaneView[] {
+    return [this.paneView];
+  }
+
+  public requestUpdate(): void {
+    this.requestUpdateCb?.();
+  }
+}
+
+/**
+ * 60 fps Chart Panel (Lightweight Charts v5.3.0 + Synchronous ISeriesPrimitive WebGL2 Orderflow
+ * Overlay + Clean-Room Drawing Engine).
  * Strictly imperative ref + rAF pipeline — zero React state updates on binary ticks (AGENTS.md #5).
  */
 export function ChartPanel({
@@ -231,8 +510,7 @@ export function ChartPanel({
   seriesSnapshotRef,
 }: ChartPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pointerSurfaceRef = useRef<HTMLDivElement | null>(null);
   const badgeRef = useRef<HTMLSpanElement | null>(null);
 
   const [visibility, setVisibility] = useState<OverlayVisibility>({
@@ -285,9 +563,8 @@ export function ChartPanel({
 
   useEffect(() => {
     const el = hostRef.current;
-    const overlayCanvas = overlayCanvasRef.current;
-    const drawingCanvas = drawingCanvasRef.current;
-    if (!el || !overlayCanvas || !drawingCanvas) return;
+    const pointerSurface = pointerSurfaceRef.current;
+    if (!el || !pointerSurface) return;
 
     const chart = createChart(el, {
       layout: {
@@ -331,6 +608,9 @@ export function ChartPanel({
     const seeded = seedInitialCandles(symbol);
     let activeCandles: CandlestickData<UTCTimestamp>[] = [...seeded.candles];
     let activeVolumes: HistogramData<UTCTimestamp>[] = [...seeded.volumes];
+    let activeBuyVolumes: number[] = [...seeded.buyVolumes];
+    let activeSellVolumes: number[] = [...seeded.sellVolumes];
+
     const publishSeriesSnapshot = () => {
       const times = activeCandles.map((c) => c.time);
       latestTimesRef.current = times;
@@ -339,6 +619,8 @@ export function ChartPanel({
           times,
           closes: activeCandles.map((c) => c.close),
           volumes: activeVolumes.map((v) => v.value),
+          buyVolumes: [...activeBuyVolumes],
+          sellVolumes: [...activeSellVolumes],
         };
       }
     };
@@ -347,7 +629,7 @@ export function ChartPanel({
     publishSeriesSnapshot();
     chart.timeScale().fitContent();
 
-    const overlay = new WebGl2OrderflowOverlay(overlayCanvas);
+    const overlay = new WebGl2OrderflowOverlay();
     setRendererLabel(overlay.isWebGl2() ? "WebGL2" : "Canvas2D");
 
     const tickFloat = Number(tickSizeE9) / 1e9;
@@ -359,32 +641,44 @@ export function ChartPanel({
 
     let pendingBar: CandlestickData<UTCTimestamp> | null = null;
     let pendingVol: HistogramData<UTCTimestamp> | null = null;
-    let pendingOverlayDirty = true;
+    let pendingBuyVol = 0;
+    let pendingSellVol = 0;
+    let pendingPrimitiveDirty = true;
     let draftAnchors: AnchorPoint[] = [];
     let hoverAnchor: AnchorPoint | null = null;
     let rafId = 0;
 
-    const getBridge = () => ({
-      timeToX: (timeSec: number): number | null => {
-        const coord = chart.timeScale().timeToCoordinate(timeSec as UTCTimestamp);
-        return coord === null ? null : Number(coord);
-      },
-      priceToY: (price: number): number | null => {
-        const coord = candleSeries.priceToCoordinate(price);
-        return coord === null ? null : Number(coord);
-      },
+    const primitive = new OrderflowAndDrawingsPrimitive(overlay, {
+      getOverlayData: (): OverlayRenderData => ({
+        tickSizeFloat: tickFloat,
+        activeBarTimeSec,
+        footprintCells,
+        vpSummary,
+        vpBins,
+        tpoRows,
+        visibility: visibilityRef.current,
+      }),
+      getDrawings: () => drawingEngineRef.current.list(symbol),
+      getDraftPreview: () => ({
+        tool: activeToolRef.current,
+        anchors: draftAnchors,
+        hover: hoverAnchor,
+      }),
+      getCandles: () => activeCandles,
+      getVolumes: () => activeVolumes,
     });
+    candleSeries.attachPrimitive(primitive);
 
     const collectMagnetTargets = (): MagnetTarget[] => {
       const targets: MagnetTarget[] = [];
       const latest = activeCandles[activeCandles.length - 1];
       if (latest && tickFloat > 0) {
-        targets.push(
-          { priceTick: BigInt(Math.round(latest.open / tickFloat)), source: "ohlc" },
-          { priceTick: BigInt(Math.round(latest.high / tickFloat)), source: "ohlc" },
-          { priceTick: BigInt(Math.round(latest.low / tickFloat)), source: "ohlc" },
-          { priceTick: BigInt(Math.round(latest.close / tickFloat)), source: "ohlc" },
-        );
+        for (const price of [latest.open, latest.high, latest.low, latest.close]) {
+          const scaled = price / tickFloat;
+          if (Number.isFinite(scaled)) {
+            targets.push({ priceTick: BigInt(Math.round(scaled)), source: "ohlc" });
+          }
+        }
       }
       if (vpSummary) {
         targets.push(
@@ -396,211 +690,64 @@ export function ChartPanel({
       return targets;
     };
 
-    const renderDrawings = (width: number, height: number) => {
-      const ctx = drawingCanvas.getContext("2d");
-      if (!ctx || width <= 0 || height <= 0) return;
-      const dpr = window.devicePixelRatio || 1;
-      const pxW = Math.floor(width * dpr);
-      const pxH = Math.floor(height * dpr);
-      if (drawingCanvas.width !== pxW || drawingCanvas.height !== pxH) {
-        drawingCanvas.width = pxW;
-        drawingCanvas.height = pxH;
-        drawingCanvas.style.width = `${width}px`;
-        drawingCanvas.style.height = `${height}px`;
-      }
-
-      ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, width, height);
-
-      const bridge = getBridge();
-      const drawings = drawingEngineRef.current.list(symbol);
-
-      const drawShape = (
-        kind: PlacedDrawingKind,
-        anchors: readonly AnchorPoint[],
-        color: string,
-        dashed = false,
-      ) => {
-        if (anchors.length === 0) return;
-        const pts = anchors.map((a) => ({
-          x: bridge.timeToX(a.timeSec) ?? width * 0.5,
-          y: bridge.priceToY(Number(a.priceTick) * tickFloat) ?? height * 0.5,
-          tick: a.priceTick,
-        }));
-        ctx.save();
-        ctx.strokeStyle = color;
-        ctx.fillStyle = color;
-        ctx.lineWidth = 1.5;
-        if (dashed) ctx.setLineDash([4, 4]);
-
-        if (kind === "horizontal_ray") {
-          const p0 = pts[0];
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          ctx.lineTo(width, p0.y);
-          ctx.stroke();
-          ctx.font = "10px ui-monospace, monospace";
-          ctx.fillText(`H-RAY ${(Number(p0.tick) * tickFloat).toFixed(2)}`, p0.x + 6, p0.y - 4);
-        } else if (kind === "anchored_vwap") {
-          const p0 = pts[0];
-          ctx.beginPath();
-          ctx.moveTo(p0.x, p0.y);
-          // Compute cumulative anchor-to-present VWAP curve from activeCandles
-          let cumPv = 0;
-          let cumV = 0;
-          for (let i = 0; i < activeCandles.length; i++) {
-            const bar = activeCandles[i];
-            if (Number(bar.time) < anchors[0].timeSec) continue;
-            const typical = (bar.high + bar.low + bar.close) / 3;
-            const vol = activeVolumes[i]?.value ?? 1;
-            cumPv += typical * vol;
-            cumV += vol;
-            const bx = bridge.timeToX(Number(bar.time));
-            const by = bridge.priceToY(cumV > 0 ? cumPv / cumV : typical);
-            if (bx !== null && by !== null) {
-              ctx.lineTo(bx, by);
-            }
-          }
-          ctx.stroke();
-          ctx.font = "10px ui-monospace, monospace";
-          ctx.fillText("A-VWAP", p0.x + 6, p0.y - 5);
-        } else if (pts.length >= 2) {
-          const [p0, p1] = pts;
-          if (kind === "trendline") {
-            ctx.beginPath();
-            ctx.moveTo(p0.x, p0.y);
-            ctx.lineTo(p1.x, p1.y);
-            ctx.stroke();
-          } else if (kind === "box_zone") {
-            const x = Math.min(p0.x, p1.x);
-            const y = Math.min(p0.y, p1.y);
-            const w = Math.abs(p1.x - p0.x);
-            const h = Math.abs(p1.y - p0.y);
-            ctx.save();
-            ctx.globalAlpha = 0.16;
-            ctx.fillRect(x, y, w, h);
-            ctx.restore();
-            ctx.strokeRect(x, y, w, h);
-          } else if (kind === "fib_retracement") {
-            const x0 = Math.min(p0.x, p1.x);
-            const x1 = Math.max(p0.x, p1.x);
-            ctx.font = "10px ui-monospace, monospace";
-            for (const lvl of FIB_LEVELS) {
-              const y = p0.y + (p1.y - p0.y) * lvl;
-              ctx.beginPath();
-              ctx.moveTo(x0, y);
-              ctx.lineTo(x1, y);
-              ctx.stroke();
-              ctx.fillText(`${(lvl * 100).toFixed(1)}%`, x1 + 4, y + 3);
-            }
-          } else if (kind === "price_range") {
-            const x = Math.min(p0.x, p1.x);
-            const y = Math.min(p0.y, p1.y);
-            const w = Math.abs(p1.x - p0.x);
-            const h = Math.abs(p1.y - p0.y);
-            ctx.save();
-            ctx.globalAlpha = 0.14;
-            ctx.fillRect(x, y, w, h);
-            ctx.restore();
-            ctx.strokeRect(x, y, w, h);
-            const deltaTicks = p1.tick - p0.tick;
-            const deltaPrice = Number(deltaTicks) * tickFloat;
-            ctx.font = "10px ui-monospace, monospace";
-            ctx.fillText(
-              `${deltaPrice >= 0 ? "+" : ""}${deltaPrice.toFixed(2)} (${deltaTicks.toString()}t)`,
-              x + 6,
-              y + 13,
-            );
-          }
-        }
-
-        // Anchor handles
-        ctx.setLineDash([]);
-        for (const p of pts) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      };
-
-      for (const drw of drawings) {
-        drawShape(drw.kind, drw.anchors, drw.color, false);
-      }
-
-      if (draftAnchors.length > 0 && activeToolRef.current !== "cursor") {
-        const preview = hoverAnchor ? [...draftAnchors, hoverAnchor] : draftAnchors;
-        const meta = DRAWING_TOOL_META.find((m) => m.kind === activeToolRef.current);
-        drawShape(
-          activeToolRef.current as PlacedDrawingKind,
-          preview,
-          meta?.defaultColor ?? "#38bdf8",
-          true,
-        );
-      }
-
-      ctx.restore();
-    };
-
     const flush = () => {
       rafId = 0;
-      if (pendingBar) {
-        const resCandle = applyBarHysteresis(activeCandles, pendingBar);
-        activeCandles = resCandle.bars;
-        const resVol = pendingVol ? applyBarHysteresis(activeVolumes, pendingVol) : null;
-        if (resVol) activeVolumes = resVol.bars;
-        if (resCandle.trimmed || resVol?.trimmed) {
-          candleSeries.setData(activeCandles);
-          volumeSeries.setData(activeVolumes);
-        } else {
+      if (pendingBar && pendingVol) {
+        const res = applyBarHysteresis(activeCandles, pendingBar);
+        activeCandles = res.bars;
+        activeBarTimeSec = Number(pendingBar.time);
+        if (!res.trimmed) {
           candleSeries.update(pendingBar);
-          if (pendingVol) volumeSeries.update(pendingVol);
+          volumeSeries.update(pendingVol);
+          if (activeVolumes.length > 0 && activeVolumes[activeVolumes.length - 1].time === pendingVol.time) {
+            activeVolumes[activeVolumes.length - 1] = pendingVol;
+            activeBuyVolumes[activeBuyVolumes.length - 1] = pendingBuyVol;
+            activeSellVolumes[activeSellVolumes.length - 1] = pendingSellVol;
+          } else {
+            activeVolumes.push(pendingVol);
+            activeBuyVolumes.push(pendingBuyVol);
+            activeSellVolumes.push(pendingSellVol);
+          }
+        } else {
+          candleSeries.setData(activeCandles);
+          const volMap = new Map<number, HistogramData<UTCTimestamp>>();
+          for (const v of activeVolumes) volMap.set(Number(v.time), v);
+          volMap.set(Number(pendingVol.time), pendingVol);
+          activeVolumes = activeCandles.map(
+            (c) =>
+              volMap.get(Number(c.time)) ?? {
+                time: c.time,
+                value: 0,
+                color: "rgba(16, 185, 129, 0.35)",
+              },
+          );
+          activeBuyVolumes = activeVolumes.map((v, idx) => {
+            const c = activeCandles[idx];
+            return v.value * (c && c.close >= c.open ? 0.62 : 0.38);
+          });
+          activeSellVolumes = activeVolumes.map((v, idx) => Math.max(0, v.value - activeBuyVolumes[idx]));
+          volumeSeries.setData(activeVolumes);
         }
         publishSeriesSnapshot();
-        activeBarTimeSec = Number(pendingBar.time);
-        if (badgeRef.current) {
-          badgeRef.current.textContent = `${symbol} · ${timeframe} · LAST ${pendingBar.close.toFixed(2)} · BARS ${activeCandles.length}`;
-        }
         pendingBar = null;
         pendingVol = null;
-        pendingOverlayDirty = true;
+        pendingPrimitiveDirty = true;
       }
 
-      if (pendingOverlayDirty) {
-        pendingOverlayDirty = false;
-        const w = el.clientWidth;
-        const h = el.clientHeight;
-        overlay.render(
-          w,
-          h,
-          {
-            activeBarTimeSec,
-            tickSizeFloat: tickFloat,
-            footprintCells,
-            vpSummary,
-            vpBins,
-            tpoRows,
-            visibility: visibilityRef.current,
-          },
-          getBridge(),
-        );
-        renderDrawings(w, h);
+      if (pendingPrimitiveDirty) {
+        pendingPrimitiveDirty = false;
+        primitive.requestUpdate();
       }
     };
 
     const scheduleFlush = () => {
-      pendingOverlayDirty = true;
+      pendingPrimitiveDirty = true;
       if (rafId === 0) {
         rafId = requestAnimationFrame(flush);
       }
     };
 
     redrawTriggerRef.current = scheduleFlush;
-
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
-      scheduleFlush();
-    });
 
     const unsub = transport.subscribeBinary(1, (buf) => {
       try {
@@ -614,16 +761,30 @@ export function ChartPanel({
           const high = Number(latest.highTick) * tickFloat;
           const low = Number(latest.lowTick) * tickFloat;
           const close = Number(latest.closeTick) * tickFloat;
+          const totalVol = Number(latest.volumeE9) / 1e9;
           pendingBar = { time: t, open, high, low, close };
           pendingVol = {
             time: t,
-            value: Number(latest.volumeE9) / 1e9,
+            value: totalVol,
             color: close >= open ? "rgba(16, 185, 129, 0.45)" : "rgba(244, 63, 94, 0.45)",
           };
+          pendingBuyVol = totalVol * (close >= open ? 0.62 : 0.38);
+          pendingSellVol = Math.max(0, totalVol - pendingBuyVol);
           scheduleFlush();
         } else if (hdr.frameType === FrameType.LIVE_FOOTPRINT_DELTA) {
           const decoded = decodeFootprintDelta(buf);
           footprintCells = decoded.cells;
+          let sumBid = 0n;
+          let sumAsk = 0n;
+          for (const c of footprintCells) {
+            sumBid += c.bidVolE9;
+            sumAsk += c.askVolE9;
+          }
+          if (activeBuyVolumes.length > 0 && (sumBid > 0n || sumAsk > 0n)) {
+            activeBuyVolumes[activeBuyVolumes.length - 1] = Number(sumAsk) / 1e9;
+            activeSellVolumes[activeSellVolumes.length - 1] = Number(sumBid) / 1e9;
+            publishSeriesSnapshot();
+          }
           scheduleFlush();
         } else if (hdr.frameType === FrameType.VOLUME_PROFILE_SOA) {
           const decoded = decodeVolumeProfile(buf);
@@ -641,17 +802,19 @@ export function ChartPanel({
     });
 
     const toAnchorFromPointer = (clientX: number, clientY: number): AnchorPoint | null => {
-      const rect = drawingCanvas.getBoundingClientRect();
+      const rect = pointerSurface.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
       const rawPrice = candleSeries.coordinateToPrice(y);
       if (rawPrice === null || tickFloat <= 0) return null;
+      const scaled = Number(rawPrice) / tickFloat;
+      if (!Number.isFinite(scaled)) return null;
       const rawTime = chart.timeScale().coordinateToTime(x);
       const timeSec =
         typeof rawTime === "number"
           ? rawTime
           : activeBarTimeSec || Math.floor(Date.now() / 1000);
-      let priceTick = BigInt(Math.round(Number(rawPrice) / tickFloat));
+      let priceTick = BigInt(Math.round(scaled));
       if (magnetRef.current) {
         const snapped = snapTickToMagnet(priceTick, collectMagnetTargets(), 250n);
         priceTick = snapped.snappedTick;
@@ -683,8 +846,8 @@ export function ChartPanel({
       scheduleFlush();
     };
 
-    drawingCanvas.addEventListener("pointerdown", onPointerDown);
-    drawingCanvas.addEventListener("pointermove", onPointerMove);
+    pointerSurface.addEventListener("pointerdown", onPointerDown);
+    pointerSurface.addEventListener("pointermove", onPointerMove);
 
     const ro = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -702,9 +865,10 @@ export function ChartPanel({
     return () => {
       unsub();
       ro.disconnect();
-      drawingCanvas.removeEventListener("pointerdown", onPointerDown);
-      drawingCanvas.removeEventListener("pointermove", onPointerMove);
+      pointerSurface.removeEventListener("pointerdown", onPointerDown);
+      pointerSurface.removeEventListener("pointermove", onPointerMove);
       if (rafId !== 0) cancelAnimationFrame(rafId);
+      candleSeries.detachPrimitive(primitive);
       studyLineSeriesRef.current.clear();
       chartApiRef.current = null;
       overlay.dispose();
@@ -764,7 +928,7 @@ export function ChartPanel({
   };
 
   const handleClear = () => {
-    drawingEngineRef.current.clear();
+    drawingEngineRef.current.clear(symbol);
     syncHistoryMeta();
   };
 
@@ -791,17 +955,12 @@ export function ChartPanel({
             ref={badgeRef}
             className="rounded border border-zinc-800 bg-zinc-900/90 px-2 py-0.5 font-mono text-[11px] text-zinc-200"
           >
-            {symbol} · {timeframe} · LWC v5.3 + {rendererLabel}
+            {symbol} · {timeframe} · LWC v5.3 ISeriesPrimitive ({rendererLabel})
           </span>
         </div>
         <div ref={hostRef} className="h-full w-full" />
-        <canvas
-          ref={overlayCanvasRef}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-10 h-full w-full"
-        />
-        <canvas
-          ref={drawingCanvasRef}
+        <div
+          ref={pointerSurfaceRef}
           aria-label="Chart interactive drawing surface"
           className={
             activeTool === "cursor"

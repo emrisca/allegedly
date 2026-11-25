@@ -82,6 +82,7 @@ export interface StudyRunResponse {
   overlay: boolean;
   values: Array<number | null>;
   memory_pool_reserved_bytes: number;
+  memory_pool_peak_bytes?: number;
   memory_pool_cap_bytes: number;
 }
 

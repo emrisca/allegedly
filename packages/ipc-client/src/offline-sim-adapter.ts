@@ -288,6 +288,8 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
 
   async invokeJson<TReq, TRes>(cmd: string, payload: TReq): Promise<TRes> {
     switch (cmd) {
+      case "report_ui_ready":
+        return null as unknown as TRes;
       case "get_boot_config":
         return { ...this.bootConfig } as TRes;
 
@@ -642,7 +644,10 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
         source_layer: hasOverride ? "instance" : "defaults",
         inherited_value: inherited,
         is_overridden: hasOverride,
-        locked: key === "updates.checkOnStartup" || key === "execution.live_armed",
+        locked:
+        key === "updates.checkOnStartup" ||
+        key === "execution.live_armed" ||
+        key === "execution.mode",
       };
     });
   }

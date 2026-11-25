@@ -187,7 +187,12 @@ export function writeFrameHeader(
   view.setBigUint64(byteOffset + 16, sendNs, true);
 }
 
+const VALID_FRAME_TYPES: ReadonlySet<number> = new Set(Object.values(FrameType));
+
 export function decodeFrameHeader(buf: ArrayBufferLike, byteOffset = 0): FrameHeader {
+  if (!Number.isInteger(byteOffset) || byteOffset < 0 || byteOffset > buf.byteLength) {
+    throw new RangeError(`Invalid ALG2 byteOffset: ${byteOffset}`);
+  }
   if (buf.byteLength - byteOffset < HEADER_BYTES) {
     throw new RangeError(
       `ALG2 frame truncated: need ${HEADER_BYTES} B, got ${buf.byteLength - byteOffset}`,
@@ -202,10 +207,14 @@ export function decodeFrameHeader(buf: ArrayBufferLike, byteOffset = 0): FrameHe
   if (version !== PROTOCOL_VERSION_V1) {
     throw new Error(`Unsupported ALG2 protocol version: ${version}`);
   }
+  const frameType = view.getUint16(6, true);
+  if (!VALID_FRAME_TYPES.has(frameType)) {
+    throw new Error(`Unknown ALG2 frameType: 0x${frameType.toString(16)}`);
+  }
   return {
     magic,
     version,
-    frameType: view.getUint16(6, true),
+    frameType,
     streamId: view.getUint32(8, true),
     recordCount: view.getUint32(12, true),
     sendNs: view.getBigUint64(16, true),
@@ -349,6 +358,11 @@ export function decodeTpoProfileBitmask(
     wordsPerRow: view.getUint16(0, true),
     periodCount: view.getUint16(2, true),
   };
+  if (tpoHeader.wordsPerRow !== 2) {
+    throw new RangeError(
+      `TPO_PROFILE_BITMASK unsupported wordsPerRow: expected 2, got ${tpoHeader.wordsPerRow}`,
+    );
+  }
   const rows: TpoRow128[] = new Array(header.recordCount);
   for (let i = 0; i < header.recordCount; i++) {
     const base = 8 + i * 24;
@@ -413,6 +427,11 @@ export function decodeLiveL2BookBatch(
     provenanceTier: view.getUint8(14),
     provenanceModifiers: view.getUint8(15),
   };
+  if (bookHeader.levelCount !== header.recordCount) {
+    throw new RangeError(
+      `LIVE_L2_BOOK_BATCH levelCount (${bookHeader.levelCount}) !== header.recordCount (${header.recordCount})`,
+    );
+  }
   const levels: LiveL2BookLevel[] = new Array(header.recordCount);
   for (let i = 0; i < header.recordCount; i++) {
     const base = 16 + i * 24;
@@ -509,6 +528,11 @@ export function decodeStreamStatusFrame(
   if (header.frameType !== FrameType.STREAM_STATUS_FRAME) {
     throw new Error(
       `Expected STREAM_STATUS_FRAME (0x0201), got 0x${header.frameType.toString(16)}`,
+    );
+  }
+  if (header.recordCount !== 1) {
+    throw new RangeError(
+      `STREAM_STATUS_FRAME invalid recordCount: expected 1, got ${header.recordCount}`,
     );
   }
   const expectedBytes = HEADER_BYTES + 16;

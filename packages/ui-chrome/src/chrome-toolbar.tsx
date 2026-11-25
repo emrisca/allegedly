@@ -41,6 +41,10 @@ export interface ChromeToolbarProps {
   onTimeframeChange: (timeframe: string) => void;
   onKillSwitch: () => void;
   onResetLayout: () => void;
+  compactDensity?: boolean;
+  onCompactDensityChange?: (next: boolean) => void;
+  showProvenanceOverlay?: boolean;
+  onShowProvenanceOverlayChange?: (next: boolean) => void;
 }
 
 const SYMBOLS = ["BTC/USD", "ETH/USD", "SOL/USD"] as const;
@@ -58,11 +62,27 @@ export function ChromeToolbar({
   onTimeframeChange,
   onKillSwitch,
   onResetLayout,
+  compactDensity: controlledCompactDensity,
+  onCompactDensityChange,
+  showProvenanceOverlay: controlledShowProvenance,
+  onShowProvenanceOverlayChange,
 }: ChromeToolbarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [compactDensity, setCompactDensity] = useState(true);
-  const [showProvenanceOverlay, setShowProvenanceOverlay] = useState(true);
+  const [localCompactDensity, setLocalCompactDensity] = useState(true);
+  const [localShowProvenance, setLocalShowProvenance] = useState(true);
+
+  const compactDensity = controlledCompactDensity ?? localCompactDensity;
+  const setCompactDensity = (next: boolean) => {
+    setLocalCompactDensity(next);
+    onCompactDensityChange?.(next);
+  };
+
+  const showProvenanceOverlay = controlledShowProvenance ?? localShowProvenance;
+  const setShowProvenanceOverlay = (next: boolean) => {
+    setLocalShowProvenance(next);
+    onShowProvenanceOverlayChange?.(next);
+  };
 
   useShortcut("mod+k", () => setCommandOpen((open) => !open), {
     description: "Open command palette",

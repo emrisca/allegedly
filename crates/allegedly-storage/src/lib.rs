@@ -2,7 +2,10 @@ pub mod atvault;
 pub mod catalog;
 pub mod parquet_vault;
 
-pub use atvault::{ATVAULT_MAGIC, StorageError, append_atvault_block, read_atvault_segment};
+pub use atvault::{
+    ATVAULT_MAGIC, AtVaultBlockReader, MAX_BLOCK_COMP_BYTES, MAX_BLOCK_TICKS, StorageError,
+    append_atvault_block, read_atvault_segment,
+};
 pub use catalog::{CatalogDb, PartitionEntry};
 pub use parquet_vault::{read_parquet_range, write_parquet_atomic};
 
@@ -70,6 +73,42 @@ mod tests {
             .query_overlapping("BTC/USD", i64::MIN, i64::MAX)
             .unwrap();
         assert_eq!(found.len(), 1);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rtsd12_corrupt_header_and_parquet_pruning() {
+        let dir =
+            std::env::temp_dir().join(format!("allegedly-storage-rtsd12-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // 1. Corrupt .atvault count header triggers ChecksumMismatch or BlockLimitExceeded (no OOM)
+        let ticks = sample_ticks(20);
+        let atv = dir.join("corrupt.atvault");
+        append_atvault_block(&atv, &ticks).unwrap();
+        let mut bytes = std::fs::read(&atv).unwrap();
+        // Flip bit in count u32 at offset 4..8 (set to 500_000 which is under cap, so CRC must catch it)
+        bytes[4..8].copy_from_slice(&500_000u32.to_le_bytes());
+        std::fs::write(&atv, &bytes).unwrap();
+        assert!(matches!(
+            read_atvault_segment(&atv),
+            Err(StorageError::ChecksumMismatch { .. })
+        ));
+        // Set huge count over cap (u32::MAX) -> BlockLimitExceeded before allocation
+        bytes[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
+        std::fs::write(&atv, &bytes).unwrap();
+        assert!(matches!(
+            read_atvault_segment(&atv),
+            Err(StorageError::BlockLimitExceeded { .. })
+        ));
+
+        // 2. Parquet out-of-range query prunes all row groups cleanly
+        let pq = dir.join("pruned.parquet");
+        write_parquet_atomic(&pq, &ticks).unwrap();
+        let empty = read_parquet_range(&pq, 0, 1_000).unwrap();
+        assert!(empty.is_empty());
 
         let _ = std::fs::remove_dir_all(&dir);
     }

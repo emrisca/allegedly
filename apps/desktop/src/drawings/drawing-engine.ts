@@ -10,8 +10,9 @@ export type DrawingToolKind =
 export type PlacedDrawingKind = Exclude<DrawingToolKind, "cursor">;
 
 export interface AnchorPoint {
+  /** Unix timestamp in seconds (LWC UTCTimestamp) */
   timeSec: number;
-  /** Exact integer price in instrument ticks (SV-08 / SV-17 — zero float drift). */
+  /** Exact integer price tick (SV-17 / SV-08) */
   priceTick: bigint;
 }
 
@@ -74,7 +75,7 @@ type HistoryAction =
   | { type: "add"; drawing: DrawingObject }
   | { type: "delete"; drawing: DrawingObject; index: number }
   | { type: "move"; id: string; before: AnchorPoint[]; after: AnchorPoint[] }
-  | { type: "clear"; previous: DrawingObject[] };
+  | { type: "clear"; symbol?: string; previous: DrawingObject[] };
 
 /**
  * Deterministic clean-room Drawing Engine with full Undo/Redo command stack
@@ -147,7 +148,7 @@ export class DrawingEngine {
     } else {
       this.drawings = [];
     }
-    this.undoStack.push({ type: "clear", previous: prev });
+    this.undoStack.push({ type: "clear", symbol, previous: prev });
     this.redoStack.length = 0;
   }
 
@@ -193,7 +194,11 @@ export class DrawingEngine {
         break;
       }
       case "clear":
-        this.drawings = [];
+        if (action.symbol) {
+          this.drawings = this.drawings.filter((d) => d.symbol !== action.symbol);
+        } else {
+          this.drawings = [];
+        }
         break;
     }
     this.undoStack.push(action);
@@ -214,7 +219,7 @@ export class DrawingEngine {
       lines.push(`kind = "${d.kind}"`);
       lines.push(`symbol = "${escapeToml(d.symbol)}"`);
       lines.push(`color = "${escapeToml(d.color)}"`);
-      if (d.label) {
+      if (d.label !== undefined) {
         lines.push(`label = "${escapeToml(d.label)}"`);
       }
       const anchorStrs = d.anchors.map(
@@ -232,6 +237,7 @@ export class DrawingEngine {
   public loadFromAtAnalysisToml(toml: string): number {
     const parsed: DrawingObject[] = [];
     const blocks = toml.split("[[drawings]]").slice(1);
+    let maxNumericId = 0;
     for (const block of blocks) {
       const id = matchTomlStr(block, "id");
       const kind = matchTomlStr(block, "kind") as PlacedDrawingKind | null;
@@ -239,6 +245,14 @@ export class DrawingEngine {
       const color = matchTomlStr(block, "color") ?? "#38bdf8";
       const label = matchTomlStr(block, "label") ?? undefined;
       if (!id || !kind || !symbol) continue;
+
+      const idMatch = /^drw-(\d+)$/.exec(id);
+      if (idMatch) {
+        const n = Number.parseInt(idMatch[1], 10);
+        if (Number.isFinite(n) && n > maxNumericId) {
+          maxNumericId = n;
+        }
+      }
 
       const anchors: AnchorPoint[] = [];
       const anchorRegex = /\{\s*time_sec\s*=\s*(-?\d+)\s*,\s*price_tick\s*=\s*"(-?\d+)"\s*\}/g;
@@ -253,17 +267,41 @@ export class DrawingEngine {
     this.drawings = parsed;
     this.undoStack.length = 0;
     this.redoStack.length = 0;
-    this.idCounter = parsed.length;
+    this.idCounter = Math.max(parsed.length, maxNumericId);
     return parsed.length;
   }
 }
 
 function escapeToml(s: string): string {
-  return s.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+  return s
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r")
+    .replaceAll("\t", "\\t");
+}
+
+function unescapeToml(s: string): string {
+  let out = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "\\" && i + 1 < s.length) {
+      const next = s[++i];
+      if (next === "\\") out += "\\";
+      else if (next === '"') out += '"';
+      else if (next === "n") out += "\n";
+      else if (next === "r") out += "\r";
+      else if (next === "t") out += "\t";
+      else out += next;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
 }
 
 function matchTomlStr(block: string, key: string): string | null {
-  const re = new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, "m");
+  const re = new RegExp(`^${key}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m");
   const m = block.match(re);
-  return m ? m[1] : null;
+  return m ? unescapeToml(m[1]) : null;
 }

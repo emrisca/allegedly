@@ -39,6 +39,52 @@ describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
     expect(restored.list("BTC/USD")[0].anchors[0].priceTick).toBe(190_000n);
   });
 
+  it("scopes clear(symbol) on redo, preserves monotonic IDs after reload, and round-trips escaped TOML strings (RTSD-17)", () => {
+    const engine = new DrawingEngine();
+    const btc = engine.add(
+      "trendline",
+      "BTC/USD",
+      [
+        { timeSec: 100, priceTick: 190_000n },
+        { timeSec: 200, priceTick: 190_100n },
+      ],
+      "#38bdf8",
+      'Breakout "A" \\ line\n2',
+    );
+    const eth = engine.add("horizontal_ray", "ETH/USD", [
+      { timeSec: 100, priceTick: 35_000n },
+    ]);
+    expect(btc.id).toBe("drw-1");
+    expect(eth.id).toBe("drw-2");
+
+    // Clear only BTC/USD, undo, then redo — ETH/USD must survive redo!
+    engine.clear("BTC/USD");
+    expect(engine.list("BTC/USD")).toHaveLength(0);
+    expect(engine.list("ETH/USD")).toHaveLength(1);
+
+    expect(engine.undo()).toBe(true);
+    expect(engine.list("BTC/USD")).toHaveLength(1);
+    expect(engine.list("ETH/USD")).toHaveLength(1);
+
+    expect(engine.redo()).toBe(true);
+    expect(engine.list("BTC/USD")).toHaveLength(0);
+    expect(engine.list("ETH/USD")).toHaveLength(1);
+
+    // Undo so both exist, check TOML escape round-trip, then remove drw-1 & reload
+    expect(engine.undo()).toBe(true);
+    const tomlWithEscapes = engine.toAtAnalysisToml();
+    const loaded = new DrawingEngine();
+    expect(loaded.loadFromAtAnalysisToml(tomlWithEscapes)).toBe(2);
+    expect(loaded.list("BTC/USD")[0].label).toBe('Breakout "A" \\ line\n2');
+
+    engine.remove("drw-1");
+    const sparseToml = engine.toAtAnalysisToml();
+    const sparseLoaded = new DrawingEngine();
+    expect(sparseLoaded.loadFromAtAnalysisToml(sparseToml)).toBe(1);
+    const next = sparseLoaded.add("horizontal_ray", "SOL/USD", [{ timeSec: 300, priceTick: 18500n }]);
+    expect(next.id).toBe("drw-3");
+  });
+
   it("performs exact SV-17 integer magnet snap to TPO POC/VAH/VAL and bar OHLC", () => {
     const snap = snapTickToMagnet(
       190_003n,

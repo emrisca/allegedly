@@ -7,6 +7,7 @@ use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::basic::{Compression, Encoding, ZstdLevel};
 use parquet::file::properties::WriterProperties;
+use parquet::file::statistics::Statistics;
 use std::fs::{self, File};
 use std::path::Path;
 use std::sync::Arc;
@@ -27,7 +28,25 @@ fn tick_schema() -> Arc<Schema> {
     ]))
 }
 
-/// Atomically compact NormalizedTicks into a Zstd-3 + DELTA_BINARY_PACKED Parquet 2.0 file.
+fn downcast_col<'a, T: 'static>(
+    batch: &'a RecordBatch,
+    index: usize,
+    name: &'static str,
+) -> Result<&'a T, StorageError> {
+    let col = batch
+        .columns()
+        .get(index)
+        .ok_or_else(|| StorageError::SchemaMismatch(format!("missing column {index} ({name})")))?;
+    col.as_any().downcast_ref::<T>().ok_or_else(|| {
+        StorageError::SchemaMismatch(format!(
+            "column {index} ({name}) has unexpected Arrow type {:?}",
+            col.data_type()
+        ))
+    })
+}
+
+/// Atomically compact NormalizedTicks into a Zstd-3 + DELTA_BINARY_PACKED Parquet 2.0 file
+/// with explicit `sync_all()` before atomic rename (RTSD-12 / SV-03).
 pub fn write_parquet_atomic(path: &Path, ticks: &[NormalizedTick]) -> Result<u64, StorageError> {
     let schema = tick_schema();
     let batch = RecordBatch::try_new(
@@ -68,77 +87,59 @@ pub fn write_parquet_atomic(path: &Path, ticks: &[NormalizedTick]) -> Result<u64
         .build();
     let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
     writer.write(&batch)?;
-    writer.close()?;
+    let file = writer.into_inner()?;
+    file.sync_all()?;
+    drop(file);
     fs::rename(&tmp, path)?;
     Ok(fs::metadata(path)?.len())
 }
 
-/// Read ticks within `[start_ts_ns, end_ts_ns]` using Parquet streaming batches.
+/// Read ticks within `[start_ts_ns, end_ts_ns]` using Parquet row-group min/max statistics pruning
+/// and typed schema checks (zero `.unwrap()` panics on untrusted input; RTSD-12).
 pub fn read_parquet_range(
     path: &Path,
     start_ts_ns: i64,
     end_ts_ns: i64,
 ) -> Result<Vec<NormalizedTick>, StorageError> {
     let file = File::open(path)?;
-    let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+    let metadata = builder.metadata().clone();
+
+    // Row-group statistics pruning on column 0 (`ts_exchange_ns`)
+    let mut selected_row_groups = Vec::new();
+    for (rg_idx, rg) in metadata.row_groups().iter().enumerate() {
+        let mut overlaps = true;
+        if let Some(col_meta) = rg.columns().first()
+            && let Some(Statistics::Int64(stats)) = col_meta.statistics()
+            && let (Some(&min_ts), Some(&max_ts)) = (stats.min_opt(), stats.max_opt())
+            && (max_ts < start_ts_ns || min_ts > end_ts_ns)
+        {
+            overlaps = false;
+        }
+        if overlaps {
+            selected_row_groups.push(rg_idx);
+        }
+    }
+
+    if selected_row_groups.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let reader = builder.with_row_groups(selected_row_groups).build()?;
     let mut out = Vec::new();
     for maybe_batch in reader {
         let batch = maybe_batch?;
-        let ts_ex = batch
-            .column(0)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let ts_rx = batch
-            .column(1)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let inst = batch
-            .column(2)
-            .as_any()
-            .downcast_ref::<UInt32Array>()
-            .unwrap();
-        let seq = batch
-            .column(3)
-            .as_any()
-            .downcast_ref::<UInt64Array>()
-            .unwrap();
-        let price = batch
-            .column(4)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let qty = batch
-            .column(5)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let bid = batch
-            .column(6)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let ask = batch
-            .column(7)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let side = batch
-            .column(8)
-            .as_any()
-            .downcast_ref::<UInt8Array>()
-            .unwrap();
-        let tier = batch
-            .column(9)
-            .as_any()
-            .downcast_ref::<UInt8Array>()
-            .unwrap();
-        let mods = batch
-            .column(10)
-            .as_any()
-            .downcast_ref::<UInt8Array>()
-            .unwrap();
+        let ts_ex = downcast_col::<Int64Array>(&batch, 0, "ts_exchange_ns")?;
+        let ts_rx = downcast_col::<Int64Array>(&batch, 1, "ts_recv_ns")?;
+        let inst = downcast_col::<UInt32Array>(&batch, 2, "instrument_id")?;
+        let seq = downcast_col::<UInt64Array>(&batch, 3, "seq")?;
+        let price = downcast_col::<Int64Array>(&batch, 4, "price_e9")?;
+        let qty = downcast_col::<Int64Array>(&batch, 5, "qty_e9")?;
+        let bid = downcast_col::<Int64Array>(&batch, 6, "bid_e9")?;
+        let ask = downcast_col::<Int64Array>(&batch, 7, "ask_e9")?;
+        let side = downcast_col::<UInt8Array>(&batch, 8, "side")?;
+        let tier = downcast_col::<UInt8Array>(&batch, 9, "provenance_tier")?;
+        let mods = downcast_col::<UInt8Array>(&batch, 10, "provenance_modifiers")?;
 
         for i in 0..batch.num_rows() {
             let t = ts_ex.value(i);

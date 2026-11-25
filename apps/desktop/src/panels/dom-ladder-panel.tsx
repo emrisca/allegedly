@@ -14,6 +14,7 @@ import {
 export interface DomLadderPanelProps {
   transport: TransportAdapter;
   symbol: string;
+  compactDensity?: boolean;
 }
 
 /**
@@ -21,9 +22,20 @@ export interface DomLadderPanelProps {
  * Consumes binary ALG2 frames directly into mutable refs and repaints inside rAF
  * with zero React state updates or virtual-DOM diffing.
  */
-export function DomLadderPanel({ transport, symbol }: DomLadderPanelProps) {
+export function DomLadderPanel({
+  transport,
+  symbol,
+  compactDensity = true,
+}: DomLadderPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const compactRef = useRef<boolean>(compactDensity);
+  compactRef.current = compactDensity;
+  const repaintRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    repaintRef.current();
+  }, [compactDensity]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -68,7 +80,7 @@ export function DomLadderPanel({ transport, symbol }: DomLadderPanelProps) {
       ctx.fillStyle = "#71717a";
       ctx.fillText("SIZE", w - 70, 16);
 
-      const rowH = 18;
+      const rowH = compactRef.current ? 16 : 22;
       const visibleSide = Math.min(8, Math.max(4, Math.floor((h - 140) / (rowH * 2))));
       const topAsks = asks.slice(0, visibleSide).reverse();
       const topBids = bids.slice(0, visibleSide);
@@ -118,7 +130,8 @@ export function DomLadderPanel({ transport, symbol }: DomLadderPanelProps) {
       ctx.fillText("TIME & SALES (ALG2 BINARY)", 10, y + 14);
       y += 24;
 
-      const maxTapeRows = Math.max(0, Math.floor((h - y - 4) / 16));
+      const tapeRowH = compactRef.current ? 14 : 19;
+      const maxTapeRows = Math.max(0, Math.floor((h - y - 4) / tapeRowH));
       for (let i = 0; i < Math.min(tape.length, maxTapeRows); i++) {
         const t = tape[i];
         const { side } = unpackTradeFlags(t.flags);
@@ -129,7 +142,7 @@ export function DomLadderPanel({ transport, symbol }: DomLadderPanelProps) {
         ctx.fillText(formatFixedE9(t.priceE9, 2), 54, y + 11);
         ctx.fillStyle = "#a1a1aa";
         ctx.fillText(formatFixedE9(t.qtyE9, 3), w - 76, y + 11);
-        y += 16;
+        y += tapeRowH;
       }
 
       ctx.restore();
@@ -141,6 +154,7 @@ export function DomLadderPanel({ transport, symbol }: DomLadderPanelProps) {
         rafId = requestAnimationFrame(paint);
       }
     };
+    repaintRef.current = schedulePaint;
 
     const unsub = transport.subscribeBinary(1, (buf) => {
       try {

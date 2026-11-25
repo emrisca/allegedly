@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { Button } from "@ui-sdk/react/button";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
 import {
   BOOK_STATE_LABELS,
+  BookState,
   formatFixedE9,
   PROVENANCE_TIER_LABELS,
   ProvenanceTier,
@@ -9,17 +12,15 @@ import {
   type ResolvedSetting,
   type StudyRunResponse,
 } from "@allegedly/ipc-client";
-import { Button } from "@ui-sdk/react/button";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
 
 export interface PaperOmsPanelProps {
   symbol: string;
   account: PaperAccountSnapshot;
   bookState: number;
   provenanceTier: number;
-  activeStudies?: StudyRunResponse[];
+  activeStudies?: readonly StudyRunResponse[];
   studyError?: string | null;
-  settings?: ResolvedSetting[];
+  settings?: readonly ResolvedSetting[];
   exportedToml?: string | null;
   onSubmitOrder: (side: "buy" | "sell", orderType: "market" | "limit") => void;
   onKillSwitch: () => void;
@@ -33,6 +34,7 @@ export interface PaperOmsPanelProps {
 
 const PROVENANCE_LADDER: ReadonlyArray<{
   tier: number;
+  displayTier: number;
   label: string;
   desc: string;
   absorptionAllowed: boolean;
@@ -40,34 +42,39 @@ const PROVENANCE_LADDER: ReadonlyArray<{
 }> = [
   {
     tier: ProvenanceTier.ExactL3Mbo,
-    label: "EXACT: L3-MBO",
-    desc: "Native order-by-order exchange feed",
+    displayTier: 1,
+    label: "EXACT: L3 MBO",
+    desc: "Native per-order queue position (Exact PIQ)",
     absorptionAllowed: true,
     exactMbo: true,
   },
   {
     tier: ProvenanceTier.ExactTickAggr,
-    label: "EXACT: TICK-AGGR",
-    desc: "Tick trades with exchange aggressor side",
+    displayTier: 2,
+    label: "EXACT: TICK AGGR",
+    desc: "Exchange-tagged aggressor side (SV-10 OK)",
     absorptionAllowed: true,
     exactMbo: false,
   },
   {
     tier: ProvenanceTier.EstimatedL1Quote,
-    label: "ESTIMATED: L1-QUOTE",
-    desc: "Lee-Ready BBO trade side inference",
+    displayTier: 3,
+    label: "INFERRED: QUOTE RULE",
+    desc: "Lee-Ready BBO side classification",
     absorptionAllowed: true,
     exactMbo: false,
   },
   {
     tier: ProvenanceTier.EstimatedTickRule,
-    label: "ESTIMATED: TICK-RULE",
+    displayTier: 4,
+    label: "INFERRED: TICK RULE",
     desc: "Prior-tick direction inference",
     absorptionAllowed: true,
     exactMbo: false,
   },
   {
     tier: ProvenanceTier.SyntheticIntrabar,
+    displayTier: 5,
     label: "SYNTHETIC: INTRABAR",
     desc: "Coarse OHLCV synthesis (SV-10 triggers gated)",
     absorptionAllowed: false,
@@ -77,6 +84,12 @@ const PROVENANCE_LADDER: ReadonlyArray<{
 
 const DEFAULT_LUAU_SNIPPET =
   "local out = {}; for i = 1, #close do out[i] = i == 1 and close[i] or (close[i] + close[i-1]) / 2 end; return out";
+
+function bookStateTextClass(bookState: number): string {
+  if (bookState === BookState.Live) return "text-emerald-300";
+  if (bookState === BookState.Rebuilding || bookState === BookState.Stale) return "text-amber-300";
+  return "text-rose-300";
+}
 
 export function PaperOmsPanel({
   symbol,
@@ -97,8 +110,27 @@ export function PaperOmsPanel({
   onExportWorkspaceToml,
 }: PaperOmsPanelProps) {
   const [luauDraft, setLuauDraft] = useState<string>(DEFAULT_LUAU_SNIPPET);
+  const [editingSettingKey, setEditingSettingKey] = useState<string | null>(null);
+  const [editingSettingValue, setEditingSettingValue] = useState<string>("");
+
   const rawPos = account.net_position_e9[symbol] ?? "0";
   const netPos = formatFixedE9(BigInt(rawPos), 3);
+
+  const latestLuauPeakBytes = activeStudies.reduce(
+    (max, st) => Math.max(max, st.memory_pool_peak_bytes ?? st.memory_pool_reserved_bytes ?? 0),
+    0,
+  );
+  const poolCapBytes = activeStudies[0]?.memory_pool_cap_bytes ?? 64 * 1024 * 1024;
+
+  const beginEditSetting = (s: ResolvedSetting) => {
+    setEditingSettingKey(s.key);
+    setEditingSettingValue(s.value);
+  };
+
+  const commitEditSetting = (key: string) => {
+    onUpdateSetting?.(key, editingSettingValue);
+    setEditingSettingKey(null);
+  };
 
   return (
     <section
@@ -183,7 +215,7 @@ export function PaperOmsPanel({
             </Button>
           </div>
           <p className="font-mono text-[10px] text-zinc-400">
-            LIVE_ARMED = false · LocalPaperAdapter only · Zero broker network egress (ADR-0009).
+            LIVE_ARMED = false · LocalPaperAdapter + SQLite WAL · Zero broker network egress (ADR-0009).
           </p>
         </TabsPanel>
 
@@ -216,7 +248,10 @@ export function PaperOmsPanel({
           </div>
           <div className="flex justify-between rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1">
             <span className="text-zinc-400">Book State · PIQ Badge</span>
-            <span className="text-emerald-300">
+            <span
+              data-testid="oms-book-state-badge"
+              className={bookStateTextClass(bookState)}
+            >
               {BOOK_STATE_LABELS[bookState] ?? "UNKNOWN"} ·{" "}
               {provenanceTier === ProvenanceTier.ExactL3Mbo ? "[EXACT MBO]" : "[Est / Max]"}
             </span>
@@ -235,7 +270,7 @@ export function PaperOmsPanel({
                 >
                   <div>
                     <div className={active ? "font-semibold text-sky-200" : "text-zinc-300"}>
-                      T{row.tier} · {row.label}
+                      T{row.displayTier} · {row.label}
                     </div>
                     <div className="text-[9px] text-zinc-400">{row.desc}</div>
                   </div>
@@ -274,6 +309,18 @@ export function PaperOmsPanel({
             >
               + RSI(14)
             </Button>
+            <Button
+              onClick={() => onRunBuiltinStudy?.("cvd", 1)}
+              className="rounded border border-cyan-700/70 bg-cyan-950/60 px-2 py-1 text-[10px] text-cyan-200 hover:bg-cyan-900/60"
+            >
+              + CVD
+            </Button>
+            <Button
+              onClick={() => onRunBuiltinStudy?.("footprint_delta", 1)}
+              className="rounded border border-fuchsia-700/70 bg-fuchsia-950/60 px-2 py-1 text-[10px] text-fuchsia-200 hover:bg-fuchsia-900/60"
+            >
+              + FP Delta
+            </Button>
             {activeStudies.length > 0 && (
               <Button
                 onClick={() => onClearStudies?.()}
@@ -285,9 +332,14 @@ export function PaperOmsPanel({
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="luau-study-input" className="block text-[10px] text-zinc-400">
-              Sandboxed Luau Study (≤ 64 MiB Global Pool · No os/io):
-            </label>
+            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+              <label htmlFor="luau-study-input">
+                Sandboxed Luau Study (≤ {(poolCapBytes / (1024 * 1024)).toFixed(0)} MiB Global Pool · No os/io):
+              </label>
+              <span className="text-zinc-500">
+                Peak: {(latestLuauPeakBytes / (1024 * 1024)).toFixed(1)} MiB
+              </span>
+            </div>
             <textarea
               id="luau-study-input"
               value={luauDraft}
@@ -344,50 +396,76 @@ export function PaperOmsPanel({
           </div>
 
           <ul className="space-y-1">
-            {settings.map((s) => (
-              <li
-                key={s.key}
-                className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900/50 px-2 py-1"
-              >
-                <div className="min-w-0 truncate">
-                  <span className="text-zinc-200">{s.key}</span>
-                  <span className="ml-1.5 rounded bg-zinc-800 px-1 py-0.5 text-[9px] uppercase text-zinc-400">
-                    {s.source_layer}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-amber-300">{s.value}</span>
-                  {s.locked ? (
-                    <span className="rounded border border-emerald-800 bg-emerald-950/60 px-1 py-0.5 text-[9px] text-emerald-300">
-                      LOCKED
+            {settings.map((s) => {
+              const isEditing = editingSettingKey === s.key;
+              return (
+                <li
+                  key={s.key}
+                  className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900/50 px-2 py-1"
+                >
+                  <div className="min-w-0 truncate">
+                    <span className="text-zinc-200">{s.key}</span>
+                    <span className="ml-1.5 rounded bg-zinc-800 px-1 py-0.5 text-[9px] uppercase text-zinc-400">
+                      {s.source_layer}
                     </span>
-                  ) : s.is_overridden ? (
-                    <Button
-                      onClick={() => onResetSetting?.(s.key)}
-                      className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-300 hover:bg-zinc-800"
-                    >
-                      Reset
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() =>
-                        onUpdateSetting?.(
-                          s.key,
-                          s.key === "orderflow.imbalance_ratio_bps"
-                            ? "35000"
-                            : s.key === "ui.density"
-                              ? '"comfortable"'
-                              : s.value,
-                        )
-                      }
-                      className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:text-zinc-200"
-                    >
-                      Override
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {isEditing ? (
+                      <>
+                        <input
+                          aria-label={`Override value for ${s.key}`}
+                          value={editingSettingValue}
+                          onChange={(e) => setEditingSettingValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitEditSetting(s.key);
+                            if (e.key === "Escape") setEditingSettingKey(null);
+                          }}
+                          className="w-24 rounded border border-amber-500/60 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-amber-200 focus:outline-none"
+                        />
+                        <Button
+                          onClick={() => commitEditSetting(s.key)}
+                          className="rounded border border-amber-500/60 bg-amber-950/60 px-1.5 py-0.5 text-[9px] text-amber-200 hover:bg-amber-900/60"
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          onClick={() => setEditingSettingKey(null)}
+                          className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:text-zinc-200"
+                        >
+                          Cancel
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-amber-300">{s.value}</span>
+                        {s.locked ? (
+                          <span className="rounded border border-emerald-800 bg-emerald-950/60 px-1 py-0.5 text-[9px] text-emerald-300">
+                            LOCKED
+                          </span>
+                        ) : (
+                          <>
+                            <Button
+                              onClick={() => beginEditSetting(s)}
+                              className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:text-zinc-200"
+                            >
+                              Override
+                            </Button>
+                            {s.is_overridden && (
+                              <Button
+                                onClick={() => onResetSetting?.(s.key)}
+                                className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-300 hover:bg-zinc-800"
+                              >
+                                Reset
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
 
           {exportedToml && (

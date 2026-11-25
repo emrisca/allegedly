@@ -1,11 +1,8 @@
-import {
-  BIT_BUY_IMBAL,
-  BIT_POC,
-  BIT_SELL_IMBAL,
-  type FootprintCell,
-  type TpoRow128,
-  type VolumeProfileBin,
-  type VolumeProfileSummary,
+import type {
+  FootprintCell,
+  TpoRow128,
+  VolumeProfileBin,
+  VolumeProfileSummary,
 } from "@allegedly/ipc-client";
 
 export interface OverlayVisibility {
@@ -15,8 +12,8 @@ export interface OverlayVisibility {
 }
 
 export interface OverlayRenderData {
-  activeBarTimeSec: number;
   tickSizeFloat: number;
+  activeBarTimeSec: number;
   footprintCells: readonly FootprintCell[];
   vpSummary: VolumeProfileSummary | null;
   vpBins: readonly VolumeProfileBin[];
@@ -25,15 +22,15 @@ export interface OverlayRenderData {
 }
 
 export interface CoordinateBridge {
-  timeToX: (timeSec: number) => number | null;
-  priceToY: (price: number) => number | null;
+  timeToX(timeSec: number): number | null;
+  priceToY(price: number): number | null;
 }
 
 const VERT_SRC = `#version 300 es
 precision highp float;
 layout(location = 0) in vec2 a_unit;
-layout(location = 1) in vec4 a_rect;  // x, y, w, h in CSS pixels
-layout(location = 2) in vec4 a_color; // r, g, b, a
+layout(location = 1) in vec4 a_rect;   // x, y, w, h in CSS px
+layout(location = 2) in vec4 a_color;  // rgba
 uniform vec2 u_viewport;
 out vec4 v_color;
 void main() {
@@ -45,7 +42,7 @@ void main() {
 `;
 
 const FRAG_SRC = `#version 300 es
-precision mediump float;
+precision highp float;
 in vec4 v_color;
 out vec4 outColor;
 void main() {
@@ -53,41 +50,43 @@ void main() {
 }
 `;
 
-const MAX_QUADS = 2048;
-const FLOATS_PER_QUAD = 8; // rect(4) + color(4)
+const MAX_QUADS = 16_384;
+const FLOATS_PER_QUAD = 8; // x, y, w, h, r, g, b, a
+const BIT_SELL_IMBAL = 1 << 0;
+const BIT_BUY_IMBAL = 1 << 1;
+const BIT_POC = 1 << 2;
 
 /**
- * WebGL2 instanced-quad overlay synchronized to Lightweight Charts v5.3.0 (ADR-0004 / S01).
- * Keeps React completely out of the 60 fps render path; falls back gracefully to Canvas2D
- * if WebGL2 is unavailable (e.g. headless jsdom test runners).
+ * Instanced WebGL2 orderflow quad renderer (Footprint + VRVP + u128 TPO)
+ * designed to run synchronously inside Lightweight Charts v5 ISeriesPrimitive.draw()
+ * via an offscreen WebGL2 surface (zero async rAF drag drift, ADR-0004 / S01)
+ * with graceful direct Canvas2D fallback when WebGL2 is unavailable.
  */
 export class WebGl2OrderflowOverlay {
   private readonly canvas: HTMLCanvasElement;
-  private readonly gl: WebGL2RenderingContext | null;
-  private readonly ctx2d: CanvasRenderingContext2D | null;
+  private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
+  private quadBuf: WebGLBuffer | null = null;
   private instanceBuf: WebGLBuffer | null = null;
   private uViewport: WebGLUniformLocation | null = null;
   private readonly instanceData = new Float32Array(MAX_QUADS * FLOATS_PER_QUAD);
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
-    let gl: WebGL2RenderingContext | null = null;
+  constructor(canvas?: HTMLCanvasElement) {
+    this.canvas = canvas ?? document.createElement("canvas");
     try {
-      gl = canvas.getContext("webgl2", {
+      const gl = this.canvas.getContext("webgl2", {
         alpha: true,
         antialias: false,
-        depth: false,
         premultipliedAlpha: true,
+        preserveDrawingBuffer: false,
       });
+      if (gl) {
+        this.gl = gl;
+        this.initGl(gl);
+      }
     } catch {
-      gl = null;
-    }
-    this.gl = gl;
-    this.ctx2d = gl ? null : canvas.getContext("2d");
-    if (this.gl) {
-      this.initGl(this.gl);
+      this.gl = null;
     }
   }
 
@@ -95,25 +94,37 @@ export class WebGl2OrderflowOverlay {
     return this.gl !== null && this.program !== null;
   }
 
+  public getCanvas(): HTMLCanvasElement {
+    return this.canvas;
+  }
+
   private initGl(gl: WebGL2RenderingContext): void {
     const compile = (type: number, src: string): WebGLShader | null => {
-      const s = gl.createShader(type);
-      if (!s) return null;
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        gl.deleteShader(s);
+      const sh = gl.createShader(type);
+      if (!sh) return null;
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        gl.deleteShader(sh);
         return null;
       }
-      return s;
+      return sh;
     };
 
     const vs = compile(gl.VERTEX_SHADER, VERT_SRC);
     const fs = compile(gl.FRAGMENT_SHADER, FRAG_SRC);
-    if (!vs || !fs) return;
+    if (!vs || !fs) {
+      if (vs) gl.deleteShader(vs);
+      if (fs) gl.deleteShader(fs);
+      return;
+    }
 
     const prog = gl.createProgram();
-    if (!prog) return;
+    if (!prog) {
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      return;
+    }
     gl.attachShader(prog, vs);
     gl.attachShader(prog, fs);
     gl.linkProgram(prog);
@@ -127,7 +138,13 @@ export class WebGl2OrderflowOverlay {
     const vao = gl.createVertexArray();
     const quadBuf = gl.createBuffer();
     const instanceBuf = gl.createBuffer();
-    if (!vao || !quadBuf || !instanceBuf) return;
+    if (!vao || !quadBuf || !instanceBuf) {
+      if (vao) gl.deleteVertexArray(vao);
+      if (quadBuf) gl.deleteBuffer(quadBuf);
+      if (instanceBuf) gl.deleteBuffer(instanceBuf);
+      gl.deleteProgram(prog);
+      return;
+    }
 
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
@@ -156,27 +173,16 @@ export class WebGl2OrderflowOverlay {
 
     this.program = prog;
     this.vao = vao;
+    this.quadBuf = quadBuf;
     this.instanceBuf = instanceBuf;
     this.uViewport = gl.getUniformLocation(prog, "u_viewport");
   }
 
-  public render(
+  private buildQuads(
     width: number,
-    height: number,
     data: OverlayRenderData,
     bridge: CoordinateBridge,
   ): number {
-    if (width <= 0 || height <= 0) return 0;
-    const dpr = window.devicePixelRatio || 1;
-    const pxW = Math.floor(width * dpr);
-    const pxH = Math.floor(height * dpr);
-    if (this.canvas.width !== pxW || this.canvas.height !== pxH) {
-      this.canvas.width = pxW;
-      this.canvas.height = pxH;
-      this.canvas.style.width = `${width}px`;
-      this.canvas.style.height = `${height}px`;
-    }
-
     let quadCount = 0;
     const pushQuad = (
       x: number,
@@ -203,7 +209,7 @@ export class WebGl2OrderflowOverlay {
 
     const rowHeight = 9;
 
-    // 1. Volume Profile (VRVP) horizontal histogram anchored to right chart edge
+    // 1. Volume Profile (VRVP) horizontal histogram anchored to right chart pane edge
     if (data.visibility.vrvp && data.vpBins.length > 0) {
       let maxTotal = 1n;
       for (const b of data.vpBins) {
@@ -211,7 +217,7 @@ export class WebGl2OrderflowOverlay {
         if (t > maxTotal) maxTotal = t;
       }
       const maxBarW = Math.min(120, width * 0.16);
-      const rightEdge = width - 64; // stay clear of LWC right price axis
+      const rightEdge = Math.max(24, width - 8);
       for (const bin of data.vpBins) {
         const y = bridge.priceToY(Number(bin.priceTick) * data.tickSizeFloat);
         if (y === null) continue;
@@ -294,40 +300,61 @@ export class WebGl2OrderflowOverlay {
       }
     }
 
+    return quadCount;
+  }
+
+  /**
+   * Synchronously renders orderflow quads directly into Lightweight Charts' own
+   * CanvasRenderingContext2D (via offscreen WebGL2 instanced pass + drawImage when
+   * WebGL2 is available, or direct Canvas2D fillRect fallback). Runs in the exact
+   * same paint pass as candlesticks for 0.000 CSS px drag drift (ADR-0004 / S01).
+   */
+  public compositeIntoContext(
+    targetCtx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    dpr: number,
+    data: OverlayRenderData,
+    bridge: CoordinateBridge,
+  ): number {
+    if (width <= 0 || height <= 0) return 0;
+    const quadCount = this.buildQuads(width, data, bridge);
+    if (quadCount === 0) return 0;
+
     if (this.gl && this.program && this.vao && this.instanceBuf) {
       const gl = this.gl;
+      const pxW = Math.max(1, Math.floor(width * dpr));
+      const pxH = Math.max(1, Math.floor(height * dpr));
+      if (this.canvas.width !== pxW || this.canvas.height !== pxH) {
+        this.canvas.width = pxW;
+        this.canvas.height = pxH;
+      }
       gl.viewport(0, 0, pxW, pxH);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
-      if (quadCount > 0) {
-        gl.useProgram(this.program);
-        gl.uniform2f(this.uViewport, width, height);
-        gl.bindVertexArray(this.vao);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuf);
-        gl.bufferSubData(
-          gl.ARRAY_BUFFER,
-          0,
-          this.instanceData.subarray(0, quadCount * FLOATS_PER_QUAD),
-        );
-        gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, quadCount);
-        gl.bindVertexArray(null);
-      }
-    } else if (this.ctx2d) {
-      const ctx = this.ctx2d;
-      ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, width, height);
+      gl.useProgram(this.program);
+      gl.uniform2f(this.uViewport, width, height);
+      gl.bindVertexArray(this.vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuf);
+      gl.bufferSubData(
+        gl.ARRAY_BUFFER,
+        0,
+        this.instanceData.subarray(0, quadCount * FLOATS_PER_QUAD),
+      );
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, quadCount);
+      gl.bindVertexArray(null);
+      targetCtx.drawImage(this.canvas, 0, 0, width, height);
+    } else {
       for (let i = 0; i < quadCount; i++) {
         const o = i * FLOATS_PER_QUAD;
-        ctx.fillStyle = `rgba(${Math.round(this.instanceData[o + 4] * 255)}, ${Math.round(this.instanceData[o + 5] * 255)}, ${Math.round(this.instanceData[o + 6] * 255)}, ${this.instanceData[o + 7]})`;
-        ctx.fillRect(
+        targetCtx.fillStyle = `rgba(${Math.round(this.instanceData[o + 4] * 255)}, ${Math.round(this.instanceData[o + 5] * 255)}, ${Math.round(this.instanceData[o + 6] * 255)}, ${this.instanceData[o + 7]})`;
+        targetCtx.fillRect(
           this.instanceData[o],
           this.instanceData[o + 1],
           this.instanceData[o + 2],
           this.instanceData[o + 3],
         );
       }
-      ctx.restore();
     }
 
     return quadCount;
@@ -335,12 +362,14 @@ export class WebGl2OrderflowOverlay {
 
   public dispose(): void {
     if (this.gl) {
+      if (this.quadBuf) this.gl.deleteBuffer(this.quadBuf);
       if (this.instanceBuf) this.gl.deleteBuffer(this.instanceBuf);
       if (this.vao) this.gl.deleteVertexArray(this.vao);
       if (this.program) this.gl.deleteProgram(this.program);
     }
     this.program = null;
     this.vao = null;
+    this.quadBuf = null;
     this.instanceBuf = null;
   }
 }

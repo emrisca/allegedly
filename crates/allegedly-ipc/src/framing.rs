@@ -23,6 +23,10 @@ pub enum IpcFrameError {
     UnknownFrameType(u16),
     #[error("payload length {actual} does not match expected {expected}")]
     PayloadLengthMismatch { expected: usize, actual: usize },
+    #[error("unexpected frame_type 0x{actual:04X}, expected 0x{expected:04X}")]
+    UnexpectedFrameType { expected: u16, actual: u16 },
+    #[error("invalid record_count {actual}, expected {expected}")]
+    InvalidRecordCount { expected: u32, actual: u32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -287,6 +291,12 @@ pub fn decode_live_trade_batch(
     bytes: &[u8],
 ) -> Result<(FrameHeader, Vec<LiveTradeRecord>), IpcFrameError> {
     let hdr = decode_header(bytes)?;
+    if hdr.frame_type != FrameType::LiveTradeBatch as u16 {
+        return Err(IpcFrameError::UnexpectedFrameType {
+            expected: FrameType::LiveTradeBatch as u16,
+            actual: hdr.frame_type,
+        });
+    }
     let expected = HEADER_BYTES + (hdr.record_count as usize) * 40;
     if bytes.len() != expected {
         return Err(IpcFrameError::PayloadLengthMismatch {
@@ -386,6 +396,18 @@ pub fn decode_stream_status(
     bytes: &[u8],
 ) -> Result<(FrameHeader, StreamStatusFrame), IpcFrameError> {
     let hdr = decode_header(bytes)?;
+    if hdr.frame_type != FrameType::StreamStatusFrame as u16 {
+        return Err(IpcFrameError::UnexpectedFrameType {
+            expected: FrameType::StreamStatusFrame as u16,
+            actual: hdr.frame_type,
+        });
+    }
+    if hdr.record_count != 1 {
+        return Err(IpcFrameError::InvalidRecordCount {
+            expected: 1,
+            actual: hdr.record_count,
+        });
+    }
     let expected = HEADER_BYTES + 16;
     if bytes.len() != expected {
         return Err(IpcFrameError::PayloadLengthMismatch {
@@ -422,4 +444,97 @@ impl StreamStatusFrame {
             provenance_tier: tier as u8,
         }
     }
+}
+
+pub fn encode_tpo_profile_bitmask(
+    stream_id: u32,
+    send_ns: u64,
+    tpo_header: TpoHeader,
+    rows: &[TpoRow128],
+) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(HEADER_BYTES + 8 + rows.len() * 24);
+    encode_header(
+        &mut buf,
+        FrameHeader {
+            magic: MAGIC_ALG2,
+            version: PROTOCOL_VERSION_V1,
+            frame_type: FrameType::TpoProfileBitmask as u16,
+            stream_id,
+            record_count: rows.len() as u32,
+            send_ns,
+        },
+    );
+    buf.extend_from_slice(&tpo_header.words_per_row.to_le_bytes());
+    buf.extend_from_slice(&tpo_header.period_count.to_le_bytes());
+    buf.extend_from_slice(&0u32.to_le_bytes());
+    for r in rows {
+        buf.extend_from_slice(&r.price_tick.to_le_bytes());
+        buf.extend_from_slice(&r.period_mask[0].to_le_bytes());
+        buf.extend_from_slice(&r.period_mask[1].to_le_bytes());
+    }
+    buf
+}
+
+pub fn encode_live_l2_book_batch(
+    stream_id: u32,
+    send_ns: u64,
+    book_header: LiveL2BookHeader,
+    levels: &[LiveL2BookLevel],
+) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(HEADER_BYTES + 16 + levels.len() * 24);
+    encode_header(
+        &mut buf,
+        FrameHeader {
+            magic: MAGIC_ALG2,
+            version: PROTOCOL_VERSION_V1,
+            frame_type: FrameType::LiveL2BookBatch as u16,
+            stream_id,
+            record_count: levels.len() as u32,
+            send_ns,
+        },
+    );
+    buf.extend_from_slice(&book_header.book_seq.to_le_bytes());
+    buf.extend_from_slice(&(levels.len() as u32).to_le_bytes());
+    buf.push(book_header.book_state);
+    buf.push(book_header.is_snapshot);
+    buf.push(book_header.provenance_tier);
+    buf.push(book_header.provenance_modifiers);
+    for lv in levels {
+        buf.extend_from_slice(&lv.price_e9.to_le_bytes());
+        buf.extend_from_slice(&lv.qty_e9.to_le_bytes());
+        buf.extend_from_slice(&lv.side_action_flags.to_le_bytes());
+        buf.extend_from_slice(&lv.order_count.to_le_bytes());
+    }
+    buf
+}
+
+pub fn encode_live_bar_update_batch(
+    stream_id: u32,
+    send_ns: u64,
+    bars: &[LiveBarUpdate],
+) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(HEADER_BYTES + bars.len() * 72);
+    encode_header(
+        &mut buf,
+        FrameHeader {
+            magic: MAGIC_ALG2,
+            version: PROTOCOL_VERSION_V1,
+            frame_type: FrameType::LiveBarUpdateBatch as u16,
+            stream_id,
+            record_count: bars.len() as u32,
+            send_ns,
+        },
+    );
+    for b in bars {
+        buf.extend_from_slice(&b.ts_open_ns.to_le_bytes());
+        buf.extend_from_slice(&b.open_tick.to_le_bytes());
+        buf.extend_from_slice(&b.high_tick.to_le_bytes());
+        buf.extend_from_slice(&b.low_tick.to_le_bytes());
+        buf.extend_from_slice(&b.close_tick.to_le_bytes());
+        buf.extend_from_slice(&b.volume_e9.to_le_bytes());
+        buf.extend_from_slice(&b.buy_vol_e9.to_le_bytes());
+        buf.extend_from_slice(&b.sell_vol_e9.to_le_bytes());
+        buf.extend_from_slice(&b.flags.to_le_bytes());
+    }
+    buf
 }

@@ -22,6 +22,7 @@ pub struct BarSlice {
 pub struct FootprintSlabArena {
     pub bars: Vec<BarSlice>,
     pub cells: Vec<FootprintCell>,
+    pub late_ticks_dropped: u64,
     active_bar_ts_ns: Option<i64>,
     active_cells: BTreeMap<i64, FootprintCell>,
     active_ohlc: Option<(i64, i64, i64, i64)>,
@@ -36,6 +37,7 @@ impl FootprintSlabArena {
         Self {
             bars: Vec::new(),
             cells: Vec::new(),
+            late_ticks_dropped: 0,
             active_bar_ts_ns: None,
             active_cells: BTreeMap::new(),
             active_ohlc: None,
@@ -46,12 +48,30 @@ impl FootprintSlabArena {
         }
     }
 
+    pub fn active_bar_ts_ns(&self) -> Option<i64> {
+        self.active_bar_ts_ns
+    }
+
+    pub fn active_ohlc(&self) -> Option<(i64, i64, i64, i64)> {
+        self.active_ohlc
+    }
+
+    pub fn active_totals(&self) -> (i64, i64, i64) {
+        self.active_totals
+    }
+
     pub fn ingest_tick(&mut self, tick: &NormalizedTick) {
         let bucket = tick.ts_exchange_ns.div_euclid(self.bar_interval_ns) * self.bar_interval_ns;
-        if let Some(cur) = self.active_bar_ts_ns
-            && bucket > cur
-        {
-            self.seal_active_bar();
+        if let Some(cur) = self.active_bar_ts_ns {
+            if bucket < cur {
+                // Fail-closed on backwards out-of-order tick: never rewind active_bar_ts_ns
+                // or corrupt sealed bar boundaries (RTSD-15).
+                self.late_ticks_dropped = self.late_ticks_dropped.saturating_add(1);
+                return;
+            }
+            if bucket > cur {
+                self.seal_active_bar();
+            }
         }
         self.active_bar_ts_ns = Some(bucket);
         let price_tick = PriceE9(tick.price_e9)
@@ -151,7 +171,7 @@ impl FootprintSlabArena {
         self.active_cells.values().copied().collect()
     }
 
-    /// Exact heap memory consumed by contiguous BarSlice + FootprintCell slabs (UV-04 / SV-13).
+    /// Estimated heap memory consumed by contiguous BarSlice + FootprintCell slabs.
     pub fn estimated_heap_bytes(&self) -> usize {
         self.bars.capacity() * std::mem::size_of::<BarSlice>()
             + self.cells.capacity() * std::mem::size_of::<FootprintCell>()
@@ -161,6 +181,13 @@ impl FootprintSlabArena {
 
     /// Evict oldest historical bars beyond `keep_bars`, compacting the contiguous cell slab.
     pub fn evict_oldest_bars(&mut self, keep_bars: usize) {
+        if keep_bars == 0 {
+            self.bars.clear();
+            self.cells.clear();
+            self.bars.shrink_to_fit();
+            self.cells.shrink_to_fit();
+            return;
+        }
         if self.bars.len() <= keep_bars {
             return;
         }

@@ -9,7 +9,8 @@ pub use dispatcher::{
 };
 pub use parsers::{ParseError, kraken_book_crc32, parse_coinbase_trade, parse_kraken_trade};
 pub use ws_client::{
-    FaultEvent, VenueProtocol, WsIngestError, WsSessionStats, run_resilient_ws_session,
+    FaultEvent, VenueProtocol, WsIngestError, WsSessionStats, json_exact_decimal_str,
+    parse_rfc3339_utc_ns, run_resilient_ws_session, run_resilient_ws_session_with_subscribe,
 };
 
 #[cfg(test)]
