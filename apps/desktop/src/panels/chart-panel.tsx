@@ -3,10 +3,13 @@ import {
   CandlestickSeries,
   ColorType,
   HistogramSeries,
+  LineSeries,
   createChart,
   type CandlestickData,
   type HistogramData,
+  type IChartApi,
   type ISeriesApi,
+  type LineData,
   type UTCTimestamp,
 } from "lightweight-charts";
 import { Button } from "@ui-sdk/react/button";
@@ -41,11 +44,20 @@ import {
   type OverlayVisibility,
 } from "../render/webgl2-orderflow-overlay";
 
+export interface StudyOverlaySeries {
+  id: string;
+  label: string;
+  color: string;
+  values: Array<number | null>;
+}
+
 export interface ChartPanelProps {
   transport: TransportAdapter;
   symbol: string;
   timeframe: string;
   tickSizeE9: bigint;
+  studyOverlays?: readonly StudyOverlaySeries[];
+  seriesSnapshotRef?: { current: { times: UTCTimestamp[]; closes: number[]; volumes: number[] } };
 }
 
 export interface ChartOverlayToolbarProps {
@@ -210,7 +222,14 @@ function seedInitialCandles(symbol: string): {
  * 60 fps Chart Panel (Lightweight Charts v5.3.0 + WebGL2 Orderflow Overlay + Clean-Room Drawing Engine).
  * Strictly imperative ref + rAF pipeline — zero React state updates on binary ticks (AGENTS.md #5).
  */
-export function ChartPanel({ transport, symbol, timeframe, tickSizeE9 }: ChartPanelProps) {
+export function ChartPanel({
+  transport,
+  symbol,
+  timeframe,
+  tickSizeE9,
+  studyOverlays = [],
+  seriesSnapshotRef,
+}: ChartPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -240,6 +259,9 @@ export function ChartPanel({ transport, symbol, timeframe, tickSizeE9 }: ChartPa
   magnetRef.current = magnetEnabled;
 
   const drawingEngineRef = useRef<DrawingEngine>(new DrawingEngine());
+  const chartApiRef = useRef<IChartApi | null>(null);
+  const studyLineSeriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+  const latestTimesRef = useRef<UTCTimestamp[]>([]);
   const redrawTriggerRef = useRef<() => void>(() => {});
 
   const syncHistoryMeta = () => {
@@ -305,11 +327,24 @@ export function ChartPanel({ transport, symbol, timeframe, tickSizeE9 }: ChartPa
       scaleMargins: { top: 0.82, bottom: 0 },
     });
 
+    chartApiRef.current = chart;
     const seeded = seedInitialCandles(symbol);
     let activeCandles: CandlestickData<UTCTimestamp>[] = [...seeded.candles];
     let activeVolumes: HistogramData<UTCTimestamp>[] = [...seeded.volumes];
+    const publishSeriesSnapshot = () => {
+      const times = activeCandles.map((c) => c.time);
+      latestTimesRef.current = times;
+      if (seriesSnapshotRef) {
+        seriesSnapshotRef.current = {
+          times,
+          closes: activeCandles.map((c) => c.close),
+          volumes: activeVolumes.map((v) => v.value),
+        };
+      }
+    };
     candleSeries.setData(activeCandles);
     volumeSeries.setData(activeVolumes);
+    publishSeriesSnapshot();
     chart.timeScale().fitContent();
 
     const overlay = new WebGl2OrderflowOverlay(overlayCanvas);
@@ -522,6 +557,7 @@ export function ChartPanel({ transport, symbol, timeframe, tickSizeE9 }: ChartPa
           candleSeries.update(pendingBar);
           if (pendingVol) volumeSeries.update(pendingVol);
         }
+        publishSeriesSnapshot();
         activeBarTimeSec = Number(pendingBar.time);
         if (badgeRef.current) {
           badgeRef.current.textContent = `${symbol} · ${timeframe} · LAST ${pendingBar.close.toFixed(2)} · BARS ${activeCandles.length}`;
@@ -669,11 +705,49 @@ export function ChartPanel({ transport, symbol, timeframe, tickSizeE9 }: ChartPa
       drawingCanvas.removeEventListener("pointerdown", onPointerDown);
       drawingCanvas.removeEventListener("pointermove", onPointerMove);
       if (rafId !== 0) cancelAnimationFrame(rafId);
+      studyLineSeriesRef.current.clear();
+      chartApiRef.current = null;
       overlay.dispose();
       chart.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transport, symbol, timeframe, tickSizeE9]);
+
+  // Synchronize active Study LineSeries overlays without disturbing 60 fps tick loop
+  useEffect(() => {
+    const chart = chartApiRef.current;
+    if (!chart) return;
+    const map = studyLineSeriesRef.current;
+    const wanted = new Set(studyOverlays.map((s) => s.id));
+    for (const [id, series] of map.entries()) {
+      if (!wanted.has(id)) {
+        chart.removeSeries(series);
+        map.delete(id);
+      }
+    }
+    const times = latestTimesRef.current;
+    for (const st of studyOverlays) {
+      let series = map.get(st.id);
+      if (!series) {
+        series = chart.addSeries(LineSeries, {
+          color: st.color,
+          lineWidth: 2,
+          priceLineVisible: false,
+          lastValueVisible: true,
+        });
+        map.set(st.id, series);
+      }
+      const n = Math.min(times.length, st.values.length);
+      const pts: LineData<UTCTimestamp>[] = [];
+      for (let i = 0; i < n; i++) {
+        const v = st.values[i];
+        if (v !== null && Number.isFinite(v)) {
+          pts.push({ time: times[i], value: v });
+        }
+      }
+      series.setData(pts);
+    }
+  }, [studyOverlays, symbol, timeframe]);
 
   const handleToggleVisibility = (key: keyof OverlayVisibility) => {
     setVisibility((prev) => ({ ...prev, [key]: !prev[key] }));

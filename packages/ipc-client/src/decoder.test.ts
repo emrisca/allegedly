@@ -277,3 +277,62 @@ describe("Rust allegedly-ipc golden binary fixtures (T07 parity)", () => {
     expect(status.provenanceTier).toBe(ProvenanceTier.ExactTickAggr);
   });
 });
+
+describe("Stage D Slice 4 JSON IPC commands (Studies, Replay, Settings-as-Code)", () => {
+  it("evaluates built-in studies, verifies replay determinism, and enforces safety-locked settings cascade", async () => {
+    const adapter = new OfflineSimTransportAdapter();
+
+    const sma = await adapter.invokeJson<
+      { id: string; builtin: string; period: number; closes: number[] },
+      { label: string; values: Array<number | null> }
+    >("run_study", {
+      id: "sma-3",
+      builtin: "sma",
+      period: 3,
+      closes: [10, 20, 30, 40],
+    });
+    expect(sma.label).toBe("SMA(3)");
+    expect(sma.values).toEqual([null, null, 20, 30]);
+
+    const r1 = await adapter.invokeJson<{ action: string; cursor?: number }, { sha256_hex: string; determinism_verified: boolean }>(
+      "control_replay",
+      { action: "seek", cursor: 500 },
+    );
+    const r2 = await adapter.invokeJson<{ action: string }, { sha256_hex: string; determinism_verified: boolean }>(
+      "control_replay",
+      { action: "verify_determinism" },
+    );
+    expect(r2.determinism_verified).toBe(true);
+    expect(r2.sha256_hex).toBe(r1.sha256_hex);
+
+    await expect(
+      adapter.invokeJson("update_setting_override", {
+        key: "updates.checkOnStartup",
+        value: "true",
+      }),
+    ).rejects.toThrow(/Safety invariant lock/);
+
+    const settings = await adapter.invokeJson<
+      { key: string; value: string },
+      Array<{ key: string; value: string; is_overridden: boolean }>
+    >("update_setting_override", {
+      key: "orderflow.imbalance_ratio_bps",
+      value: "35000",
+    });
+    expect(
+      settings.find((s) => s.key === "orderflow.imbalance_ratio_bps")?.is_overridden,
+    ).toBe(true);
+
+    const toml = await adapter.invokeJson<
+      { name: string; symbol: string; timeframe: string },
+      string
+    >("export_workspace_toml", {
+      name: "Default Desk",
+      symbol: "BTC/USD",
+      timeframe: "1m",
+    });
+    expect(toml).toContain("orderflow.imbalance_ratio_bps = 35000");
+
+    adapter.dispose();
+  });
+});

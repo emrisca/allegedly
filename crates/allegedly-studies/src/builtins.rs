@@ -73,3 +73,46 @@ pub fn wilder_rsi(values: &[f64], period: usize) -> Vec<f64> {
     }
     out
 }
+
+/// Session Volume-Weighted Average Price using centered offset for numerical stability.
+pub fn vwap_series(typical_prices: &[f64], volumes: &[f64]) -> Vec<f64> {
+    let n = typical_prices.len().min(volumes.len());
+    let mut out = vec![f64::NAN; n];
+    if n == 0 {
+        return out;
+    }
+    let anchor = typical_prices[0];
+    let mut cum_pv = 0.0;
+    let mut cum_v = 0.0;
+    for i in 0..n {
+        let v = volumes[i].max(0.0);
+        cum_pv += (typical_prices[i] - anchor) * v;
+        cum_v += v;
+        if cum_v > 0.0 {
+            out[i] = anchor + (cum_pv / cum_v);
+        }
+    }
+    out
+}
+
+/// Per-bar Footprint Delta (`ask_buy_vol - bid_sell_vol`).
+pub fn footprint_delta_series(buy_volumes: &[f64], sell_volumes: &[f64]) -> Vec<f64> {
+    let n = buy_volumes.len().min(sell_volumes.len());
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        out.push(buy_volumes[i] - sell_volumes[i]);
+    }
+    out
+}
+
+/// Cumulative Volume Delta (`running sum of (buy_vol - sell_vol)`).
+pub fn cvd_series(buy_volumes: &[f64], sell_volumes: &[f64]) -> Vec<f64> {
+    let deltas = footprint_delta_series(buy_volumes, sell_volumes);
+    let mut out = Vec::with_capacity(deltas.len());
+    let mut acc = 0.0;
+    for d in deltas {
+        acc += d;
+        out.push(acc);
+    }
+    out
+}

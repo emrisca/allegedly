@@ -11,4 +11,5 @@ workspace = true
 [dependencies]
 allegedly-core.workspace = true
 mlua.workspace = true
+serde.workspace = true
 thiserror.workspace = true

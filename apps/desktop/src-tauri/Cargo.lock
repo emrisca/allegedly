@@ -61,6 +61,8 @@ dependencies = [
  "allegedly-app",
  "allegedly-core",
  "allegedly-ipc",
+ "allegedly-replay",
+ "allegedly-studies",
  "serde",
  "serde_json",
  "tauri",
@@ -117,6 +119,8 @@ version = "0.1.0"
 dependencies = [
  "allegedly-core",
  "allegedly-orderflow",
+ "allegedly-storage",
+ "serde",
  "sha2 0.10.9",
 ]
 
@@ -139,6 +143,7 @@ version = "0.1.0"
 dependencies = [
  "allegedly-core",
  "mlua",
+ "serde",
  "thiserror 2.0.21",
 ]
 

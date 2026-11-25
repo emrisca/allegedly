@@ -57,6 +57,67 @@ export interface PaperAccountSnapshot {
   orders: PaperOrderTicket[];
 }
 
+export type BuiltinStudyKind =
+  | "sma"
+  | "ema"
+  | "wilder_rsi"
+  | "vwap"
+  | "cvd"
+  | "footprint_delta";
+
+export interface StudyRunRequest {
+  id: string;
+  builtin?: BuiltinStudyKind | null;
+  period?: number | null;
+  luau_script?: string | null;
+  closes: number[];
+  volumes?: number[];
+  buy_volumes?: number[];
+  sell_volumes?: number[];
+}
+
+export interface StudyRunResponse {
+  id: string;
+  label: string;
+  overlay: boolean;
+  values: Array<number | null>;
+  memory_pool_reserved_bytes: number;
+  memory_pool_cap_bytes: number;
+}
+
+export type ReplaySpeed = "1x" | "5x" | "50x" | "max";
+
+export type ReplayControlAction =
+  | { action: "play" }
+  | { action: "pause" }
+  | { action: "step" }
+  | { action: "seek"; cursor: number }
+  | { action: "set_speed"; speed: ReplaySpeed }
+  | { action: "reset" }
+  | { action: "verify_determinism" };
+
+export interface ReplayStatusSnapshot {
+  playing: boolean;
+  speed: ReplaySpeed;
+  cursor: number;
+  total_ticks: number;
+  bars_sealed: number;
+  final_vwap_e9: string | null;
+  sha256_hex: string;
+  determinism_verified: boolean;
+}
+
+export type ConfigLayerKind = "defaults" | "global" | "workspace" | "template" | "instance";
+
+export interface ResolvedSetting {
+  key: string;
+  value: string;
+  source_layer: ConfigLayerKind;
+  inherited_value: string | null;
+  is_overridden: boolean;
+  locked: boolean;
+}
+
 export interface TransportAdapter {
   readonly kind: "tauri" | "loopback-ws" | "offline-sim";
   invokeJson<TReq, TRes>(cmd: string, payload: TReq): Promise<TRes>;

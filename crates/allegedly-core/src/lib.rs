@@ -3,7 +3,7 @@ pub mod domain;
 pub mod fixed;
 pub mod provenance;
 
-pub use config::{ConfigCascade, ConfigLayer};
+pub use config::{ConfigCascade, ConfigLayer, ConfigLayerKind, ResolvedSetting};
 pub use domain::{
     AggressorSide, AssetClass, BookLevel, InstrumentId, InstrumentMeta, NormalizedTick, Venue,
 };
@@ -86,6 +86,42 @@ mod tests {
         assert!(cascade.modified_instance_keys().is_empty());
         assert_eq!(cascade.resolve("imbalance_ratio_bps"), Some("30000"));
         assert_eq!(cascade.export_instance_toml(), "");
+    }
+
+    #[test]
+    fn sv06_atworkspace_toml_byte_exact_roundtrip_and_safety_locks() {
+        let mut cascade = ConfigCascade::with_v01_defaults();
+        assert!(
+            cascade
+                .try_set_instance_override("updates.checkOnStartup", "true")
+                .is_err()
+        );
+        assert!(
+            cascade
+                .try_set_instance_override("execution.live_armed", "true")
+                .is_err()
+        );
+        cascade
+            .workspace
+            .values
+            .insert("ui.density".into(), "\"comfortable\"".into());
+        cascade
+            .try_set_instance_override("orderflow.imbalance_ratio_bps", "35000")
+            .unwrap();
+
+        let toml_a = cascade.export_atworkspace_toml("Default Desk", "BTC/USD", "1m");
+        let mut reloaded = ConfigCascade::with_v01_defaults();
+        reloaded.import_atworkspace_toml(&toml_a);
+        let toml_b = reloaded.export_atworkspace_toml("Default Desk", "BTC/USD", "1m");
+        assert_eq!(toml_a, toml_b);
+        assert_eq!(
+            reloaded.resolve_with_source("orderflow.imbalance_ratio_bps"),
+            Some((ConfigLayerKind::Instance, "35000"))
+        );
+        assert_eq!(
+            reloaded.resolve_with_source("ui.density"),
+            Some((ConfigLayerKind::Workspace, "\"comfortable\""))
+        );
     }
 
     #[test]

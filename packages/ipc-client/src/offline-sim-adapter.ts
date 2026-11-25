@@ -24,6 +24,12 @@ import type {
   PaperAccountSnapshot,
   PaperOrderRequest,
   PaperOrderTicket,
+  ReplayControlAction,
+  ReplaySpeed,
+  ReplayStatusSnapshot,
+  ResolvedSetting,
+  StudyRunRequest,
+  StudyRunResponse,
   TransportAdapter,
   WorkspacePatch,
   WorkspacePatchResult,
@@ -80,6 +86,25 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
   private readonly orders: PaperOrderTicket[] = [];
   private readonly netPositions = new Map<string, bigint>();
   private readonly listeners = new Map<number, Set<(frame: ArrayBuffer) => void>>();
+  private replayPlaying = false;
+  private replaySpeed: ReplaySpeed = "1x";
+  private replayCursor = 64;
+  private readonly replayTotalTicks = 2000;
+  private replayVerified = false;
+  private readonly defaultSettings: Record<string, string> = {
+    "updates.checkOnStartup": "false",
+    "execution.live_armed": "false",
+    "execution.mode": "\"paper_sim\"",
+    "chart.max_active_bars": "6000",
+    "chart.trim_target_bars": "5000",
+    "orderflow.imbalance_ratio_bps": "30000",
+    "orderflow.vrvp_value_area_bps": "7000",
+    "orderflow.tpo_period_minutes": "30",
+    "study.global_memory_cap_mib": "64",
+    "ui.density": "\"compact\"",
+    "ui.provenance_badge": "true",
+  };
+  private readonly instanceOverrides = new Map<string, string>();
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
 
   private nextRand(): bigint {
@@ -339,9 +364,287 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
         return this.snapshotPaperAccount() as TRes;
       }
 
+      case "run_study": {
+        const req = payload as unknown as StudyRunRequest;
+        return this.evalOfflineStudy(req) as TRes;
+      }
+
+      case "get_replay_status":
+        return this.snapshotReplay() as TRes;
+
+      case "control_replay": {
+        const act = payload as unknown as ReplayControlAction;
+        return this.applyOfflineReplay(act) as TRes;
+      }
+
+      case "get_settings_cascade":
+        return this.snapshotSettings() as TRes;
+
+      case "update_setting_override": {
+        const { key, value } = payload as unknown as { key: string; value: string };
+        if ((key === "updates.checkOnStartup" || key === "execution.live_armed") && value.trim() !== "false") {
+          throw new Error(`Safety invariant lock: ${key} is fixed to false in v0.1 (SV-01 / ADR-0009)`);
+        }
+        this.instanceOverrides.set(key, value);
+        return this.snapshotSettings() as TRes;
+      }
+
+      case "reset_setting_override": {
+        const { key } = payload as unknown as { key: string };
+        this.instanceOverrides.delete(key);
+        return this.snapshotSettings() as TRes;
+      }
+
+      case "export_workspace_toml": {
+        const { name, symbol, timeframe } = payload as unknown as {
+          name: string;
+          symbol: string;
+          timeframe: string;
+        };
+        const lines = [
+          "# Allegedly Workspace Settings-as-Code (.atworkspace.toml)",
+          "schema_version = 1",
+          `workspace_name = "${name.replaceAll("\"", "")}"`,
+          `active_symbol = "${symbol.replaceAll("\"", "")}"`,
+          `active_timeframe = "${timeframe.replaceAll("\"", "")}"`,
+          "",
+          "[workspace]",
+          "",
+          "[template]",
+          "",
+          "[instance]",
+        ];
+        const sortedKeys = [...this.instanceOverrides.keys()].sort();
+        for (const k of sortedKeys) {
+          lines.push(`${k} = ${this.instanceOverrides.get(k)}`);
+        }
+        return (lines.join("\n") + "\n") as TRes;
+      }
+
       default:
         throw new Error(`Unknown offline-sim command: ${cmd}`);
     }
+  }
+
+  private evalOfflineStudy(req: StudyRunRequest): StudyRunResponse {
+    const closes = req.closes ?? [];
+    const period = Math.max(1, Math.min(500, req.period ?? 14));
+    const cap = 64 * 1024 * 1024;
+
+    if (req.luau_script) {
+      if (/(os|io|package|debug|dofile|loadfile|require)/.test(req.luau_script)) {
+        throw new Error("Luau sandbox blocked forbidden global access");
+      }
+      // Deterministic offline preview evaluator matching simple close-series transforms
+      const values = closes.map((c, idx) =>
+        idx === 0 ? c : (closes[idx - 1] + c) / 2,
+      );
+      return {
+        id: req.id,
+        label: `Luau (${req.id})`,
+        overlay: true,
+        values,
+        memory_pool_reserved_bytes: 0,
+        memory_pool_cap_bytes: cap,
+      };
+    }
+
+    const kind = req.builtin ?? "sma";
+    const values: Array<number | null> = new Array(closes.length).fill(null);
+
+    if (kind === "sma") {
+      let sum = 0;
+      for (let i = 0; i < closes.length; i++) {
+        sum += closes[i];
+        if (i >= period) sum -= closes[i - period];
+        if (i + 1 >= period) values[i] = sum / period;
+      }
+      return {
+        id: req.id,
+        label: `SMA(${period})`,
+        overlay: true,
+        values,
+        memory_pool_reserved_bytes: 0,
+        memory_pool_cap_bytes: cap,
+      };
+    }
+
+    if (kind === "ema") {
+      if (closes.length >= period) {
+        const k = 2 / (period + 1);
+        let sum = 0;
+        for (let i = 0; i < period; i++) sum += closes[i];
+        let prev = sum / period;
+        values[period - 1] = prev;
+        for (let i = period; i < closes.length; i++) {
+          prev = (closes[i] - prev) * k + prev;
+          values[i] = prev;
+        }
+      }
+      return {
+        id: req.id,
+        label: `EMA(${period})`,
+        overlay: true,
+        values,
+        memory_pool_reserved_bytes: 0,
+        memory_pool_cap_bytes: cap,
+      };
+    }
+
+    if (kind === "wilder_rsi") {
+      if (closes.length > period) {
+        let g = 0;
+        let l = 0;
+        for (let i = 1; i <= period; i++) {
+          const d = closes[i] - closes[i - 1];
+          if (d >= 0) g += d;
+          else l -= d;
+        }
+        let ag = g / period;
+        let al = l / period;
+        values[period] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+        for (let i = period + 1; i < closes.length; i++) {
+          const d = closes[i] - closes[i - 1];
+          ag = (ag * (period - 1) + (d > 0 ? d : 0)) / period;
+          al = (al * (period - 1) + (d < 0 ? -d : 0)) / period;
+          values[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+        }
+      }
+      return {
+        id: req.id,
+        label: `RSI(${period})`,
+        overlay: false,
+        values,
+        memory_pool_reserved_bytes: 0,
+        memory_pool_cap_bytes: cap,
+      };
+    }
+
+    if (kind === "vwap") {
+      const vols = req.volumes && req.volumes.length === closes.length ? req.volumes : closes.map(() => 1);
+      const anchor = closes[0] ?? 0;
+      let cpv = 0;
+      let cv = 0;
+      for (let i = 0; i < closes.length; i++) {
+        const v = Math.max(0, vols[i]);
+        cpv += (closes[i] - anchor) * v;
+        cv += v;
+        values[i] = cv > 0 ? anchor + cpv / cv : null;
+      }
+      return {
+        id: req.id,
+        label: "VWAP",
+        overlay: true,
+        values,
+        memory_pool_reserved_bytes: 0,
+        memory_pool_cap_bytes: cap,
+      };
+    }
+
+    const buy = req.buy_volumes ?? [];
+    const sell = req.sell_volumes ?? [];
+    const n = Math.min(buy.length, sell.length);
+    const out: Array<number | null> = [];
+    let acc = 0;
+    for (let i = 0; i < n; i++) {
+      const d = buy[i] - sell[i];
+      acc += d;
+      out.push(kind === "cvd" ? acc : d);
+    }
+    return {
+      id: req.id,
+      label: kind === "cvd" ? "CVD" : "Footprint Delta",
+      overlay: false,
+      values: out,
+      memory_pool_reserved_bytes: 0,
+      memory_pool_cap_bytes: cap,
+    };
+  }
+
+  private replayStepForSpeed(): number {
+    if (this.replaySpeed === "1x") return 8;
+    if (this.replaySpeed === "5x") return 40;
+    if (this.replaySpeed === "50x") return 400;
+    return 2000;
+  }
+
+  private deterministicHashHex(cursor: number): string {
+    // Deterministic 64-hex digest bound solely to cursor (speed-invariant SV-09 preview)
+    let h1 = 0x6a09e667n ^ BigInt(cursor * 2654435761);
+    let h2 = 0xbb67ae85n ^ (BigInt(cursor) * 0x9e3779b1n);
+    const parts: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      h1 = ((h1 << 5n) ^ (h1 >> 3n) ^ (h2 + BigInt(i))) & 0xffffffffn;
+      h2 = ((h2 << 7n) ^ (h2 >> 2n) ^ (h1 + 0x517cc1b7n)) & 0xffffffffn;
+      parts.push(h1.toString(16).padStart(8, "0"));
+    }
+    return parts.join("");
+  }
+
+  private snapshotReplay(): ReplayStatusSnapshot {
+    return {
+      playing: this.replayPlaying,
+      speed: this.replaySpeed,
+      cursor: this.replayCursor,
+      total_ticks: this.replayTotalTicks,
+      bars_sealed: Math.max(1, Math.floor(this.replayCursor / 60)),
+      final_vwap_e9: this.currentPriceE9.toString(),
+      sha256_hex: this.deterministicHashHex(this.replayCursor),
+      determinism_verified: this.replayVerified,
+    };
+  }
+
+  private applyOfflineReplay(act: ReplayControlAction): ReplayStatusSnapshot {
+    switch (act.action) {
+      case "play":
+        this.replayPlaying = true;
+        if (this.replayCursor >= this.replayTotalTicks) this.replayCursor = 0;
+        this.replayCursor = Math.min(this.replayTotalTicks, this.replayCursor + this.replayStepForSpeed());
+        if (this.replayCursor >= this.replayTotalTicks) this.replayPlaying = false;
+        break;
+      case "pause":
+        this.replayPlaying = false;
+        break;
+      case "step":
+        this.replayPlaying = false;
+        this.replayCursor = Math.min(this.replayTotalTicks, this.replayCursor + this.replayStepForSpeed());
+        break;
+      case "seek":
+        this.replayCursor = Math.max(0, Math.min(this.replayTotalTicks, act.cursor));
+        break;
+      case "set_speed":
+        this.replaySpeed = act.speed;
+        break;
+      case "reset":
+        this.replayPlaying = false;
+        this.replayCursor = 0;
+        this.replayVerified = false;
+        break;
+      case "verify_determinism":
+        if (this.replayCursor === 0) this.replayCursor = this.replayTotalTicks;
+        this.replayVerified = true;
+        break;
+    }
+    return this.snapshotReplay();
+  }
+
+  private snapshotSettings(): ResolvedSetting[] {
+    const keys = new Set([
+      ...Object.keys(this.defaultSettings),
+      ...this.instanceOverrides.keys(),
+    ]);
+    return [...keys].sort().map((key) => {
+      const inherited = this.defaultSettings[key] ?? null;
+      const hasOverride = this.instanceOverrides.has(key);
+      return {
+        key,
+        value: hasOverride ? this.instanceOverrides.get(key)! : (inherited ?? ""),
+        source_layer: hasOverride ? "instance" : "defaults",
+        inherited_value: inherited,
+        is_overridden: hasOverride,
+        locked: key === "updates.checkOnStartup" || key === "execution.live_armed",
+      };
+    });
   }
 
   private snapshotPaperAccount(): PaperAccountSnapshot {

@@ -1,7 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use allegedly_app::{AllegedlyRuntime, BootConfig};
+use allegedly_core::ResolvedSetting;
 use allegedly_ipc::{WorkspacePatch, WorkspacePatchResult, WorkspaceState};
+use allegedly_replay::{ReplayControlAction, ReplayStatusSnapshot};
+use allegedly_studies::{StudyRunRequest, StudyRunResponse};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Mutex;
@@ -36,6 +39,24 @@ struct PaperAccountSnapshot {
     live_armed: bool,
     net_position_e9: BTreeMap<String, String>,
     orders: Vec<PaperOrderTicket>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SettingOverridePayload {
+    key: String,
+    value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SettingResetPayload {
+    key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WorkspaceExportPayload {
+    name: String,
+    symbol: String,
+    timeframe: String,
 }
 
 struct DesktopState {
@@ -174,6 +195,63 @@ fn kill_switch_cancel_all(state: State<'_, DesktopState>) -> PaperAccountSnapsho
 }
 
 #[tauri::command]
+fn run_study(
+    state: State<'_, DesktopState>,
+    payload: StudyRunRequest,
+) -> Result<StudyRunResponse, String> {
+    let rt = state.runtime.lock().expect("runtime lock");
+    rt.run_study(&payload)
+}
+
+#[tauri::command]
+fn get_replay_status(state: State<'_, DesktopState>) -> ReplayStatusSnapshot {
+    let rt = state.runtime.lock().expect("runtime lock");
+    rt.replay_status()
+}
+
+#[tauri::command]
+fn control_replay(
+    state: State<'_, DesktopState>,
+    payload: ReplayControlAction,
+) -> ReplayStatusSnapshot {
+    let mut rt = state.runtime.lock().expect("runtime lock");
+    rt.control_replay(payload)
+}
+
+#[tauri::command]
+fn get_settings_cascade(state: State<'_, DesktopState>) -> Vec<ResolvedSetting> {
+    let rt = state.runtime.lock().expect("runtime lock");
+    rt.resolved_settings()
+}
+
+#[tauri::command]
+fn update_setting_override(
+    state: State<'_, DesktopState>,
+    payload: SettingOverridePayload,
+) -> Result<Vec<ResolvedSetting>, String> {
+    let mut rt = state.runtime.lock().expect("runtime lock");
+    rt.set_setting_override(payload.key, payload.value)
+}
+
+#[tauri::command]
+fn reset_setting_override(
+    state: State<'_, DesktopState>,
+    payload: SettingResetPayload,
+) -> Vec<ResolvedSetting> {
+    let mut rt = state.runtime.lock().expect("runtime lock");
+    rt.reset_setting_override(&payload.key)
+}
+
+#[tauri::command]
+fn export_workspace_toml(
+    state: State<'_, DesktopState>,
+    payload: WorkspaceExportPayload,
+) -> String {
+    let rt = state.runtime.lock().expect("runtime lock");
+    rt.export_workspace_toml(&payload.name, &payload.symbol, &payload.timeframe)
+}
+
+#[tauri::command]
 fn poll_binary_frame(state: State<'_, DesktopState>, _stream_id: u32) -> Option<Vec<u8>> {
     let mut rt = state.runtime.lock().expect("runtime lock");
     rt.step_sim_batch(8, now_ns())
@@ -197,6 +275,13 @@ fn main() {
             get_paper_account,
             submit_paper_order,
             kill_switch_cancel_all,
+            run_study,
+            get_replay_status,
+            control_replay,
+            get_settings_cascade,
+            update_setting_override,
+            reset_setting_override,
+            export_workspace_toml,
             poll_binary_frame,
         ])
         .run(tauri::generate_context!())
