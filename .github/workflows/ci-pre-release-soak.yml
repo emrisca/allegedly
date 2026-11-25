@@ -11,7 +11,7 @@ on:
 jobs:
   public-marketdata-soak:
     name: Public Read-Only Kraken + Coinbase Soak (0 Credentials)
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

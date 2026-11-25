@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +51,11 @@ jobs:
         run: |
           cargo fmt --all -- --check
           cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+      - name: Prepare placeholder frontendDist for clean-checkout Tauri compile checks
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/dist
+          printf '<!doctype html><html><body></body></html>\n' > apps/desktop/dist/index.html
       - name: Clippy (-D warnings, workspace + Tauri shell)
         run: |
           cargo clippy --workspace --all-targets -- -D warnings
@@ -65,7 +70,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

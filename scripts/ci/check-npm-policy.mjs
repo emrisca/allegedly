@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const repoRoot =
-  process.argv[2] || path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  process.argv[2] || path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const REQUIRED_EXACT_PINS = new Map([
   ["@ui-sdk/react", "0.1.0-beta.17"],
