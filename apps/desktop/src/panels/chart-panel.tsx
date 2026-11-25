@@ -5,10 +5,12 @@ import {
   createChart,
   HistogramSeries,
   LineSeries,
+  LineStyle,
   PriceScaleMode,
   type CandlestickData,
   type HistogramData,
   type IChartApi,
+  type IPriceLine,
   type IPrimitivePaneRenderer,
   type IPrimitivePaneView,
   type ISeriesApi,
@@ -19,6 +21,12 @@ import {
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
+import {
+  DEFAULT_CHART_SETTINGS,
+  DEFAULT_CHART_TEMPLATES,
+  type ChartSettings,
+  type ChartSettingsTemplate,
+} from "@allegedly/ui-chrome";
 import { Button } from "@ui-sdk/react/button";
 import { Toggle } from "@ui-sdk/react/toggle";
 import { Toolbar } from "@ui-sdk/react/toolbar";
@@ -47,6 +55,10 @@ import {
   type PlacedDrawingKind,
 } from "../drawings/drawing-engine";
 import { getSymbolMeta } from "../data/symbols";
+import {
+  ChartContextMenu,
+  type ChartContextMenuState,
+} from "../components/chart-context-menu";
 import { applyBarHysteresis } from "../render/hysteresis";
 import {
   WebGl2OrderflowOverlay,
@@ -76,6 +88,16 @@ export interface ChartHistoryActions {
   clear: () => void;
 }
 
+export interface ChartOrderOverlay {
+  order_id: string;
+  symbol: string;
+  side: string;
+  order_type: string;
+  qty_e9: string;
+  limit_price_e9?: string | null;
+  status: string;
+}
+
 export interface ChartPanelProps {
   transport: TransportAdapter;
   symbol: string;
@@ -99,8 +121,127 @@ export interface ChartPanelProps {
   onHistoryMetaChange?: (meta: { canUndo: boolean; canRedo: boolean; count: number }) => void;
   onRemoveStudy?: (id: string) => void;
   onLivePriceSample?: (symbol: string, last: number) => void;
+  /** Live Chart Settings + Templates + Context Menu actions */
+  chartSettings?: ChartSettings;
+  replayOpen?: boolean;
+  chartTemplates?: readonly ChartSettingsTemplate[];
+  onApplyChartTemplate?: (template: ChartSettingsTemplate) => void;
+  onApplyChartDefaults?: () => void;
+  onOpenSettings?: () => void;
+  onSubmitOrderAtPrice?: (
+    side: "buy" | "sell",
+    orderType: "market" | "limit",
+    explicitPrice?: number,
+  ) => void;
+  onOpenOrderTicket?: () => void;
+  onClearAllStudies?: () => void;
+  onOpenObjectTree?: () => void;
+  activeOrders?: readonly ChartOrderOverlay[];
   /** Render legacy inline toolbar when used standalone */
   showInlineToolbar?: boolean;
+}
+
+function getPrecisionDigits(cfg: ChartSettings, defaultDecimals: number): number {
+  switch (cfg.symbol.precision) {
+    case "1/100":
+      return 2;
+    case "1/1000":
+      return 3;
+    case "1/10000":
+      return 4;
+    default:
+      return defaultDecimals;
+  }
+}
+
+function formatChartTimestamp(time: Time, cfg: ChartSettings): string {
+  const sec = typeof time === "number" ? time : 0;
+  if (!Number.isFinite(sec) || sec <= 0) return String(time);
+  const date = new Date(sec * 1000);
+  const tz = cfg.symbol.timezone || "America/Los_Angeles";
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const weekday = get("weekday");
+    const day = get("day");
+    const month = get("month");
+    const year2 = get("year");
+    const year4 = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      year: "numeric",
+    }).format(date);
+    const monthNum = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      month: "2-digit",
+    }).format(date);
+
+    const dowPrefix = cfg.scales.dayOfWeekOnLabels ? `${weekday} ` : "";
+    switch (cfg.scales.dateFormat) {
+      case "yyyy-MM-dd":
+        return `${dowPrefix}${year4}-${monthNum}-${day}`;
+      case "MM/dd/yyyy":
+        return `${dowPrefix}${monthNum}/${day}/${year4}`;
+      case "dd MMM 'yy":
+        return `${dowPrefix}${day} ${month} '${year2}`;
+      case "ddd dd MMM 'yy":
+      default:
+        return `${dowPrefix}${day} ${month} '${year2}`;
+    }
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+function getTimeframeDurationSec(tf: string): number {
+  switch (tf) {
+    case "1m":
+      return 60;
+    case "5m":
+      return 300;
+    case "15m":
+      return 900;
+    case "30m":
+      return 1800;
+    case "1h":
+      return 3600;
+    case "4h":
+      return 14400;
+    case "W":
+      return 7 * 86400;
+    case "D":
+    default:
+      return 86400;
+  }
+}
+
+function formatCountdownClock(remainingSec: number): string {
+  const s = Math.max(0, Math.floor(remainingSec));
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return hrs > 0 ? `${pad(hrs)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const cleaned = hex.replace("#", "").trim();
+  if (cleaned.length !== 6) return `rgba(31, 34, 44, ${alpha})`;
+  const r = parseInt(cleaned.slice(0, 2), 16);
+  const g = parseInt(cleaned.slice(2, 4), 16);
+  const b = parseInt(cleaned.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) {
+    return `rgba(31, 34, 44, ${alpha})`;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 export interface ChartOverlayToolbarProps {
@@ -578,8 +719,20 @@ export function ChartPanel({
   onHistoryMetaChange,
   onRemoveStudy,
   onLivePriceSample,
+  chartSettings,
+  replayOpen = false,
+  chartTemplates = DEFAULT_CHART_TEMPLATES,
+  onApplyChartTemplate,
+  onApplyChartDefaults,
+  onOpenSettings,
+  onSubmitOrderAtPrice,
+  onOpenOrderTicket,
+  onClearAllStudies,
+  onOpenObjectTree,
+  activeOrders = [],
   showInlineToolbar = false,
 }: ChartPanelProps) {
+  const effectiveSettings = chartSettings ?? DEFAULT_CHART_SETTINGS;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const pointerSurfaceRef = useRef<HTMLDivElement | null>(null);
   const ohlcRef = useRef<HTMLSpanElement | null>(null);
@@ -589,7 +742,13 @@ export function ChartPanel({
     vrvp: false,
     tpo: false,
   });
-  const [showVolume, setShowVolume] = useState<boolean>(true);
+  const [showVolume, setShowVolume] = useState<boolean>(effectiveSettings.statusLine.volume);
+  const [contextMenu, setContextMenu] = useState<ChartContextMenuState | null>(null);
+  const [lockCursorByTime, setLockCursorByTime] = useState<boolean>(false);
+  const [tableViewOpen, setTableViewOpen] = useState<boolean>(false);
+  const [alerts, setAlerts] = useState<Array<{ id: string; symbol: string; price: number }>>([]);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [countdownText, setCountdownText] = useState<string>("");
   const [scaleMenuOpen, setScaleMenuOpen] = useState<boolean>(false);
   const [priceScaleMode, setPriceScaleMode] = useState<PriceScaleMode>(PriceScaleMode.Normal);
   const [invertScale, setInvertScale] = useState<boolean>(false);
@@ -637,6 +796,9 @@ export function ChartPanel({
   const candleStyleRef = useRef<"monochrome" | "classic">(candleStyle);
   candleStyleRef.current = candleStyle;
 
+  const chartSettingsRef = useRef<ChartSettings>(effectiveSettings);
+  chartSettingsRef.current = effectiveSettings;
+
   const onLivePriceSampleRef = useRef(onLivePriceSample);
   onLivePriceSampleRef.current = onLivePriceSample;
 
@@ -645,8 +807,26 @@ export function ChartPanel({
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const studyLineSeriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+  const priceLinesRef = useRef<IPriceLine[]>([]);
   const latestTimesRef = useRef<UTCTimestamp[]>([]);
+  const latestCandlesRef = useRef<CandlestickData<UTCTimestamp>[]>([]);
+  const lastCrosshairPriceRef = useRef<number | null>(null);
   const redrawTriggerRef = useRef<() => void>(() => {});
+  const toastTimerRef = useRef<number | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    if (chartSettingsRef.current.alerts.autoHideToasts) {
+      toastTimerRef.current = window.setTimeout(() => {
+        setToastMsg(null);
+        toastTimerRef.current = null;
+      }, 2800);
+    }
+  };
 
   const syncHistoryMeta = () => {
     const engine = drawingEngineRef.current;
@@ -692,44 +872,298 @@ export function ChartPanel({
     redrawTriggerRef.current();
   }, [visibility]);
 
+  // Sync volume histogram visibility with Status line Volume checkbox
   useEffect(() => {
-    const cs = candleSeriesRef.current;
-    if (!cs) return;
-    if (candleStyle === "monochrome") {
-      cs.applyOptions({
-        upColor: "#b8c0cf",
-        downColor: "#656c7c",
-        borderUpColor: "#c5cddb",
-        borderDownColor: "#656c7c",
-        wickUpColor: "#9aa2b2",
-        wickDownColor: "#656c7c",
-      });
-    } else {
-      cs.applyOptions({
-        upColor: "#26a69a",
-        downColor: "#ef5350",
-        borderUpColor: "#26a69a",
-        borderDownColor: "#ef5350",
-        wickUpColor: "#26a69a",
-        wickDownColor: "#ef5350",
-      });
-    }
-  }, [candleStyle]);
+    setShowVolume(effectiveSettings.statusLine.volume);
+  }, [effectiveSettings.statusLine.volume]);
 
+  // Apply all live ChartSettings (Symbol, Canvas, Scales, Date format) to Lightweight Charts
   useEffect(() => {
     const chart = chartApiRef.current;
-    if (!chart) return;
+    const cs = candleSeriesRef.current;
+    if (!chart || !cs) return;
+
+    const cfg = effectiveSettings;
+    const symMetaLocal = getSymbolMeta(symbol);
+    const digits = getPrecisionDigits(cfg, symMetaLocal.decimals);
     const targetMode = effectiveLogScale
       ? PriceScaleMode.Logarithmic
       : priceScaleMode === PriceScaleMode.Logarithmic
         ? PriceScaleMode.Normal
         : priceScaleMode;
-    chart.priceScale("right").applyOptions({
-      autoScale,
-      invertScale,
-      mode: targetMode,
+
+    const topMargin = Math.max(0, Math.min(0.45, cfg.canvas.marginTopPct / 100));
+    const bottomMargin = Math.max(0, Math.min(0.45, cfg.canvas.marginBottomPct / 100));
+    const isLeftScale = cfg.scales.scalesPlacement === "left";
+
+    chart.applyOptions({
+      layout: {
+        background:
+          cfg.canvas.backgroundType === "gradient"
+            ? {
+                type: ColorType.VerticalGradient,
+                topColor: cfg.canvas.backgroundColor,
+                bottomColor: cfg.canvas.backgroundColorBottom,
+              }
+            : {
+                type: ColorType.Solid,
+                color: cfg.canvas.backgroundColor,
+              },
+        textColor: cfg.canvas.scalesTextColor,
+        fontSize: cfg.canvas.scalesFontSize,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: {
+          visible: cfg.canvas.vertGridLines,
+          color: cfg.canvas.vertGridColor,
+        },
+        horzLines: {
+          visible: cfg.canvas.horzGridLines,
+          color: cfg.canvas.horzGridColor,
+        },
+      },
+      crosshair: {
+        vertLine: {
+          color: cfg.canvas.crosshairColor,
+          labelBackgroundColor: "#2b3040",
+        },
+        horzLine: {
+          color: cfg.canvas.crosshairColor,
+          labelBackgroundColor: "#2b3040",
+        },
+      },
+      leftPriceScale: {
+        visible: isLeftScale,
+        borderVisible: cfg.canvas.scalesLinesVisible,
+        borderColor: cfg.canvas.scalesLineColor,
+        autoScale,
+        invertScale,
+        mode: targetMode,
+        scaleMargins: { top: topMargin, bottom: bottomMargin },
+      },
+      rightPriceScale: {
+        visible: !isLeftScale,
+        borderVisible: cfg.canvas.scalesLinesVisible,
+        borderColor: cfg.canvas.scalesLineColor,
+        autoScale,
+        invertScale,
+        mode: targetMode,
+        scaleMargins: { top: topMargin, bottom: bottomMargin },
+      },
+      timeScale: {
+        borderVisible: cfg.canvas.scalesLinesVisible,
+        borderColor: cfg.canvas.scalesLineColor,
+        rightOffset: cfg.canvas.marginRightBars,
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      localization: {
+        timeFormatter: (time: Time) => formatChartTimestamp(time, cfg),
+      },
     });
-  }, [autoScale, invertScale, priceScaleMode, effectiveLogScale]);
+
+    cs.applyOptions({
+      upColor: cfg.symbol.bodyEnabled ? cfg.symbol.bodyUpColor : "transparent",
+      downColor: cfg.symbol.bodyEnabled ? cfg.symbol.bodyDownColor : "transparent",
+      borderVisible: cfg.symbol.borderEnabled,
+      borderUpColor: cfg.symbol.borderUpColor,
+      borderDownColor: cfg.symbol.borderDownColor,
+      wickVisible: cfg.symbol.wickEnabled,
+      wickUpColor: cfg.symbol.wickUpColor,
+      wickDownColor: cfg.symbol.wickDownColor,
+      lastValueVisible: cfg.scales.symbolPriceLabel !== "hidden",
+      priceLineVisible: cfg.scales.symbolPriceLabel === "value_line",
+      priceFormat: {
+        type: "price",
+        precision: digits,
+        minMove: Math.pow(10, -digits),
+      },
+    });
+  }, [effectiveSettings, autoScale, invertScale, priceScaleMode, effectiveLogScale, symbol]);
+
+  // Dynamic price lines for alerts, working orders, High/Low, and Bid/Ask
+  useEffect(() => {
+    const cs = candleSeriesRef.current;
+    if (!cs) return;
+
+    for (const line of priceLinesRef.current) {
+      try {
+        cs.removePriceLine(line);
+      } catch {
+        // Ignore stale price line
+      }
+    }
+    priceLinesRef.current = [];
+
+    const cfg = effectiveSettings;
+    const candles = latestCandlesRef.current;
+    const lastBar = candles[candles.length - 1];
+    const added: IPriceLine[] = [];
+
+    if (cfg.alerts.alertLines) {
+      for (const al of alerts) {
+        if (al.symbol !== symbol) continue;
+        added.push(
+          cs.createPriceLine({
+            price: al.price,
+            color: cfg.alerts.alertLineColor,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "Alert",
+          }),
+        );
+      }
+    }
+
+    if (cfg.trading.positionsAndOrders) {
+      for (const ord of activeOrders) {
+        if (ord.symbol !== symbol || !ord.limit_price_e9) continue;
+        if (ord.status !== "working" && ord.status !== "pending") continue;
+        const p = Number(ord.limit_price_e9) / 1e9;
+        if (!Number.isFinite(p) || p <= 0) continue;
+        const isBuy = ord.side.toLowerCase() === "buy";
+        added.push(
+          cs.createPriceLine({
+            price: p,
+            color: isBuy ? "#26a69a" : "#ef5350",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: `${isBuy ? "BUY" : "SELL"} ${ord.order_type.toUpperCase()}`,
+          }),
+        );
+      }
+    }
+
+    if (cfg.scales.highAndLow !== "hidden" && candles.length > 0) {
+      let hi = -Infinity;
+      let lo = Infinity;
+      for (const c of candles) {
+        if (c.high > hi) hi = c.high;
+        if (c.low < lo) lo = c.low;
+      }
+      if (Number.isFinite(hi) && Number.isFinite(lo)) {
+        const showLine = cfg.scales.highAndLow === "value_line";
+        added.push(
+          cs.createPriceLine({
+            price: hi,
+            color: "#26a69a",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            lineVisible: showLine,
+            axisLabelVisible: true,
+            title: "High",
+          }),
+          cs.createPriceLine({
+            price: lo,
+            color: "#ef5350",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            lineVisible: showLine,
+            axisLabelVisible: true,
+            title: "Low",
+          }),
+        );
+      }
+    }
+
+    if (cfg.scales.bidAndAsk !== "hidden" && lastBar) {
+      const tickFloat = Number(tickSizeE9) / 1e9 || 0.25;
+      const showLine = cfg.scales.bidAndAsk === "lines_and_labels";
+      added.push(
+        cs.createPriceLine({
+          price: lastBar.close - tickFloat,
+          color: cfg.scales.bidColor,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          lineVisible: showLine,
+          axisLabelVisible: true,
+          title: "Bid",
+        }),
+        cs.createPriceLine({
+          price: lastBar.close + tickFloat,
+          color: cfg.scales.askColor,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dotted,
+          lineVisible: showLine,
+          axisLabelVisible: true,
+          title: "Ask",
+        }),
+      );
+    }
+
+    priceLinesRef.current = added;
+  }, [effectiveSettings, alerts, activeOrders, symbol, tickSizeE9]);
+
+  // Countdown to bar close clock
+  useEffect(() => {
+    if (!effectiveSettings.scales.countdownToBarClose) {
+      setCountdownText("");
+      return;
+    }
+    const dur = getTimeframeDurationSec(timeframe);
+    const updateClock = () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const rem = dur - (nowSec % dur);
+      setCountdownText(formatCountdownClock(rem));
+    };
+    updateClock();
+    const id = window.setInterval(updateClock, 1000);
+    return () => window.clearInterval(id);
+  }, [effectiveSettings.scales.countdownToBarClose, timeframe]);
+
+  // Chart keyboard shortcuts (⌥R reset, ⌥A alert, ⌥⇧S sell limit, ⇧T order ticket)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && key === "r") {
+        e.preventDefault();
+        setAutoScale(true);
+        setInvertScale(false);
+        setPriceScaleMode(PriceScaleMode.Normal);
+        onLogScaleChange?.(false);
+        chartApiRef.current?.timeScale().fitContent();
+        showToast("Chart view reset");
+      } else if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && key === "a") {
+        e.preventDefault();
+        const fallback = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close;
+        const price = lastCrosshairPriceRef.current ?? fallback;
+        if (price !== undefined && Number.isFinite(price)) {
+          setAlerts((prev) => [
+            ...prev,
+            { id: `al-${Date.now()}`, symbol, price },
+          ]);
+          showToast(`Alert added on ${symbol} at ${price.toFixed(getSymbolMeta(symbol).decimals)}`);
+        }
+      } else if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && key === "s") {
+        e.preventDefault();
+        const fallback = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close;
+        const price = lastCrosshairPriceRef.current ?? fallback;
+        if (price !== undefined && Number.isFinite(price)) {
+          onSubmitOrderAtPrice?.("sell", "limit", price);
+          showToast(`Sell 1 ${symbol} @ ${price.toFixed(getSymbolMeta(symbol).decimals)} limit submitted`);
+        }
+      } else if (!e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && key === "t") {
+        e.preventDefault();
+        onOpenOrderTicket?.();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, onSubmitOrderAtPrice, onOpenOrderTicket]);
 
   useEffect(() => {
     volumeSeriesRef.current?.applyOptions({ visible: showVolume });
@@ -764,51 +1198,91 @@ export function ChartPanel({
     const pointerSurface = pointerSurfaceRef.current;
     if (!el || !pointerSurface) return;
 
+    const initCfg = chartSettingsRef.current;
+    const initSymMeta = getSymbolMeta(symbol);
+    const initDigits = getPrecisionDigits(initCfg, initSymMeta.decimals);
+    const initTopMargin = Math.max(0, Math.min(0.45, initCfg.canvas.marginTopPct / 100));
+    const initBottomMargin = Math.max(0, Math.min(0.45, initCfg.canvas.marginBottomPct / 100));
+    const initLeftScale = initCfg.scales.scalesPlacement === "left";
+
     const chart = createChart(el, {
       layout: {
-        background: { type: ColorType.Solid, color: "#1b1e27" },
-        textColor: "#8b92a3",
+        background:
+          initCfg.canvas.backgroundType === "gradient"
+            ? {
+                type: ColorType.VerticalGradient,
+                topColor: initCfg.canvas.backgroundColor,
+                bottomColor: initCfg.canvas.backgroundColorBottom,
+              }
+            : { type: ColorType.Solid, color: initCfg.canvas.backgroundColor },
+        textColor: initCfg.canvas.scalesTextColor,
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", sans-serif',
-        fontSize: 11,
+        fontSize: initCfg.canvas.scalesFontSize,
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: "rgba(255, 255, 255, 0.03)" },
-        horzLines: { color: "rgba(255, 255, 255, 0.035)" },
+        vertLines: {
+          visible: initCfg.canvas.vertGridLines,
+          color: initCfg.canvas.vertGridColor,
+        },
+        horzLines: {
+          visible: initCfg.canvas.horzGridLines,
+          color: initCfg.canvas.horzGridColor,
+        },
       },
       crosshair: {
         vertLine: {
-          color: "rgba(148, 163, 184, 0.35)",
+          color: initCfg.canvas.crosshairColor,
           labelBackgroundColor: "#2b3040",
         },
         horzLine: {
-          color: "rgba(148, 163, 184, 0.35)",
+          color: initCfg.canvas.crosshairColor,
           labelBackgroundColor: "#2b3040",
         },
       },
+      leftPriceScale: {
+        visible: initLeftScale,
+        borderVisible: initCfg.canvas.scalesLinesVisible,
+        borderColor: initCfg.canvas.scalesLineColor,
+        scaleMargins: { top: initTopMargin, bottom: initBottomMargin },
+      },
       rightPriceScale: {
-        borderColor: "#232733",
-        scaleMargins: { top: 0.08, bottom: 0.12 },
+        visible: !initLeftScale,
+        borderVisible: initCfg.canvas.scalesLinesVisible,
+        borderColor: initCfg.canvas.scalesLineColor,
+        scaleMargins: { top: initTopMargin, bottom: initBottomMargin },
       },
       timeScale: {
-        borderColor: "#232733",
+        borderVisible: initCfg.canvas.scalesLinesVisible,
+        borderColor: initCfg.canvas.scalesLineColor,
         timeVisible: true,
         secondsVisible: false,
-        rightOffset: 6,
+        rightOffset: initCfg.canvas.marginRightBars,
+      },
+      localization: {
+        timeFormatter: (time: Time) => formatChartTimestamp(time, chartSettingsRef.current),
       },
       width: Math.max(300, el.clientWidth),
       height: Math.max(200, el.clientHeight),
     });
 
-    const isMono = candleStyleRef.current === "monochrome";
     const candleSeries: ISeriesApi<"Candlestick"> = chart.addSeries(CandlestickSeries, {
-      upColor: isMono ? "#b8c0cf" : "#26a69a",
-      downColor: isMono ? "#656c7c" : "#ef5350",
-      borderUpColor: isMono ? "#c5cddb" : "#26a69a",
-      borderDownColor: isMono ? "#656c7c" : "#ef5350",
-      wickUpColor: isMono ? "#9aa2b2" : "#26a69a",
-      wickDownColor: isMono ? "#656c7c" : "#ef5350",
+      upColor: initCfg.symbol.bodyEnabled ? initCfg.symbol.bodyUpColor : "transparent",
+      downColor: initCfg.symbol.bodyEnabled ? initCfg.symbol.bodyDownColor : "transparent",
+      borderVisible: initCfg.symbol.borderEnabled,
+      borderUpColor: initCfg.symbol.borderUpColor,
+      borderDownColor: initCfg.symbol.borderDownColor,
+      wickVisible: initCfg.symbol.wickEnabled,
+      wickUpColor: initCfg.symbol.wickUpColor,
+      wickDownColor: initCfg.symbol.wickDownColor,
+      lastValueVisible: initCfg.scales.symbolPriceLabel !== "hidden",
+      priceLineVisible: initCfg.scales.symbolPriceLabel === "value_line",
+      priceFormat: {
+        type: "price",
+        precision: initDigits,
+        minMove: Math.pow(10, -initDigits),
+      },
     });
     candleSeriesRef.current = candleSeries;
 
@@ -830,21 +1304,38 @@ export function ChartPanel({
     let activeSellVolumes: number[] = [...seeded.sellVolumes];
 
     const symMeta = getSymbolMeta(symbol);
-    const formatOhlc = (c: CandlestickData<UTCTimestamp>) => {
+    const formatOhlc = (c: CandlestickData<UTCTimestamp>, vol?: number) => {
+      const cfg = chartSettingsRef.current;
+      const digits = getPrecisionDigits(cfg, symMeta.decimals);
       const f = (n: number) =>
         n.toLocaleString("en-US", {
-          minimumFractionDigits: symMeta.decimals,
-          maximumFractionDigits: symMeta.decimals,
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
         });
-      return `O ${f(c.open)}   H ${f(c.high)}   L ${f(c.low)}   C ${f(c.close)}`;
+      const segments: string[] = [];
+      if (cfg.statusLine.chartValues) {
+        segments.push(`O ${f(c.open)}  H ${f(c.high)}  L ${f(c.low)}  C ${f(c.close)}`);
+      }
+      if (cfg.statusLine.barChangeValues) {
+        const diff = c.close - c.open;
+        const pct = c.open !== 0 ? (diff / c.open) * 100 : 0;
+        const sign = diff >= 0 ? "+" : "";
+        segments.push(`${sign}${f(diff)} (${sign}${pct.toFixed(2)}%)`);
+      }
+      if (cfg.statusLine.volume && typeof vol === "number") {
+        segments.push(`Vol ${Math.round(vol).toLocaleString("en-US")}`);
+      }
+      return segments.join("   ");
     };
 
     const publishSeriesSnapshot = () => {
       const times = activeCandles.map((c) => c.time);
       latestTimesRef.current = times;
+      latestCandlesRef.current = activeCandles;
       const lastBar = activeCandles[activeCandles.length - 1];
+      const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
       if (lastBar && ohlcRef.current) {
-        ohlcRef.current.textContent = formatOhlc(lastBar);
+        ohlcRef.current.textContent = formatOhlc(lastBar, lastVol);
       }
       if (seriesSnapshotRef) {
         seriesSnapshotRef.current = {
@@ -971,13 +1462,21 @@ export function ChartPanel({
     };
 
     chart.subscribeCrosshairMove((param) => {
+      if (param.point) {
+        const p = candleSeries.coordinateToPrice(param.point.y);
+        if (p !== null && Number.isFinite(p)) {
+          lastCrosshairPriceRef.current = p;
+        }
+      }
       if (!ohlcRef.current) return;
       const bar = param.seriesData.get(candleSeries) as CandlestickData<UTCTimestamp> | undefined;
+      const vPoint = param.seriesData.get(volumeSeries) as HistogramData<UTCTimestamp> | undefined;
       if (bar && typeof bar.open === "number") {
-        ohlcRef.current.textContent = formatOhlc(bar);
+        ohlcRef.current.textContent = formatOhlc(bar, vPoint?.value);
       } else {
         const lastBar = activeCandles[activeCandles.length - 1];
-        if (lastBar) ohlcRef.current.textContent = formatOhlc(lastBar);
+        const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
+        if (lastBar) ohlcRef.current.textContent = formatOhlc(lastBar, lastVol);
       }
     });
 
@@ -1134,6 +1633,7 @@ export function ChartPanel({
       pointerSurface.removeEventListener("pointermove", onPointerMove);
       if (rafId !== 0) cancelAnimationFrame(rafId);
       candleSeries.detachPrimitive(primitive);
+      priceLinesRef.current = [];
       studyLineSeriesRef.current.clear();
       chartApiRef.current = null;
       candleSeriesRef.current = null;
@@ -1167,7 +1667,10 @@ export function ChartPanel({
         });
         map.set(st.id, series);
       }
-      series.applyOptions({ visible: !hiddenStudyIds.has(st.id) });
+      series.applyOptions({
+        visible: !hiddenStudyIds.has(st.id),
+        lastValueVisible: effectiveSettings.scales.indicatorsLabel === "value",
+      });
       const n = Math.min(times.length, st.values.length);
       const pts: LineData<UTCTimestamp>[] = [];
       for (let i = 0; i < n; i++) {
@@ -1178,7 +1681,7 @@ export function ChartPanel({
       }
       series.setData(pts);
     }
-  }, [studyOverlays, hiddenStudyIds, symbol, timeframe]);
+  }, [studyOverlays, hiddenStudyIds, symbol, timeframe, effectiveSettings.scales.indicatorsLabel]);
 
   const handleToggleVisibility = (key: keyof OverlayVisibility) => {
     setVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1199,9 +1702,68 @@ export function ChartPanel({
   };
 
   const symMeta = getSymbolMeta(symbol);
+  const precisionDigits = getPrecisionDigits(effectiveSettings, symMeta.decimals);
+  const formatPriceValue = (p: number) =>
+    p.toLocaleString("en-US", {
+      minimumFractionDigits: precisionDigits,
+      maximumFractionDigits: precisionDigits,
+    });
+
+  const handleChartContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const el = hostRef.current;
+    const cs = candleSeriesRef.current;
+    let price = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close ?? symMeta.basePrice;
+    if (el && cs) {
+      const rect = el.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const computed = cs.coordinateToPrice(y);
+      if (computed !== null && Number.isFinite(computed)) {
+        price = computed;
+      }
+    }
+    const menuWidth = 296;
+    const menuHeight = 430;
+    const x = Math.min(e.clientX, Math.max(8, window.innerWidth - menuWidth));
+    const y = Math.min(e.clientY, Math.max(8, window.innerHeight - menuHeight));
+    setContextMenu({
+      x,
+      y,
+      price,
+      formattedPrice: formatPriceValue(price),
+    });
+  };
+
+  const handleResetView = () => {
+    setAutoScale(true);
+    setInvertScale(false);
+    setPriceScaleMode(PriceScaleMode.Normal);
+    onLogScaleChange?.(false);
+    chartApiRef.current?.timeScale().fitContent();
+    showToast("Chart view reset");
+  };
+
+  const showWatermark =
+    effectiveSettings.canvas.watermark === "always" ||
+    (effectiveSettings.canvas.watermark === "replay" && replayOpen);
+
+  const showBuySellButtons =
+    effectiveSettings.statusLine.buySellButtons || effectiveSettings.trading.buySellButtons;
+
+  const statusBgStyle = effectiveSettings.statusLine.background
+    ? {
+        backgroundColor: hexToRgba(
+          effectiveSettings.canvas.backgroundColor,
+          Math.max(0.05, Math.min(0.95, effectiveSettings.statusLine.backgroundOpacity / 100)),
+        ),
+      }
+    : undefined;
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-[#1b1e27]">
+    <div
+      style={{ backgroundColor: effectiveSettings.canvas.backgroundColor }}
+      className="relative flex h-full w-full flex-col"
+    >
       {showInlineToolbar && (
         <ChartOverlayToolbar
           visibility={visibility}
@@ -1220,84 +1782,175 @@ export function ChartPanel({
         />
       )}
 
-      <div className="relative flex-1 overflow-hidden">
-        {/* Transparent Top-Left Institutional Legend */}
-        <div className="pointer-events-none absolute left-3 top-2.5 z-20 flex flex-col gap-1 select-none">
+      <div
+        className="relative flex-1 overflow-hidden"
+        onContextMenu={handleChartContextMenu}
+      >
+        {/* Optional Replay / Always Clean-Room Watermark */}
+        {showWatermark && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center select-none"
+          >
+            <div className="font-mono text-5xl font-bold tracking-widest text-white/[0.045]">
+              {symMeta.symbol} · {timeframe}
+            </div>
+            {replayOpen && (
+              <div className="mt-1 font-mono text-xs uppercase tracking-[0.35em] text-amber-300/20">
+                Bar Replay
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Transparent Top-Left Institutional Status Line */}
+        <div
+          style={statusBgStyle}
+          className="pointer-events-none absolute left-3 top-2.5 z-20 flex flex-col gap-1 rounded px-1.5 py-1 select-none"
+        >
           <div className="flex flex-wrap items-center gap-2 text-[12px]">
-            <span
-              aria-hidden="true"
-              style={{ backgroundColor: symMeta.badgeColor, color: symMeta.badgeText }}
-              className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
-            >
-              {symMeta.shortLabel.slice(0, 3)}
-            </span>
-            <span className="font-semibold tracking-tight text-[#e6e8ee]">
-              {symMeta.symbol}
-            </span>
-            <span className="text-[#8b92a3]">·</span>
-            <span className="text-[#b8becd]">{symMeta.name}</span>
-            <span className="text-[#8b92a3]">·</span>
-            <span className="font-mono text-[#b8becd]">{timeframe}</span>
-            <span className="text-[#8b92a3]">·</span>
-            <span className="text-[#8b92a3]">{symMeta.exchange}</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#12332a]/90 px-2 py-0.5 text-[10px] font-medium text-[#2dd4bf]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#2dd4bf]" />
-              Open
-            </span>
-            <span className="rounded bg-[#342512]/90 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-              {symMeta.delayedLabel ?? "Paper Sim"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 font-mono text-[11px] tabular-nums text-[#8b92a3]">
-            <span ref={ohlcRef} className="text-[#b8becd]" />
-            <span className="text-[10px] text-[#636a7b]">{rendererLabel}</span>
-          </div>
-
-          <div className="pointer-events-auto mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-            {studyOverlays.map((st) => {
-              const hidden = hiddenStudyIds.has(st.id);
-              return (
-                <span
-                  key={st.id}
-                  className="inline-flex items-center gap-1.5 rounded bg-[#151821]/75 px-1.5 py-0.5 text-[#b8becd] hover:bg-[#1e2230]"
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{ backgroundColor: st.color }}
-                    className="h-2 w-2 rounded-full"
-                  />
-                  <span className={hidden ? "line-through opacity-50" : ""}>{st.label}</span>
-                  <button
-                    type="button"
-                    aria-label={hidden ? `Show ${st.label}` : `Hide ${st.label}`}
-                    onClick={() => toggleStudyVisibility(st.id)}
-                    className="text-[#868c9b] hover:text-white"
-                  >
-                    {hidden ? "○" : "◉"}
-                  </button>
-                  {onRemoveStudy && (
-                    <button
-                      type="button"
-                      aria-label={`Remove ${st.label}`}
-                      onClick={() => onRemoveStudy(st.id)}
-                      className="text-[#6f7687] hover:text-rose-300"
-                    >
-                      ×
-                    </button>
-                  )}
+            {effectiveSettings.statusLine.logo && (
+              <span
+                aria-hidden="true"
+                style={{ backgroundColor: symMeta.badgeColor, color: symMeta.badgeText }}
+                className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold"
+              >
+                {symMeta.shortLabel.slice(0, 3)}
+              </span>
+            )}
+            {effectiveSettings.statusLine.title && (
+              <>
+                {effectiveSettings.statusLine.titleMode !== "description" && (
+                  <span className="font-semibold tracking-tight text-[#e6e8ee]">
+                    {symMeta.symbol}
+                  </span>
+                )}
+                {effectiveSettings.statusLine.titleMode === "symbol_and_name" && (
+                  <>
+                    <span className="text-[#8b92a3]">·</span>
+                    <span className="text-[#b8becd]">{symMeta.name}</span>
+                  </>
+                )}
+                {effectiveSettings.statusLine.titleMode === "description" && (
+                  <span className="font-semibold tracking-tight text-[#e6e8ee]">
+                    {symMeta.name}
+                  </span>
+                )}
+                <span className="text-[#8b92a3]">·</span>
+                <span className="font-mono text-[#b8becd]">{timeframe}</span>
+                <span className="text-[#8b92a3]">·</span>
+                <span className="text-[#8b92a3]">{symMeta.exchange}</span>
+              </>
+            )}
+            {effectiveSettings.statusLine.openMarketStatus && (
+              <>
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#12332a]/90 px-2 py-0.5 text-[10px] font-medium text-[#2dd4bf]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#2dd4bf]" />
+                  Open
                 </span>
-              );
-            })}
-
-            {(visibility.footprint || visibility.vrvp || visibility.tpo) && (
-              <span className="inline-flex items-center gap-1.5 rounded bg-[#151821]/75 px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
-                {visibility.footprint && <span className="text-emerald-300">Footprint</span>}
-                {visibility.vrvp && <span className="text-sky-300">VRVP</span>}
-                {visibility.tpo && <span className="text-amber-300">TPO</span>}
+                <span className="rounded bg-[#342512]/90 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                  {symMeta.delayedLabel ?? "Paper Sim"}
+                </span>
+              </>
+            )}
+            {lockCursorByTime && (
+              <span className="rounded bg-sky-500/15 px-1.5 py-0.5 font-mono text-[10px] text-sky-300 ring-1 ring-sky-500/30">
+                Cursor Locked
               </span>
             )}
           </div>
+
+          {(effectiveSettings.statusLine.chartValues ||
+            effectiveSettings.statusLine.barChangeValues ||
+            effectiveSettings.statusLine.volume) && (
+            <div className="flex items-center gap-3 font-mono text-[11px] tabular-nums text-[#8b92a3]">
+              <span ref={ohlcRef} className="text-[#b8becd]" />
+              <span className="text-[10px] text-[#636a7b]">{rendererLabel}</span>
+            </div>
+          )}
+
+          {showBuySellButtons && (
+            <div className="pointer-events-auto mt-0.5 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  onSubmitOrderAtPrice?.("sell", "market");
+                  showToast(`Sell 1 ${symbol} market submitted`);
+                }}
+                className="rounded border border-rose-500/50 bg-rose-950/70 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-rose-200 hover:bg-rose-900/80"
+              >
+                SELL MKT
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSubmitOrderAtPrice?.("buy", "market");
+                  showToast(`Buy 1 ${symbol} market submitted`);
+                }}
+                className="rounded border border-sky-500/50 bg-sky-950/70 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-sky-200 hover:bg-sky-900/80"
+              >
+                BUY MKT
+              </button>
+            </div>
+          )}
+
+          {effectiveSettings.statusLine.indicatorTitles && (
+            <div className="pointer-events-auto mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+              {studyOverlays.map((st) => {
+                const hidden = hiddenStudyIds.has(st.id);
+                const lastVal = st.values[st.values.length - 1];
+                const titleText = effectiveSettings.statusLine.indicatorInputs
+                  ? st.label
+                  : st.label.replace(/\s*\([^)]*\)/g, "");
+                return (
+                  <span
+                    key={st.id}
+                    className="inline-flex items-center gap-1.5 rounded bg-[#151821]/75 px-1.5 py-0.5 text-[#b8becd] hover:bg-[#1e2230]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{ backgroundColor: st.color }}
+                      className="h-2 w-2 rounded-full"
+                    />
+                    <span className={hidden ? "line-through opacity-50" : ""}>{titleText}</span>
+                    {effectiveSettings.statusLine.indicatorValues &&
+                      typeof lastVal === "number" &&
+                      Number.isFinite(lastVal) && (
+                        <span className="font-mono text-[10px] text-[#8d94a5]">
+                          {formatPriceValue(lastVal)}
+                        </span>
+                      )}
+                    <button
+                      type="button"
+                      aria-label={hidden ? `Show ${st.label}` : `Hide ${st.label}`}
+                      onClick={() => toggleStudyVisibility(st.id)}
+                      className="text-[#868c9b] hover:text-white"
+                    >
+                      {hidden ? "○" : "◉"}
+                    </button>
+                    {onRemoveStudy && (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${st.label}`}
+                        onClick={() => onRemoveStudy(st.id)}
+                        className="text-[#6f7687] hover:text-rose-300"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+
+              {(visibility.footprint || visibility.vrvp || visibility.tpo) && (
+                <span className="inline-flex items-center gap-1.5 rounded bg-[#151821]/75 px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
+                  {visibility.footprint && <span className="text-emerald-300">Footprint</span>}
+                  {visibility.vrvp && <span className="text-sky-300">VRVP</span>}
+                  {visibility.tpo && <span className="text-amber-300">TPO</span>}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Floating Glass Favorites Drawing & Orderflow Pill */}
@@ -1496,10 +2149,35 @@ export function ChartPanel({
                 <span className="w-3 text-amber-400">{visibility.tpo ? "✓" : ""}</span>
                 TPO Market Profile (128)
               </button>
+              {onOpenSettings && (
+                <>
+                  <div className="my-1 h-px bg-[#232733]" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setScaleMenuOpen(false);
+                      onOpenSettings();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[#d6dae6] hover:bg-[#222633] hover:text-white"
+                  >
+                    <span className="w-3 text-[#8c92a4]">⚙</span>
+                    More settings...
+                  </button>
+                </>
+              )}
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-1.5">
+            {effectiveSettings.scales.countdownToBarClose && countdownText && (
+              <span
+                title="Countdown to bar close"
+                className="rounded border border-[#2a2f3d] bg-[#14171f]/90 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[#a5abb8]"
+              >
+                {countdownText}
+              </span>
+            )}
             <button
               type="button"
               aria-label="Price scale settings menu"
@@ -1525,6 +2203,147 @@ export function ChartPanel({
             </button>
           </div>
         </div>
+
+        {/* Optional OHLC Table View Overlay */}
+        {tableViewOpen && (
+          <div className="absolute bottom-10 left-3 z-30 w-[420px] max-w-[90%] rounded-lg border border-[#2c3140] bg-[#14171f]/95 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between border-b border-[#252936] px-3 py-1.5">
+              <span className="font-mono text-[11px] font-semibold text-[#e6e8ee]">
+                {symbol} · {timeframe} Table View (Latest 10 Bars)
+              </span>
+              <button
+                type="button"
+                aria-label="Close table view"
+                onClick={() => setTableViewOpen(false)}
+                className="text-xs text-[#8d94a5] hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            <div className="max-h-52 overflow-auto">
+              <table className="w-full font-mono text-[11px] tabular-nums">
+                <thead className="sticky top-0 bg-[#14171f] text-[10px] uppercase text-[#787f91]">
+                  <tr>
+                    <th className="px-2 py-1 text-left">Date</th>
+                    <th className="px-2 py-1 text-right">Open</th>
+                    <th className="px-2 py-1 text-right">High</th>
+                    <th className="px-2 py-1 text-right">Low</th>
+                    <th className="px-2 py-1 text-right">Close</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1f232e] text-[#c8cdd8]">
+                  {latestCandlesRef.current
+                    .slice(-10)
+                    .reverse()
+                    .map((bar) => (
+                      <tr key={String(bar.time)} className="hover:bg-[#1c202c]">
+                        <td className="px-2 py-1 text-left text-[#9aa1b2]">
+                          {formatChartTimestamp(bar.time, effectiveSettings)}
+                        </td>
+                        <td className="px-2 py-1 text-right">{formatPriceValue(bar.open)}</td>
+                        <td className="px-2 py-1 text-right">{formatPriceValue(bar.high)}</td>
+                        <td className="px-2 py-1 text-right">{formatPriceValue(bar.low)}</td>
+                        <td className="px-2 py-1 text-right font-semibold text-white">
+                          {formatPriceValue(bar.close)}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Auto-Hiding Chart Notification Toast */}
+        {toastMsg && (
+          <div
+            role="status"
+            className="absolute bottom-9 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-[#2f3545] bg-[#14171f]/95 px-3 py-1.5 text-[12px] text-[#e6e8ee] shadow-2xl"
+          >
+            <span>{toastMsg}</span>
+            {!effectiveSettings.alerts.autoHideToasts && (
+              <button
+                type="button"
+                aria-label="Dismiss notification"
+                onClick={() => setToastMsg(null)}
+                className="text-[#8a90a2] hover:text-white"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Right-Click Chart Context Menu */}
+        {contextMenu && (
+          <ChartContextMenu
+            menu={contextMenu}
+            symbol={symbol}
+            studiesCount={studyOverlays.length}
+            lockCursorByTime={lockCursorByTime}
+            tableViewOpen={tableViewOpen}
+            templates={chartTemplates}
+            onClose={() => setContextMenu(null)}
+            onResetView={handleResetView}
+            onCopyPrice={(priceText) => {
+              if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(priceText).catch(() => {});
+              }
+              showToast(`Copied price ${priceText}`);
+            }}
+            onPaste={() => {
+              showToast("Paste ready on chart canvas");
+            }}
+            onAddAlert={(price) => {
+              setAlerts((prev) => [
+                ...prev,
+                { id: `al-${Date.now()}`, symbol, price },
+              ]);
+              showToast(`Alert added on ${symbol} at ${formatPriceValue(price)}`);
+            }}
+            onSellLimit={(price) => {
+              onSubmitOrderAtPrice?.("sell", "limit", price);
+              showToast(`Sell 1 ${symbol} @ ${formatPriceValue(price)} limit submitted`);
+            }}
+            onBuyStop={(price) => {
+              onSubmitOrderAtPrice?.("buy", "limit", price);
+              showToast(`Buy 1 ${symbol} @ ${formatPriceValue(price)} stop submitted`);
+            }}
+            onAddOrder={() => {
+              onOpenOrderTicket?.();
+            }}
+            onToggleLockCursor={() => {
+              setLockCursorByTime((v) => {
+                const next = !v;
+                showToast(
+                  next
+                    ? "Vertical cursor line locked by time"
+                    : "Vertical cursor line unlocked",
+                );
+                return next;
+              });
+            }}
+            onToggleTableView={() => setTableViewOpen((v) => !v)}
+            onOpenObjectTree={() => {
+              onOpenObjectTree?.();
+            }}
+            onApplyTemplate={(tpl) => {
+              onApplyChartTemplate?.(tpl);
+              showToast(`Applied chart template "${tpl.name}"`);
+            }}
+            onApplyDefaults={() => {
+              onApplyChartDefaults?.();
+              showToast("Applied default chart settings");
+            }}
+            onRemoveIndicators={() => {
+              onClearAllStudies?.();
+              showToast("Removed chart indicators");
+            }}
+            onOpenSettings={() => {
+              onOpenSettings?.();
+            }}
+          />
+        )}
       </div>
     </div>
   );

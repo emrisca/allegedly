@@ -13,16 +13,20 @@ import {
 import {
   Dialog,
   DialogBackdrop,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from "@ui-sdk/react/dialog";
 import { useShortcut, useShortcutHint } from "@ui-sdk/react/shortcuts";
-import { Switch, SwitchThumb } from "@ui-sdk/react/switch";
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
 import { Toolbar, ToolbarButton, ToolbarSeparator } from "@ui-sdk/react/toolbar";
+import {
+  DEFAULT_CHART_SETTINGS,
+  DEFAULT_CHART_TEMPLATES,
+  type ChartSettings,
+  type ChartSettingsTemplate,
+} from "./chart-settings";
+import { ChartSettingsDialog } from "./chart-settings-dialog";
 
 export type CandleVisualStyle = "monochrome" | "classic";
 export type WorkspaceLayoutMode = "focus" | "dockview";
@@ -56,6 +60,15 @@ export interface ChromeToolbarProps {
   onUndo?: () => void;
   onRedo?: () => void;
   onExportWorkspace?: () => void;
+  /** Controlled full Chart Settings modal state */
+  chartSettings?: ChartSettings;
+  onChartSettingsChange?: (next: ChartSettings) => void;
+  chartTemplates?: readonly ChartSettingsTemplate[];
+  onApplyChartTemplate?: (template: ChartSettingsTemplate) => void;
+  onSaveChartTemplate?: (name: string, settings: ChartSettings) => void;
+  onApplyChartDefaults?: () => void;
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
 }
 
 const SYMBOLS = [
@@ -103,11 +116,32 @@ export function ChromeToolbar({
   onUndo,
   onRedo,
   onExportWorkspace,
+  chartSettings: controlledChartSettings,
+  onChartSettingsChange,
+  chartTemplates = DEFAULT_CHART_TEMPLATES,
+  onApplyChartTemplate,
+  onSaveChartTemplate,
+  onApplyChartDefaults,
+  settingsOpen: controlledSettingsOpen,
+  onSettingsOpenChange,
 }: ChromeToolbarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [localSettingsOpen, setLocalSettingsOpen] = useState(false);
+  const [localChartSettings, setLocalChartSettings] = useState<ChartSettings>(DEFAULT_CHART_SETTINGS);
   const [localCompactDensity, setLocalCompactDensity] = useState(true);
   const [localShowProvenance, setLocalShowProvenance] = useState(true);
+
+  const settingsOpen = controlledSettingsOpen ?? localSettingsOpen;
+  const setSettingsOpen = (next: boolean) => {
+    setLocalSettingsOpen(next);
+    onSettingsOpenChange?.(next);
+  };
+
+  const chartSettings = controlledChartSettings ?? localChartSettings;
+  const setChartSettings = (next: ChartSettings) => {
+    setLocalChartSettings(next);
+    onChartSettingsChange?.(next);
+  };
 
   const compactDensity = controlledCompactDensity ?? localCompactDensity;
   const setCompactDensity = (next: boolean) => {
@@ -432,108 +466,22 @@ export function ChromeToolbar({
           </Button>
         )}
 
-        {/* Settings Dialog Trigger (preserves @ui-sdk/react Dialog + Tabs + Switch a11y contract) */}
-        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogTrigger
-            aria-label="Settings"
-            title="Terminal & Safety Settings"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[#9aa1b2] hover:bg-[#1c202b] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-          >
-            <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <circle cx="9" cy="9" r="2.5" />
-              <path d="M9 2.2v1.6M9 14.2v1.6M2.2 9h1.6M14.2 9h1.6M4.2 4.2l1.1 1.1M12.7 12.7l1.1 1.1M13.8 4.2l-1.1 1.1M5.3 12.7l-1.1 1.1" strokeLinecap="round" />
-            </svg>
-          </DialogTrigger>
-          <DialogBackdrop className="fixed inset-0 z-50 bg-black/70 backdrop-blur-[2px]" />
-          <DialogContent className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2f3d] bg-[#14171f] p-4 shadow-2xl">
-            <DialogTitle className="text-sm font-semibold text-[#f1f3f8]">
-              Allegedly Terminal Settings
-            </DialogTitle>
-            <DialogDescription className="mt-1 text-xs text-[#868c9b]">
-              Local-first defaults verified for v0.1 offline startup (SV-01 / ADR-0010).
-            </DialogDescription>
-
-            <Tabs defaultValue="safety" className="mt-4">
-              <TabsList
-                aria-label="Settings categories"
-                className="mb-3 flex gap-1 border-b border-[#232733] pb-2"
-              >
-                <TabsTab
-                  value="safety"
-                  className="rounded-md px-2.5 py-1 text-xs text-[#868c9b] data-selected:bg-[#252a37] data-selected:text-[#f1f3f8]"
-                >
-                  Safety & Offline Boot
-                </TabsTab>
-                <TabsTab
-                  value="display"
-                  className="rounded-md px-2.5 py-1 text-xs text-[#868c9b] data-selected:bg-[#252a37] data-selected:text-[#f1f3f8]"
-                >
-                  Workspace Display
-                </TabsTab>
-              </TabsList>
-
-              <TabsPanel value="safety" className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between rounded-lg border border-[#232733] bg-[#101217] p-2.5">
-                  <div>
-                    <div className="font-medium text-[#e6e8ee]">updates.checkOnStartup</div>
-                    <div className="text-[#868c9b]">
-                      SV-01 / RT3-02: Locked false for zero-packet offline startup.
-                    </div>
-                  </div>
-                  <span className="rounded bg-emerald-950/80 px-2 py-0.5 font-mono text-[11px] text-emerald-300 ring-1 ring-emerald-800/80">
-                    {String(bootConfig.updates_check_on_startup)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-[#232733] bg-[#101217] p-2.5">
-                  <div>
-                    <div className="font-medium text-[#e6e8ee]">LIVE_ARMED Execution Lock</div>
-                    <div className="text-[#868c9b]">
-                      ADR-0009: v0.1 ships Paper/Sim only; live broker routing is disabled.
-                    </div>
-                  </div>
-                  <span className="rounded bg-amber-950/80 px-2 py-0.5 font-mono text-[11px] text-amber-300 ring-1 ring-amber-800/80">
-                    {String(bootConfig.live_armed)}
-                  </span>
-                </div>
-              </TabsPanel>
-
-              <TabsPanel value="display" className="space-y-2.5 text-xs">
-                <label className="flex items-center justify-between rounded-lg border border-[#232733] bg-[#101217] p-2.5">
-                  <span className="text-[#e6e8ee]">Compact Orderflow Table Density</span>
-                  <Switch
-                    checked={compactDensity}
-                    onCheckedChange={setCompactDensity}
-                    className="relative inline-flex h-5 w-9 items-center rounded-full bg-[#2a2f3d] data-checked:bg-sky-500"
-                  >
-                    <SwitchThumb className="block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-white transition-transform data-checked:translate-x-5" />
-                  </Switch>
-                </label>
-                <label className="flex items-center justify-between rounded-lg border border-[#232733] bg-[#101217] p-2.5">
-                  <span className="text-[#e6e8ee]">Show Active 5-Tier Provenance Badge</span>
-                  <Switch
-                    checked={showProvenanceOverlay}
-                    onCheckedChange={setShowProvenanceOverlay}
-                    className="relative inline-flex h-5 w-9 items-center rounded-full bg-[#2a2f3d] data-checked:bg-sky-500"
-                  >
-                    <SwitchThumb className="block h-3.5 w-3.5 translate-x-0.5 rounded-full bg-white transition-transform data-checked:translate-x-5" />
-                  </Switch>
-                </label>
-              </TabsPanel>
-            </Tabs>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                onClick={onResetLayout}
-                className="rounded-md border border-[#2a2f3d] bg-[#1a1d26] px-3 py-1.5 text-xs text-[#e6e8ee] hover:bg-[#252a37]"
-              >
-                Reset Layout
-              </Button>
-              <DialogClose className="rounded-md bg-[#e6e8ee] px-3 py-1.5 text-xs font-semibold text-[#0c0d11] hover:bg-white">
-                Done
-              </DialogClose>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Full Chart & Terminal Settings Dialog (Symbol, Status line, Scales, Canvas, Trading, Alerts, Events, Templates, Display & Safety) */}
+        <ChartSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          settings={chartSettings}
+          onSettingsChange={setChartSettings}
+          templates={chartTemplates}
+          onApplyTemplate={onApplyChartTemplate}
+          onSaveTemplate={onSaveChartTemplate}
+          onApplyDefaults={onApplyChartDefaults}
+          bootConfig={bootConfig}
+          compactDensity={compactDensity}
+          onCompactDensityChange={setCompactDensity}
+          showProvenanceOverlay={showProvenanceOverlay}
+          onShowProvenanceOverlayChange={setShowProvenanceOverlay}
+        />
 
         <span className="h-4 w-px bg-[#232733]" aria-hidden="true" />
 

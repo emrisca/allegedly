@@ -22,9 +22,14 @@ import {
 } from "@allegedly/ipc-client";
 import {
   ChromeToolbar,
+  cloneChartSettings,
+  DEFAULT_CHART_SETTINGS,
+  DEFAULT_CHART_TEMPLATES,
   StatusBar,
   WorkspaceHost,
   type CandleVisualStyle,
+  type ChartSettings,
+  type ChartSettingsTemplate,
   type QuickRangePreset,
   type WorkspaceLayoutMode,
 } from "@allegedly/ui-chrome";
@@ -77,6 +82,72 @@ const STUDY_COLORS: Record<string, string> = {
   luau: "#fb7185",
 };
 
+const CHART_SETTINGS_STORAGE_KEY = "allegedly.chartSettings.v1";
+const CHART_TEMPLATES_STORAGE_KEY = "allegedly.chartTemplates.v1";
+
+function loadStoredChartSettings(): ChartSettings {
+  if (typeof window === "undefined") return cloneChartSettings(DEFAULT_CHART_SETTINGS);
+  try {
+    const raw = window.localStorage.getItem(CHART_SETTINGS_STORAGE_KEY);
+    if (!raw) return cloneChartSettings(DEFAULT_CHART_SETTINGS);
+    const parsed = JSON.parse(raw) as Partial<ChartSettings>;
+    return {
+      symbol: { ...DEFAULT_CHART_SETTINGS.symbol, ...(parsed.symbol ?? {}) },
+      statusLine: { ...DEFAULT_CHART_SETTINGS.statusLine, ...(parsed.statusLine ?? {}) },
+      scales: { ...DEFAULT_CHART_SETTINGS.scales, ...(parsed.scales ?? {}) },
+      canvas: { ...DEFAULT_CHART_SETTINGS.canvas, ...(parsed.canvas ?? {}) },
+      trading: { ...DEFAULT_CHART_SETTINGS.trading, ...(parsed.trading ?? {}) },
+      alerts: { ...DEFAULT_CHART_SETTINGS.alerts, ...(parsed.alerts ?? {}) },
+      events: { ...DEFAULT_CHART_SETTINGS.events, ...(parsed.events ?? {}) },
+    };
+  } catch {
+    return cloneChartSettings(DEFAULT_CHART_SETTINGS);
+  }
+}
+
+function loadStoredChartTemplates(): ChartSettingsTemplate[] {
+  if (typeof window === "undefined") {
+    return DEFAULT_CHART_TEMPLATES.map((t) => ({
+      ...t,
+      settings: cloneChartSettings(t.settings),
+    }));
+  }
+  try {
+    const raw = window.localStorage.getItem(CHART_TEMPLATES_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_CHART_TEMPLATES.map((t) => ({
+        ...t,
+        settings: cloneChartSettings(t.settings),
+      }));
+    }
+    const parsed = JSON.parse(raw) as ChartSettingsTemplate[];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return DEFAULT_CHART_TEMPLATES.map((t) => ({
+        ...t,
+        settings: cloneChartSettings(t.settings),
+      }));
+    }
+    return parsed.map((t) => ({
+      id: String(t.id),
+      name: String(t.name),
+      settings: {
+        symbol: { ...DEFAULT_CHART_SETTINGS.symbol, ...(t.settings?.symbol ?? {}) },
+        statusLine: { ...DEFAULT_CHART_SETTINGS.statusLine, ...(t.settings?.statusLine ?? {}) },
+        scales: { ...DEFAULT_CHART_SETTINGS.scales, ...(t.settings?.scales ?? {}) },
+        canvas: { ...DEFAULT_CHART_SETTINGS.canvas, ...(t.settings?.canvas ?? {}) },
+        trading: { ...DEFAULT_CHART_SETTINGS.trading, ...(t.settings?.trading ?? {}) },
+        alerts: { ...DEFAULT_CHART_SETTINGS.alerts, ...(t.settings?.alerts ?? {}) },
+        events: { ...DEFAULT_CHART_SETTINGS.events, ...(t.settings?.events ?? {}) },
+      },
+    }));
+  } catch {
+    return DEFAULT_CHART_TEMPLATES.map((t) => ({
+      ...t,
+      settings: cloneChartSettings(t.settings),
+    }));
+  }
+}
+
 export interface AppProps {
   transport?: TransportAdapter;
 }
@@ -110,6 +181,11 @@ export function App({ transport: providedTransport }: AppProps) {
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>("focus");
   const [rightTab, setRightTab] = useState<RightDrawerTab>("watchlist");
   const [replayOpen, setReplayOpen] = useState<boolean>(false);
+  const [chartSettings, setChartSettings] = useState<ChartSettings>(loadStoredChartSettings);
+  const [chartTemplates, setChartTemplates] = useState<ChartSettingsTemplate[]>(
+    loadStoredChartTemplates,
+  );
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [candleStyle, setCandleStyle] = useState<CandleVisualStyle>("monochrome");
   const [activeTool, setActiveTool] = useState<DrawingToolKind>("cursor");
   const [magnetEnabled, setMagnetEnabled] = useState<boolean>(true);
@@ -231,22 +307,104 @@ export function App({ transport: providedTransport }: AppProps) {
     }));
   }, []);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHART_SETTINGS_STORAGE_KEY, JSON.stringify(chartSettings));
+    } catch {
+      // Ignore storage quota errors in restricted sandboxes
+    }
+  }, [chartSettings]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHART_TEMPLATES_STORAGE_KEY, JSON.stringify(chartTemplates));
+    } catch {
+      // Ignore storage quota errors in restricted sandboxes
+    }
+  }, [chartTemplates]);
+
+  const handleCandleStyleChange = useCallback((next: CandleVisualStyle) => {
+    setCandleStyle(next);
+    setChartSettings((prev) => ({
+      ...prev,
+      symbol:
+        next === "monochrome"
+          ? {
+              ...prev.symbol,
+              bodyUpColor: DEFAULT_CHART_SETTINGS.symbol.bodyUpColor,
+              bodyDownColor: DEFAULT_CHART_SETTINGS.symbol.bodyDownColor,
+              borderUpColor: DEFAULT_CHART_SETTINGS.symbol.borderUpColor,
+              borderDownColor: DEFAULT_CHART_SETTINGS.symbol.borderDownColor,
+              wickUpColor: DEFAULT_CHART_SETTINGS.symbol.wickUpColor,
+              wickDownColor: DEFAULT_CHART_SETTINGS.symbol.wickDownColor,
+            }
+          : {
+              ...prev.symbol,
+              bodyUpColor: "#089981",
+              bodyDownColor: "#f23645",
+              borderUpColor: "#089981",
+              borderDownColor: "#f23645",
+              wickUpColor: "#089981",
+              wickDownColor: "#f23645",
+            },
+    }));
+  }, []);
+
+  const handleApplyChartTemplate = useCallback((tpl: ChartSettingsTemplate) => {
+    setChartSettings(cloneChartSettings(tpl.settings));
+    setCandleStyle(
+      tpl.settings.symbol.bodyUpColor.toLowerCase() ===
+        DEFAULT_CHART_SETTINGS.symbol.bodyUpColor.toLowerCase()
+        ? "monochrome"
+        : "classic",
+    );
+  }, []);
+
+  const handleSaveChartTemplate = useCallback((name: string, nextSettings: ChartSettings) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setChartTemplates((prev) => {
+      const existingIdx = prev.findIndex((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+      const nextEntry: ChartSettingsTemplate = {
+        id: existingIdx >= 0 ? prev[existingIdx].id : `tpl-${Date.now()}`,
+        name: trimmed,
+        settings: cloneChartSettings(nextSettings),
+      };
+      if (existingIdx >= 0) {
+        const copy = [...prev];
+        copy[existingIdx] = nextEntry;
+        return copy;
+      }
+      return [...prev, nextEntry];
+    });
+  }, []);
+
+  const handleApplyChartDefaults = useCallback(() => {
+    setChartSettings(cloneChartSettings(DEFAULT_CHART_SETTINGS));
+    setCandleStyle("monochrome");
+  }, []);
+
   const handleSubmitOrder = useCallback(
-    (side: "buy" | "sell", orderType: "market" | "limit") => {
+    (side: "buy" | "sell", orderType: "market" | "limit", explicitPrice?: number) => {
       let limitPrice: string | undefined;
       if (orderType === "limit") {
         const meta = getSymbolMeta(symbol);
         const tickE9 = meta.tickSizeE9;
-        const closes = seriesSnapshotRef.current.closes;
-        const lastClose =
-          closes.length > 0 && Number.isFinite(closes[closes.length - 1])
-            ? closes[closes.length - 1]
-            : meta.basePrice;
         const tickFloat = Number(tickE9) / 1e9;
-        const baseTicks = BigInt(Math.max(1, Math.round(lastClose / tickFloat)));
-        const offsetTicks = side === "buy" ? -2n : 2n;
-        const limitTicks = baseTicks + offsetTicks > 0n ? baseTicks + offsetTicks : 1n;
-        limitPrice = (limitTicks * tickE9).toString();
+        if (typeof explicitPrice === "number" && Number.isFinite(explicitPrice) && explicitPrice > 0) {
+          const snappedTicks = BigInt(Math.max(1, Math.round(explicitPrice / tickFloat)));
+          limitPrice = (snappedTicks * tickE9).toString();
+        } else {
+          const closes = seriesSnapshotRef.current.closes;
+          const lastClose =
+            closes.length > 0 && Number.isFinite(closes[closes.length - 1])
+              ? closes[closes.length - 1]
+              : meta.basePrice;
+          const baseTicks = BigInt(Math.max(1, Math.round(lastClose / tickFloat)));
+          const offsetTicks = side === "buy" ? -2n : 2n;
+          const limitTicks = baseTicks + offsetTicks > 0n ? baseTicks + offsetTicks : 1n;
+          limitPrice = (limitTicks * tickE9).toString();
+        }
       }
       void transport
         .invokeJson<unknown, PaperAccountSnapshot>("submit_paper_order", {
@@ -419,7 +577,15 @@ export function App({ transport: providedTransport }: AppProps) {
         showProvenanceOverlay={showProvenanceOverlay}
         onShowProvenanceOverlayChange={setShowProvenanceOverlay}
         candleStyle={candleStyle}
-        onCandleStyleChange={setCandleStyle}
+        onCandleStyleChange={handleCandleStyleChange}
+        chartSettings={chartSettings}
+        onChartSettingsChange={setChartSettings}
+        chartTemplates={chartTemplates}
+        onApplyChartTemplate={handleApplyChartTemplate}
+        onSaveChartTemplate={handleSaveChartTemplate}
+        onApplyChartDefaults={handleApplyChartDefaults}
+        settingsOpen={settingsOpen}
+        onSettingsOpenChange={setSettingsOpen}
         replayOpen={replayOpen}
         onToggleReplay={() => setReplayOpen((v) => !v)}
         studiesActiveCount={activeStudies.length}
@@ -457,7 +623,10 @@ export function App({ transport: providedTransport }: AppProps) {
               onClearDrawings={() => chartHistoryActionsRef.current?.clear()}
             />
 
-            <div className="relative min-w-0 flex-1 overflow-hidden bg-[#1b1e27]">
+            <div
+              style={{ backgroundColor: chartSettings.canvas.backgroundColor }}
+              className="relative min-w-0 flex-1 overflow-hidden"
+            >
               <ChartPanel
                 transport={transport}
                 symbol={symbol}
@@ -480,6 +649,23 @@ export function App({ transport: providedTransport }: AppProps) {
                 onHistoryMetaChange={setHistoryMeta}
                 onRemoveStudy={handleRemoveStudy}
                 onLivePriceSample={handleLivePriceSample}
+                chartSettings={chartSettings}
+                replayOpen={replayOpen}
+                chartTemplates={chartTemplates}
+                onApplyChartTemplate={handleApplyChartTemplate}
+                onApplyChartDefaults={handleApplyChartDefaults}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onSubmitOrderAtPrice={handleSubmitOrder}
+                onOpenOrderTicket={() => {
+                  setLayoutMode("focus");
+                  setRightTab("trade");
+                }}
+                onClearAllStudies={handleClearStudies}
+                onOpenObjectTree={() => {
+                  setLayoutMode("focus");
+                  setRightTab("studies");
+                }}
+                activeOrders={account.orders}
               />
             </div>
 
@@ -571,6 +757,23 @@ export function App({ transport: providedTransport }: AppProps) {
                   onHistoryMetaChange={setHistoryMeta}
                   onRemoveStudy={handleRemoveStudy}
                   onLivePriceSample={handleLivePriceSample}
+                  chartSettings={chartSettings}
+                  replayOpen={replayOpen}
+                  chartTemplates={chartTemplates}
+                  onApplyChartTemplate={handleApplyChartTemplate}
+                  onApplyChartDefaults={handleApplyChartDefaults}
+                  onOpenSettings={() => setSettingsOpen(true)}
+                  onSubmitOrderAtPrice={handleSubmitOrder}
+                  onOpenOrderTicket={() => {
+                    setLayoutMode("focus");
+                    setRightTab("trade");
+                  }}
+                  onClearAllStudies={handleClearStudies}
+                  onOpenObjectTree={() => {
+                    setLayoutMode("focus");
+                    setRightTab("studies");
+                  }}
+                  activeOrders={account.orders}
                 />
               ),
             }}
