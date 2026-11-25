@@ -1,0 +1,13 @@
+[package]
+name = "allegedly-orderflow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allegedly zero-float FootprintSlabArena, 16-ary Dyadic VRVP Segment Tree, u128 TPO Profile, and CVD/VWAP engine."
+
+[lints]
+workspace = true
+
+[dependencies]
+allegedly-core.workspace = true
+allegedly-ipc.workspace = true

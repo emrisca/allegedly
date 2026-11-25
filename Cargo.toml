@@ -1,0 +1,65 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/allegedly-core",
+    "crates/allegedly-ipc",
+    "crates/allegedly-ingest",
+    "crates/allegedly-storage",
+    "crates/allegedly-orderflow",
+    "crates/allegedly-studies",
+    "crates/allegedly-replay",
+    "crates/allegedly-oms",
+    "crates/allegedly-app",
+    "crates/allegedly-docgen",
+]
+exclude = [
+    "spikes",
+    "spikes/S02-tauri-ipc-throughput",
+    "spikes/S05-live-ingest-tickvault",
+    "spikes/S06-oms-paper-execution",
+    "spikes/S07-scripting-sandbox",
+    "spikes/S08-storage-100m-replay",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/emrisca/allegedly"
+rust-version = "1.85"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+allegedly-core = { path = "crates/allegedly-core" }
+allegedly-ipc = { path = "crates/allegedly-ipc" }
+allegedly-ingest = { path = "crates/allegedly-ingest" }
+allegedly-storage = { path = "crates/allegedly-storage" }
+allegedly-orderflow = { path = "crates/allegedly-orderflow" }
+allegedly-studies = { path = "crates/allegedly-studies" }
+allegedly-replay = { path = "crates/allegedly-replay" }
+allegedly-oms = { path = "crates/allegedly-oms" }
+
+arrow = { version = "60.2.0", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+crc32fast = "1.5"
+mlua = { version = "0.12.3", features = ["luau"] }
+parquet = { version = "60.2.0", default-features = false, features = ["arrow", "zstd"] }
+rtrb = "0.4.1"
+rusqlite = { version = "0.43.0", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1.44", features = ["macros", "rt-multi-thread", "sync", "time"] }
+uuid = { version = "1", features = ["v7", "serde"] }
+zstd = "0.14"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

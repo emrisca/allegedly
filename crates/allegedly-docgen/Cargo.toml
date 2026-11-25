@@ -1,0 +1,15 @@
+[package]
+name = "allegedly-docgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Dev-only schema and IPC contract generator for Allegedly (not shipped in desktop binary)."
+
+[lints]
+workspace = true
+
+[dependencies]
+allegedly-ipc.workspace = true
+serde.workspace = true
+serde_json.workspace = true

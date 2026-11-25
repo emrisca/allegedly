@@ -1,0 +1,18 @@
+[package]
+name = "allegedly-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allegedly crash-safe .atvault Zstd+CRC32 segment storage, Hive Parquet 2.0 compactor/reader, and SQLite WAL catalog."
+
+[lints]
+workspace = true
+
+[dependencies]
+allegedly-core.workspace = true
+arrow.workspace = true
+crc32fast.workspace = true
+parquet.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+zstd.workspace = true

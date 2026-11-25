@@ -1,0 +1,21 @@
+[package]
+name = "allegedly-oms"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allegedly zero-float 12-state OMS, Risk-Reduction Bypass Rule, SQLite WAL crash recovery, APFS fullfsync batched Kill-Switch, and DO-NOT-BUILD denylist."
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Compile-time safety rail: live execution is structurally unreachable in v0.1 unless explicitly opted in.
+allow-live-trading = []
+
+[dependencies]
+allegedly-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

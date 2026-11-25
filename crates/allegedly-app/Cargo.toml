@@ -1,0 +1,20 @@
+[package]
+name = "allegedly-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allegedly local-first desktop runtime wiring (SV-01 zero-network boot, updates.checkOnStartup=false, Paper/Sim default)."
+
+[lints]
+workspace = true
+
+[dependencies]
+allegedly-core.workspace = true
+allegedly-ingest.workspace = true
+allegedly-ipc.workspace = true
+allegedly-oms.workspace = true
+allegedly-orderflow.workspace = true
+allegedly-replay.workspace = true
+allegedly-storage.workspace = true
+allegedly-studies.workspace = true
+serde.workspace = true

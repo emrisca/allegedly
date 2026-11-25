@@ -1,0 +1,55 @@
+{
+  "magic_hex": "0x414C4732",
+  "version": 1,
+  "header_bytes": 24,
+  "record_sizes": {
+    "live_trade_record": 40,
+    "footprint_cell": 32,
+    "volume_profile_summary": 24,
+    "volume_profile_bin": 24,
+    "tpo_header": 8,
+    "tpo_row_128": 24,
+    "live_l2_book_header": 16,
+    "live_l2_book_level": 24,
+    "live_bar_update": 72,
+    "stream_status_frame": 16
+  },
+  "frame_types": [
+    [
+      "OHLCV_BARS_SOA",
+      1
+    ],
+    [
+      "FOOTPRINT_SLAB_SOA",
+      2
+    ],
+    [
+      "VOLUME_PROFILE_SOA",
+      3
+    ],
+    [
+      "TPO_PROFILE_BITMASK",
+      4
+    ],
+    [
+      "LIVE_TRADE_BATCH",
+      257
+    ],
+    [
+      "LIVE_L2_BOOK_BATCH",
+      258
+    ],
+    [
+      "LIVE_BAR_UPDATE_BATCH",
+      259
+    ],
+    [
+      "LIVE_FOOTPRINT_DELTA",
+      260
+    ],
+    [
+      "STREAM_STATUS_FRAME",
+      513
+    ]
+  ]
+}

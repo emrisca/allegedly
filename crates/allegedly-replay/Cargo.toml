@@ -1,0 +1,14 @@
+[package]
+name = "allegedly-replay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allegedly deterministic streaming tick replay engine producing bit-exact SHA-256 state hashes across speeds (SV-09)."
+
+[lints]
+workspace = true
+
+[dependencies]
+allegedly-core.workspace = true
+allegedly-orderflow.workspace = true
+sha2.workspace = true

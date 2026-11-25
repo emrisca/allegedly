@@ -1,0 +1,46 @@
+name: CI PR Fast (macOS + Windows)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-guards:
+    name: Static Policy Guards (SV-08, ADR-0001, SC-02)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Zero-float financial crate gate (SV-08)
+        run: bash scripts/ci/check-no-floats.sh
+      - name: Zero retired legacy prefix gate (ADR-0001)
+        run: bash scripts/ci/check-no-legacy-prefix.sh
+      - name: npm SPDX, dockview-enterprise ban & @ui-sdk pin gate
+        run: node scripts/ci/check-npm-policy.mjs
+
+  rust-workspace:
+    name: Rust Workspace (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Clippy (-D warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Run workspace unit & integration tests
+        run: cargo test --workspace --release

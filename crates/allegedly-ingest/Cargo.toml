@@ -1,0 +1,18 @@
+[package]
+name = "allegedly-ingest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Allegedly per-provider rtrb SPSC ingest pipeline, Synthetic Sim, Kraken/Coinbase parsers with maker->taker inversion, and Lee-Ready/Tick-Rule provenance classifier."
+
+[lints]
+workspace = true
+
+[dependencies]
+allegedly-core.workspace = true
+allegedly-ipc.workspace = true
+crc32fast.workspace = true
+rtrb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
