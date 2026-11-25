@@ -68,20 +68,22 @@ export function DomLadderPanel({
 
       ctx.save();
       ctx.scale(dpr, dpr);
-      ctx.fillStyle = "#09090b";
+      ctx.fillStyle = "#101217";
       ctx.fillRect(0, 0, w, h);
 
       // Header bar
-      ctx.fillStyle = "#18181b";
-      ctx.fillRect(0, 0, w, 24);
+      ctx.fillStyle = "#161922";
+      ctx.fillRect(0, 0, w, 28);
+      ctx.fillStyle = "#232733";
+      ctx.fillRect(0, 27, w, 1);
       ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.fillStyle = "#a1a1aa";
-      ctx.fillText(`DOM LADDER · ${symbol}`, 10, 16);
-      ctx.fillStyle = "#71717a";
-      ctx.fillText("SIZE", w - 70, 16);
+      ctx.fillStyle = "#e6e8ee";
+      ctx.fillText(`DOM · ${symbol}`, 10, 18);
+      ctx.fillStyle = "#868c9b";
+      ctx.fillText("SIZE", w - 64, 18);
 
-      const rowH = compactRef.current ? 16 : 22;
-      const visibleSide = Math.min(8, Math.max(4, Math.floor((h - 140) / (rowH * 2))));
+      const rowH = compactRef.current ? 17 : 22;
+      const visibleSide = Math.min(10, Math.max(4, Math.floor((h - 160) / (rowH * 2))));
       const topAsks = asks.slice(0, visibleSide).reverse();
       const topBids = bids.slice(0, visibleSide);
 
@@ -90,58 +92,61 @@ export function DomLadderPanel({
         if (l.qtyE9 > maxQty) maxQty = l.qtyE9;
       }
 
-      let y = 28;
+      let y = 32;
       ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
 
       // Asks (sell liquidity)
       for (const lvl of topAsks) {
         const barW = Number((lvl.qtyE9 * BigInt(Math.floor(w - 20))) / maxQty);
-        ctx.fillStyle = "rgba(244, 63, 94, 0.16)";
+        ctx.fillStyle = "rgba(242, 54, 69, 0.16)";
         ctx.fillRect(w - 10 - barW, y, barW, rowH - 2);
-        ctx.fillStyle = "#fda4af";
+        ctx.fillStyle = "#f87171";
         ctx.fillText(formatFixedE9(lvl.priceE9, 2), 10, y + 12);
-        ctx.fillStyle = "#e4e4e7";
-        ctx.fillText(formatFixedE9(lvl.qtyE9, 3), w - 76, y + 12);
+        ctx.fillStyle = "#cfd4e0";
+        ctx.fillText(formatFixedE9(lvl.qtyE9, 3), w - 72, y + 12);
         y += rowH;
       }
 
       // Spread divider
-      ctx.fillStyle = "#27272a";
+      ctx.fillStyle = "#232733";
       ctx.fillRect(8, y + 2, w - 16, 1);
       y += 8;
 
       // Bids (buy liquidity)
       for (const lvl of topBids) {
         const barW = Number((lvl.qtyE9 * BigInt(Math.floor(w - 20))) / maxQty);
-        ctx.fillStyle = "rgba(16, 185, 129, 0.16)";
+        ctx.fillStyle = "rgba(8, 153, 129, 0.18)";
         ctx.fillRect(w - 10 - barW, y, barW, rowH - 2);
-        ctx.fillStyle = "#6ee7b7";
+        ctx.fillStyle = "#34d399";
         ctx.fillText(formatFixedE9(lvl.priceE9, 2), 10, y + 12);
-        ctx.fillStyle = "#e4e4e7";
-        ctx.fillText(formatFixedE9(lvl.qtyE9, 3), w - 76, y + 12);
+        ctx.fillStyle = "#cfd4e0";
+        ctx.fillText(formatFixedE9(lvl.qtyE9, 3), w - 72, y + 12);
         y += rowH;
       }
 
       // Time & Sales tape footer section
       y += 6;
-      ctx.fillStyle = "#18181b";
-      ctx.fillRect(0, y, w, 20);
-      ctx.fillStyle = "#a1a1aa";
-      ctx.fillText("TIME & SALES (ALG2 BINARY)", 10, y + 14);
-      y += 24;
+      ctx.fillStyle = "#161922";
+      ctx.fillRect(0, y, w, 22);
+      ctx.fillStyle = "#232733";
+      ctx.fillRect(0, y, w, 1);
+      ctx.fillRect(0, y + 21, w, 1);
+      ctx.fillStyle = "#8c93a4";
+      ctx.fillText("TIME & SALES (ALG2)", 10, y + 15);
+      y += 26;
 
-      const tapeRowH = compactRef.current ? 14 : 19;
+      const tapeRowH = compactRef.current ? 15 : 19;
       const maxTapeRows = Math.max(0, Math.floor((h - y - 4) / tapeRowH));
       for (let i = 0; i < Math.min(tape.length, maxTapeRows); i++) {
         const t = tape[i];
         const { side } = unpackTradeFlags(t.flags);
         const isBuy = side === 1;
-        ctx.fillStyle = isBuy ? "#34d399" : "#fb7185";
+        ctx.fillStyle = isBuy ? "#22c55e" : "#ef4444";
         ctx.fillText(isBuy ? "BUY " : "SELL", 10, y + 11);
-        ctx.fillStyle = "#f4f4f5";
-        ctx.fillText(formatFixedE9(t.priceE9, 2), 54, y + 11);
-        ctx.fillStyle = "#a1a1aa";
-        ctx.fillText(formatFixedE9(t.qtyE9, 3), w - 76, y + 11);
+        ctx.fillStyle = "#e6e8ee";
+        ctx.fillText(formatFixedE9(t.priceE9, 2), 52, y + 11);
+        ctx.fillStyle = "#8c93a4";
+        ctx.fillText(formatFixedE9(t.qtyE9, 3), w - 72, y + 11);
         y += tapeRowH;
       }
 
@@ -189,7 +194,7 @@ export function DomLadderPanel({
   }, [transport, symbol]);
 
   return (
-    <div ref={hostRef} className="h-full w-full overflow-hidden bg-zinc-950">
+    <div ref={hostRef} className="h-full w-full overflow-hidden bg-[#101217]">
       <canvas
         ref={canvasRef}
         aria-label={`DOM Ladder and Time and Sales for ${symbol}`}

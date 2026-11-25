@@ -1,3 +1,3 @@
-export * from "./workspace-host.js";
-export * from "./chrome-toolbar.js";
-export * from "./status-bar.js";
+export * from "./chrome-toolbar";
+export * from "./status-bar";
+export * from "./workspace-host";

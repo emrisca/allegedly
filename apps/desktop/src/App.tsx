@@ -20,15 +20,28 @@ import {
   type WorkspacePatchResult,
   type WorkspaceState,
 } from "@allegedly/ipc-client";
-import { ChromeToolbar, StatusBar, WorkspaceHost } from "@allegedly/ui-chrome";
+import {
+  ChromeToolbar,
+  StatusBar,
+  WorkspaceHost,
+  type CandleVisualStyle,
+  type QuickRangePreset,
+  type WorkspaceLayoutMode,
+} from "@allegedly/ui-chrome";
+import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { ReplayBar } from "./components/replay-bar";
+import { RightIconRail, type RightDrawerTab } from "./components/right-icon-rail";
+import { getSymbolMeta } from "./data/symbols";
+import type { DrawingToolKind } from "./drawings/drawing-engine";
 import {
   ChartPanel,
+  type ChartHistoryActions,
   type ChartSeriesSnapshot,
   type StudyOverlaySeries,
 } from "./panels/chart-panel";
 import { DomLadderPanel } from "./panels/dom-ladder-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
+import { WatchlistPanel } from "./panels/watchlist-panel";
 
 const DEFAULT_BOOT_CONFIG: BootConfig = {
   updates_check_on_startup: false,
@@ -54,18 +67,6 @@ const DEFAULT_REPLAY_STATUS: ReplayStatusSnapshot = {
   determinism_verified: false,
 };
 
-const SYMBOL_TICK_E9: Record<string, bigint> = {
-  "BTC/USD": 500_000_000n, // $0.50
-  "ETH/USD": 100_000_000n, // $0.10
-  "SOL/USD": 10_000_000n, // $0.01
-};
-
-const SYMBOL_FALLBACK_PRICE: Record<string, number> = {
-  "BTC/USD": 95_000,
-  "ETH/USD": 3_500,
-  "SOL/USD": 185,
-};
-
 const STUDY_COLORS: Record<string, string> = {
   sma: "#38bdf8",
   ema: "#f59e0b",
@@ -82,13 +83,15 @@ export interface AppProps {
 
 export function App({ transport: providedTransport }: AppProps) {
   const transport = useMemo<TransportAdapter>(
-    () => providedTransport ?? (isTauriRuntime() ? new TauriTransportAdapter() : new OfflineSimTransportAdapter()),
+    () =>
+      providedTransport ??
+      (isTauriRuntime() ? new TauriTransportAdapter() : new OfflineSimTransportAdapter()),
     [providedTransport],
   );
 
   const [bootConfig, setBootConfig] = useState<BootConfig>(DEFAULT_BOOT_CONFIG);
-  const [symbol, setSymbol] = useState<string>("BTC/USD");
-  const [timeframe, setTimeframe] = useState<string>("1m");
+  const [symbol, setSymbol] = useState<string>("NQ1!");
+  const [timeframe, setTimeframe] = useState<string>("D");
   const [stateRev, setStateRev] = useState<number>(0);
   const [bookState, setBookState] = useState<number>(BookState.Live);
   const [provenanceTier, setProvenanceTier] = useState<number>(ProvenanceTier.ExactTickAggr);
@@ -103,6 +106,27 @@ export function App({ transport: providedTransport }: AppProps) {
   const [compactDensity, setCompactDensity] = useState<boolean>(true);
   const [showProvenanceOverlay, setShowProvenanceOverlay] = useState<boolean>(true);
 
+  // Institutional layout & chart chrome state
+  const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>("focus");
+  const [rightTab, setRightTab] = useState<RightDrawerTab>("watchlist");
+  const [replayOpen, setReplayOpen] = useState<boolean>(false);
+  const [candleStyle, setCandleStyle] = useState<CandleVisualStyle>("monochrome");
+  const [activeTool, setActiveTool] = useState<DrawingToolKind>("cursor");
+  const [magnetEnabled, setMagnetEnabled] = useState<boolean>(true);
+  const [showFloatingBar, setShowFloatingBar] = useState<boolean>(true);
+  const [activeRange, setActiveRange] = useState<QuickRangePreset>("1Y");
+  const [autoScale, setAutoScale] = useState<boolean>(true);
+  const [logScale, setLogScale] = useState<boolean>(false);
+  const [historyMeta, setHistoryMeta] = useState<{
+    canUndo: boolean;
+    canRedo: boolean;
+    count: number;
+  }>({ canUndo: false, canRedo: false, count: 0 });
+  const [livePrices, setLivePrices] = useState<
+    Record<string, { last: number; change: number; changePct: number }>
+  >({});
+
+  const chartHistoryActionsRef = useRef<ChartHistoryActions | null>(null);
   const seriesSnapshotRef = useRef<ChartSeriesSnapshot>({
     times: [],
     closes: [],
@@ -148,7 +172,9 @@ export function App({ transport: providedTransport }: AppProps) {
         if (!mounted) return;
         setBootConfig(cfg);
         setStateRev(ws.state_rev);
-        if (ws.link_group_symbols.A) setSymbol(ws.link_group_symbols.A);
+        if (ws.state_rev > 0 && ws.link_group_symbols.A) {
+          setSymbol(ws.link_group_symbols.A);
+        }
         setAccount(acct);
         setReplayStatus(rep);
         setSettings(cfgCascade);
@@ -194,19 +220,30 @@ export function App({ transport: providedTransport }: AppProps) {
     [transport, stateRev],
   );
 
+  const handleLivePriceSample = useCallback((sym: string, last: number) => {
+    const meta = getSymbolMeta(sym);
+    const openRef = Math.max(0.01, meta.basePrice - meta.seedChange);
+    const change = last - openRef;
+    const changePct = (change / openRef) * 100;
+    setLivePrices((prev) => ({
+      ...prev,
+      [sym]: { last, change, changePct },
+    }));
+  }, []);
+
   const handleSubmitOrder = useCallback(
     (side: "buy" | "sell", orderType: "market" | "limit") => {
       let limitPrice: string | undefined;
       if (orderType === "limit") {
-        const tickE9 = SYMBOL_TICK_E9[symbol] ?? 500_000_000n;
+        const meta = getSymbolMeta(symbol);
+        const tickE9 = meta.tickSizeE9;
         const closes = seriesSnapshotRef.current.closes;
         const lastClose =
           closes.length > 0 && Number.isFinite(closes[closes.length - 1])
             ? closes[closes.length - 1]
-            : (SYMBOL_FALLBACK_PRICE[symbol] ?? 95_000);
+            : meta.basePrice;
         const tickFloat = Number(tickE9) / 1e9;
         const baseTicks = BigInt(Math.max(1, Math.round(lastClose / tickFloat)));
-        // Place resting limit slightly passive (2 ticks inside bid/ask)
         const offsetTicks = side === "buy" ? -2n : 2n;
         const limitTicks = baseTicks + offsetTicks > 0n ? baseTicks + offsetTicks : 1n;
         limitPrice = (limitTicks * tickE9).toString();
@@ -297,6 +334,10 @@ export function App({ transport: providedTransport }: AppProps) {
     setStudyError(null);
   }, []);
 
+  const handleRemoveStudy = useCallback((id: string) => {
+    setActiveStudies((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+
   const handleUpdateSetting = useCallback(
     (key: string, value: string) => {
       void transport
@@ -326,12 +367,22 @@ export function App({ transport: providedTransport }: AppProps) {
         "export_workspace_toml",
         { name: "Default Desk", symbol, timeframe },
       )
-      .then(setExportedToml)
+      .then((toml) => {
+        setExportedToml(toml);
+        setRightTab("provenance");
+      })
       .catch(() => {});
   }, [transport, symbol, timeframe]);
 
   const handleResetLayout = useCallback(() => {
+    setLayoutMode("focus");
+    setRightTab("watchlist");
+    setReplayOpen(false);
     setLayoutEpoch((e) => e + 1);
+  }, []);
+
+  const handleToggleRightTab = useCallback((tab: Exclude<RightDrawerTab, null>) => {
+    setRightTab((curr) => (curr === tab ? null : tab));
   }, []);
 
   const studyOverlays = useMemo<StudyOverlaySeries[]>(
@@ -349,10 +400,11 @@ export function App({ transport: providedTransport }: AppProps) {
     [activeStudies],
   );
 
-  const tickSizeE9 = SYMBOL_TICK_E9[symbol] ?? 500_000_000n;
+  const symbolMeta = getSymbolMeta(symbol);
+  const tickSizeE9 = symbolMeta.tickSizeE9;
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-zinc-950 text-zinc-100">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0c0d11] text-[#e6e8ee]">
       <ChromeToolbar
         symbol={symbol}
         timeframe={timeframe}
@@ -366,14 +418,46 @@ export function App({ transport: providedTransport }: AppProps) {
         onCompactDensityChange={setCompactDensity}
         showProvenanceOverlay={showProvenanceOverlay}
         onShowProvenanceOverlayChange={setShowProvenanceOverlay}
+        candleStyle={candleStyle}
+        onCandleStyleChange={setCandleStyle}
+        replayOpen={replayOpen}
+        onToggleReplay={() => setReplayOpen((v) => !v)}
+        studiesActiveCount={activeStudies.length}
+        onOpenStudies={() => {
+          setLayoutMode("focus");
+          setRightTab((curr) => (curr === "studies" ? null : "studies"));
+        }}
+        tradeOpen={rightTab === "trade"}
+        onToggleTrade={() => {
+          setLayoutMode("focus");
+          setRightTab((curr) => (curr === "trade" ? null : "trade"));
+        }}
+        layoutMode={layoutMode}
+        onToggleLayoutMode={() =>
+          setLayoutMode((curr) => (curr === "focus" ? "dockview" : "focus"))
+        }
+        canUndo={historyMeta.canUndo}
+        canRedo={historyMeta.canRedo}
+        onUndo={() => chartHistoryActionsRef.current?.undo()}
+        onRedo={() => chartHistoryActionsRef.current?.redo()}
+        onExportWorkspace={handleExportWorkspaceToml}
       />
-      <main className="flex min-h-0 flex-1 flex-col">
-        <WorkspaceHost
-          key={layoutEpoch}
-          chartPanel={{
-            id: "chart-main",
-            title: `${symbol} · ${timeframe} Chart`,
-            render: () => (
+
+      <main className="flex min-h-0 flex-1 overflow-hidden">
+        {layoutMode === "focus" ? (
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <LeftDrawingRail
+              activeTool={activeTool}
+              magnetEnabled={magnetEnabled}
+              showFloatingBar={showFloatingBar}
+              drawingCount={historyMeta.count}
+              onSelectTool={setActiveTool}
+              onToggleMagnet={() => setMagnetEnabled((v) => !v)}
+              onToggleFloatingBar={() => setShowFloatingBar((v) => !v)}
+              onClearDrawings={() => chartHistoryActionsRef.current?.clear()}
+            />
+
+            <div className="relative min-w-0 flex-1 overflow-hidden bg-[#1b1e27]">
               <ChartPanel
                 transport={transport}
                 symbol={symbol}
@@ -381,47 +465,162 @@ export function App({ transport: providedTransport }: AppProps) {
                 tickSizeE9={tickSizeE9}
                 studyOverlays={studyOverlays}
                 seriesSnapshotRef={seriesSnapshotRef}
+                activeTool={activeTool}
+                onSelectTool={setActiveTool}
+                magnetEnabled={magnetEnabled}
+                onToggleMagnet={() => setMagnetEnabled((v) => !v)}
+                showFloatingBar={showFloatingBar}
+                candleStyle={candleStyle}
+                autoScale={autoScale}
+                onAutoScaleChange={setAutoScale}
+                logScale={logScale}
+                onLogScaleChange={setLogScale}
+                rangePreset={activeRange}
+                historyActionsRef={chartHistoryActionsRef}
+                onHistoryMetaChange={setHistoryMeta}
+                onRemoveStudy={handleRemoveStudy}
+                onLivePriceSample={handleLivePriceSample}
               />
-            ),
-          }}
-          domPanel={{
-            id: "dom-ladder",
-            title: "DOM Ladder & Tape",
-            render: () => (
-              <DomLadderPanel
-                transport={transport}
-                symbol={symbol}
-                compactDensity={compactDensity}
-              />
-            ),
-          }}
-          executionPanel={{
-            id: "paper-oms",
-            title: "Paper OMS · Studies · Provenance",
-            render: () => (
-              <PaperOmsPanel
-                symbol={symbol}
-                account={account}
-                bookState={bookState}
-                provenanceTier={provenanceTier}
-                activeStudies={activeStudies}
-                studyError={studyError}
-                settings={settings}
-                exportedToml={exportedToml}
-                onSubmitOrder={handleSubmitOrder}
-                onKillSwitch={handleKillSwitch}
-                onRunBuiltinStudy={handleRunBuiltinStudy}
-                onRunLuauStudy={handleRunLuauStudy}
-                onClearStudies={handleClearStudies}
-                onUpdateSetting={handleUpdateSetting}
-                onResetSetting={handleResetSetting}
-                onExportWorkspaceToml={handleExportWorkspaceToml}
-              />
-            ),
-          }}
-        />
+            </div>
+
+            {rightTab !== null && (
+              <div className="flex w-[276px] shrink-0 flex-col border-l border-[#232733] bg-[#101217]">
+                {rightTab === "watchlist" && (
+                  <WatchlistPanel
+                    activeSymbol={symbol}
+                    livePrices={livePrices}
+                    onSelectSymbol={handleSymbolChange}
+                    onCollapse={() => setRightTab(null)}
+                  />
+                )}
+                {rightTab === "dom" && (
+                  <DomLadderPanel
+                    transport={transport}
+                    symbol={symbol}
+                    compactDensity={compactDensity}
+                  />
+                )}
+                {(rightTab === "trade" ||
+                  rightTab === "studies" ||
+                  rightTab === "provenance") && (
+                  <PaperOmsPanel
+                    key={rightTab}
+                    defaultTab={
+                      rightTab === "studies"
+                        ? "studies"
+                        : rightTab === "provenance"
+                          ? exportedToml
+                            ? "settings"
+                            : "provenance"
+                          : "ticket"
+                    }
+                    symbol={symbol}
+                    account={account}
+                    bookState={bookState}
+                    provenanceTier={provenanceTier}
+                    activeStudies={activeStudies}
+                    studyError={studyError}
+                    settings={settings}
+                    exportedToml={exportedToml}
+                    onSubmitOrder={handleSubmitOrder}
+                    onKillSwitch={handleKillSwitch}
+                    onRunBuiltinStudy={handleRunBuiltinStudy}
+                    onRunLuauStudy={handleRunLuauStudy}
+                    onClearStudies={handleClearStudies}
+                    onUpdateSetting={handleUpdateSetting}
+                    onResetSetting={handleResetSetting}
+                    onExportWorkspaceToml={handleExportWorkspaceToml}
+                  />
+                )}
+              </div>
+            )}
+
+            <RightIconRail
+              activeTab={rightTab}
+              onSelectTab={handleToggleRightTab}
+              studiesCount={activeStudies.length}
+              openOrdersCount={account.orders.length}
+            />
+          </div>
+        ) : (
+          <WorkspaceHost
+            key={layoutEpoch}
+            chartPanel={{
+              id: "chart-main",
+              title: `${symbol} · ${timeframe} Chart`,
+              render: () => (
+                <ChartPanel
+                  transport={transport}
+                  symbol={symbol}
+                  timeframe={timeframe}
+                  tickSizeE9={tickSizeE9}
+                  studyOverlays={studyOverlays}
+                  seriesSnapshotRef={seriesSnapshotRef}
+                  activeTool={activeTool}
+                  onSelectTool={setActiveTool}
+                  magnetEnabled={magnetEnabled}
+                  onToggleMagnet={() => setMagnetEnabled((v) => !v)}
+                  showFloatingBar={showFloatingBar}
+                  candleStyle={candleStyle}
+                  autoScale={autoScale}
+                  onAutoScaleChange={setAutoScale}
+                  logScale={logScale}
+                  onLogScaleChange={setLogScale}
+                  rangePreset={activeRange}
+                  historyActionsRef={chartHistoryActionsRef}
+                  onHistoryMetaChange={setHistoryMeta}
+                  onRemoveStudy={handleRemoveStudy}
+                  onLivePriceSample={handleLivePriceSample}
+                />
+              ),
+            }}
+            domPanel={{
+              id: "dom-ladder",
+              title: "DOM Ladder & Tape",
+              render: () => (
+                <DomLadderPanel
+                  transport={transport}
+                  symbol={symbol}
+                  compactDensity={compactDensity}
+                />
+              ),
+            }}
+            executionPanel={{
+              id: "paper-oms",
+              title: "Paper OMS · Studies · Provenance",
+              render: () => (
+                <PaperOmsPanel
+                  symbol={symbol}
+                  account={account}
+                  bookState={bookState}
+                  provenanceTier={provenanceTier}
+                  activeStudies={activeStudies}
+                  studyError={studyError}
+                  settings={settings}
+                  exportedToml={exportedToml}
+                  onSubmitOrder={handleSubmitOrder}
+                  onKillSwitch={handleKillSwitch}
+                  onRunBuiltinStudy={handleRunBuiltinStudy}
+                  onRunLuauStudy={handleRunLuauStudy}
+                  onClearStudies={handleClearStudies}
+                  onUpdateSetting={handleUpdateSetting}
+                  onResetSetting={handleResetSetting}
+                  onExportWorkspaceToml={handleExportWorkspaceToml}
+                />
+              ),
+            }}
+          />
+        )}
       </main>
-      <ReplayBar status={replayStatus} onControl={handleReplayControl} />
+
+      {replayOpen && (
+        <ReplayBar
+          status={replayStatus}
+          onControl={handleReplayControl}
+          onClose={() => setReplayOpen(false)}
+        />
+      )}
+
       <StatusBar
         transportKind={transport.kind}
         bootConfig={bootConfig}
@@ -430,6 +629,12 @@ export function App({ transport: providedTransport }: AppProps) {
         stateRev={stateRev}
         droppedTotal={droppedTotal}
         showProvenance={showProvenanceOverlay}
+        activeRange={activeRange}
+        onSelectRange={setActiveRange}
+        autoScale={autoScale}
+        onToggleAutoScale={() => setAutoScale((v) => !v)}
+        logScale={logScale}
+        onToggleLogScale={() => setLogScale((v) => !v)}
       />
     </div>
   );

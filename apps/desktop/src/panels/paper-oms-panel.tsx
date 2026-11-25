@@ -13,11 +13,14 @@ import {
   type StudyRunResponse,
 } from "@allegedly/ipc-client";
 
+export type PaperOmsTabValue = "ticket" | "orders" | "provenance" | "studies" | "settings";
+
 export interface PaperOmsPanelProps {
   symbol: string;
   account: PaperAccountSnapshot;
   bookState: number;
   provenanceTier: number;
+  defaultTab?: PaperOmsTabValue;
   activeStudies?: readonly StudyRunResponse[];
   studyError?: string | null;
   settings?: readonly ResolvedSetting[];
@@ -96,6 +99,7 @@ export function PaperOmsPanel({
   account,
   bookState,
   provenanceTier,
+  defaultTab = "ticket",
   activeStudies = [],
   studyError = null,
   settings = [],
@@ -135,104 +139,104 @@ export function PaperOmsPanel({
   return (
     <section
       aria-label="Paper execution, studies, provenance, and settings"
-      className="flex h-full w-full flex-col bg-zinc-950 p-3 text-xs text-zinc-100"
+      className="flex h-full w-full flex-col bg-[#101217] p-2.5 text-xs text-[#e6e8ee]"
     >
-      <div className="mb-2 flex items-center justify-between border-b border-zinc-800 pb-2">
-        <div className="flex items-center gap-2 font-mono">
-          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/40">
+      <div className="mb-2 flex items-center justify-between border-b border-[#232733] pb-2">
+        <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px]">
+          <span className="rounded border border-amber-500/35 bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
             {account.mode}
           </span>
-          <span className="text-zinc-400">NET {symbol}:</span>
-          <span className="font-semibold text-zinc-100">{netPos}</span>
+          <span className="truncate text-[#868c9b]">NET {symbol}:</span>
+          <span className="font-semibold tabular-nums text-[#f1f3f8]">{netPos}</span>
         </div>
         <Button
           onClick={onKillSwitch}
-          className="rounded border border-rose-500/40 bg-rose-950/70 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-200 hover:bg-rose-900"
+          className="shrink-0 rounded border border-rose-500/40 bg-rose-950/60 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-200 hover:bg-rose-900/80"
         >
           Cancel All
         </Button>
       </div>
 
-      <Tabs defaultValue="ticket" className="flex min-h-0 flex-1 flex-col">
+      <Tabs defaultValue={defaultTab} className="flex min-h-0 flex-1 flex-col">
         <TabsList aria-label="Execution and desk panel tabs" className="mb-2 flex flex-wrap gap-1">
           <TabsTab
             value="ticket"
-            className="rounded px-2 py-1 text-[11px] text-zinc-400 data-selected:bg-zinc-800 data-selected:text-zinc-100"
+            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#e6e8ee] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
           >
             Paper Ticket
           </TabsTab>
           <TabsTab
             value="orders"
-            className="rounded px-2 py-1 text-[11px] text-zinc-400 data-selected:bg-zinc-800 data-selected:text-zinc-100"
+            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#e6e8ee] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
           >
             Journal ({account.orders.length})
           </TabsTab>
           <TabsTab
             value="provenance"
-            className="rounded px-2 py-1 text-[11px] text-zinc-400 data-selected:bg-zinc-800 data-selected:text-zinc-100"
+            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#e6e8ee] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
           >
             Provenance
           </TabsTab>
           <TabsTab
             value="studies"
-            className="rounded px-2 py-1 text-[11px] text-zinc-400 data-selected:bg-zinc-800 data-selected:text-zinc-100"
+            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#e6e8ee] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
           >
             Studies ({activeStudies.length})
           </TabsTab>
           <TabsTab
             value="settings"
-            className="rounded px-2 py-1 text-[11px] text-zinc-400 data-selected:bg-zinc-800 data-selected:text-zinc-100"
+            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#e6e8ee] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
           >
             TOML Cascade
           </TabsTab>
         </TabsList>
 
         <TabsPanel value="ticket" className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             <Button
               onClick={() => onSubmitOrder("buy", "market")}
-              className="rounded bg-emerald-600 px-2.5 py-1.5 font-mono text-xs font-semibold text-zinc-950 hover:bg-emerald-500"
+              className="rounded bg-emerald-600 px-2.5 py-2 font-mono text-[11px] font-semibold text-[#0c0d11] hover:bg-emerald-500"
             >
               BUY MKT 0.50
             </Button>
             <Button
               onClick={() => onSubmitOrder("sell", "market")}
-              className="rounded bg-rose-600 px-2.5 py-1.5 font-mono text-xs font-semibold text-white hover:bg-rose-500"
+              className="rounded bg-rose-600 px-2.5 py-2 font-mono text-[11px] font-semibold text-white hover:bg-rose-500"
             >
               SELL MKT 0.50
             </Button>
             <Button
               onClick={() => onSubmitOrder("buy", "limit")}
-              className="rounded border border-emerald-700 bg-emerald-950/60 px-2.5 py-1.5 font-mono text-xs text-emerald-200 hover:bg-emerald-900/60"
+              className="rounded border border-emerald-700/70 bg-emerald-950/50 px-2.5 py-1.5 font-mono text-[11px] text-emerald-200 hover:bg-emerald-900/60"
             >
               BUY LMT 0.50
             </Button>
             <Button
               onClick={() => onSubmitOrder("sell", "limit")}
-              className="rounded border border-rose-700 bg-rose-950/60 px-2.5 py-1.5 font-mono text-xs text-rose-200 hover:bg-rose-900/60"
+              className="rounded border border-rose-700/70 bg-rose-950/50 px-2.5 py-1.5 font-mono text-[11px] text-rose-200 hover:bg-rose-900/60"
             >
               SELL LMT 0.50
             </Button>
           </div>
-          <p className="font-mono text-[10px] text-zinc-400">
+          <p className="rounded border border-[#232733] bg-[#161922] px-2 py-1.5 font-mono text-[10px] leading-relaxed text-[#868c9b]">
             LIVE_ARMED = false · LocalPaperAdapter + SQLite WAL · Zero broker network egress (ADR-0009).
           </p>
         </TabsPanel>
 
         <TabsPanel value="orders" className="min-h-0 flex-1 overflow-y-auto font-mono text-[11px]">
           {account.orders.length === 0 ? (
-            <p className="py-3 text-zinc-400">No paper orders submitted yet.</p>
+            <p className="py-3 text-[#868c9b]">No paper orders submitted yet.</p>
           ) : (
             <ul className="space-y-1">
               {account.orders.slice(0, 10).map((ord) => (
                 <li
                   key={ord.order_id}
-                  className="flex items-center justify-between rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1"
+                  className="flex items-center justify-between rounded border border-[#232733] bg-[#161922] px-2 py-1.5"
                 >
                   <span className={ord.side === "buy" ? "text-emerald-300" : "text-rose-300"}>
                     {ord.order_id} · {ord.side.toUpperCase()} {ord.order_type.toUpperCase()}
                   </span>
-                  <span className="text-zinc-300">
+                  <span className="tabular-nums text-[#cfd4e0]">
                     {formatFixedE9(BigInt(ord.qty_e9), 2)} · {ord.status.toUpperCase()}
                   </span>
                 </li>
@@ -242,12 +246,12 @@ export function PaperOmsPanel({
         </TabsPanel>
 
         <TabsPanel value="provenance" className="min-h-0 flex-1 space-y-1.5 overflow-y-auto font-mono text-[11px]">
-          <div className="flex justify-between rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1">
-            <span className="text-zinc-400">Active Tier</span>
+          <div className="flex justify-between rounded border border-[#232733] bg-[#161922] px-2 py-1.5">
+            <span className="text-[#868c9b]">Active Tier</span>
             <span className="text-sky-300">{PROVENANCE_TIER_LABELS[provenanceTier] ?? "UNKNOWN"}</span>
           </div>
-          <div className="flex justify-between rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1">
-            <span className="text-zinc-400">Book State · PIQ Badge</span>
+          <div className="flex justify-between rounded border border-[#232733] bg-[#161922] px-2 py-1.5">
+            <span className="text-[#868c9b]">Book State · PIQ Badge</span>
             <span
               data-testid="oms-book-state-badge"
               className={bookStateTextClass(bookState)}
@@ -264,17 +268,17 @@ export function PaperOmsPanel({
                   key={row.tier}
                   className={
                     active
-                      ? "flex items-center justify-between rounded border border-sky-500/60 bg-sky-950/40 px-2 py-1 text-[10px]"
-                      : "flex items-center justify-between rounded border border-zinc-800/80 bg-zinc-900/40 px-2 py-1 text-[10px] text-zinc-400"
+                      ? "flex items-center justify-between rounded border border-sky-500/60 bg-sky-950/35 px-2 py-1.5 text-[10px]"
+                      : "flex items-center justify-between rounded border border-[#232733] bg-[#161922]/70 px-2 py-1.5 text-[10px] text-[#868c9b]"
                   }
                 >
                   <div>
-                    <div className={active ? "font-semibold text-sky-200" : "text-zinc-300"}>
+                    <div className={active ? "font-semibold text-sky-200" : "text-[#cfd4e0]"}>
                       T{row.displayTier} · {row.label}
                     </div>
-                    <div className="text-[9px] text-zinc-400">{row.desc}</div>
+                    <div className="text-[9px] text-[#868c9b]">{row.desc}</div>
                   </div>
-                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-300">
+                  <span className="rounded bg-[#101217] px-1.5 py-0.5 text-[9px] text-[#cfd4e0]">
                     {active ? "ACTIVE" : row.absorptionAllowed ? "SV-10 OK" : "GATED"}
                   </span>
                 </li>
@@ -287,56 +291,56 @@ export function PaperOmsPanel({
           <div className="flex flex-wrap gap-1">
             <Button
               onClick={() => onRunBuiltinStudy?.("sma", 20)}
-              className="rounded border border-sky-700/70 bg-sky-950/60 px-2 py-1 text-[10px] text-sky-200 hover:bg-sky-900/60"
+              className="rounded border border-sky-500/40 bg-sky-950/40 px-2 py-1 text-[10px] text-sky-200 hover:bg-sky-900/50"
             >
               + SMA(20)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("ema", 9)}
-              className="rounded border border-amber-700/70 bg-amber-950/60 px-2 py-1 text-[10px] text-amber-200 hover:bg-amber-900/60"
+              className="rounded border border-amber-500/40 bg-amber-950/40 px-2 py-1 text-[10px] text-amber-200 hover:bg-amber-900/50"
             >
               + EMA(9)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("vwap", 1)}
-              className="rounded border border-violet-700/70 bg-violet-950/60 px-2 py-1 text-[10px] text-violet-200 hover:bg-violet-900/60"
+              className="rounded border border-violet-500/40 bg-violet-950/40 px-2 py-1 text-[10px] text-violet-200 hover:bg-violet-900/50"
             >
               + VWAP
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("wilder_rsi", 14)}
-              className="rounded border border-emerald-700/70 bg-emerald-950/60 px-2 py-1 text-[10px] text-emerald-200 hover:bg-emerald-900/60"
+              className="rounded border border-emerald-500/40 bg-emerald-950/40 px-2 py-1 text-[10px] text-emerald-200 hover:bg-emerald-900/50"
             >
               + RSI(14)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("cvd", 1)}
-              className="rounded border border-cyan-700/70 bg-cyan-950/60 px-2 py-1 text-[10px] text-cyan-200 hover:bg-cyan-900/60"
+              className="rounded border border-cyan-500/40 bg-cyan-950/40 px-2 py-1 text-[10px] text-cyan-200 hover:bg-cyan-900/50"
             >
               + CVD
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("footprint_delta", 1)}
-              className="rounded border border-fuchsia-700/70 bg-fuchsia-950/60 px-2 py-1 text-[10px] text-fuchsia-200 hover:bg-fuchsia-900/60"
+              className="rounded border border-fuchsia-500/40 bg-fuchsia-950/40 px-2 py-1 text-[10px] text-fuchsia-200 hover:bg-fuchsia-900/50"
             >
               + FP Delta
             </Button>
             {activeStudies.length > 0 && (
               <Button
                 onClick={() => onClearStudies?.()}
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-[10px] text-zinc-300 hover:bg-zinc-800"
+                className="rounded border border-[#2a2f3d] bg-[#161922] px-2 py-1 text-[10px] text-[#cfd4e0] hover:bg-[#1e2330]"
               >
                 Clear
               </Button>
             )}
           </div>
 
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-[#8c93a4]">
               <label htmlFor="luau-study-input">
-                Sandboxed Luau Study (≤ {(poolCapBytes / (1024 * 1024)).toFixed(0)} MiB Global Pool · No os/io):
+                Sandboxed Luau Study (≤ {(poolCapBytes / (1024 * 1024)).toFixed(0)} MiB · No os/io):
               </label>
-              <span className="text-zinc-500">
+              <span className="tabular-nums text-[#868c9b]">
                 Peak: {(latestLuauPeakBytes / (1024 * 1024)).toFixed(1)} MiB
               </span>
             </div>
@@ -344,12 +348,12 @@ export function PaperOmsPanel({
               id="luau-study-input"
               value={luauDraft}
               onChange={(e) => setLuauDraft(e.target.value)}
-              rows={2}
-              className="w-full rounded border border-zinc-800 bg-zinc-900 p-1.5 font-mono text-[10px] text-zinc-200 focus:outline-2 focus:outline-amber-400"
+              rows={3}
+              className="w-full rounded border border-[#232733] bg-[#161922] p-1.5 font-mono text-[10px] text-[#e6e8ee] focus:outline-2 focus:outline-sky-400"
             />
             <Button
               onClick={() => onRunLuauStudy?.(luauDraft)}
-              className="rounded bg-amber-500 px-2.5 py-1 text-[10px] font-semibold text-zinc-950 hover:bg-amber-400"
+              className="rounded bg-[#e6e8ee] px-2.5 py-1 text-[10px] font-semibold text-[#0c0d11] hover:bg-white"
             >
               Run Luau Study
             </Button>
@@ -368,10 +372,10 @@ export function PaperOmsPanel({
                 return (
                   <li
                     key={st.id}
-                    className="flex items-center justify-between rounded border border-zinc-800 bg-zinc-900/60 px-2 py-1"
+                    className="flex items-center justify-between rounded border border-[#232733] bg-[#161922] px-2 py-1"
                   >
-                    <span className="text-zinc-200">{st.label}</span>
-                    <span className="text-zinc-400">
+                    <span className="text-[#e6e8ee]">{st.label}</span>
+                    <span className="tabular-nums text-[#868c9b]">
                       {latest !== undefined && latest !== null ? latest.toFixed(2) : "—"} ·{" "}
                       {st.overlay ? "OVERLAY" : "OSC"}
                     </span>
@@ -383,13 +387,13 @@ export function PaperOmsPanel({
         </TabsPanel>
 
         <TabsPanel value="settings" className="min-h-0 flex-1 space-y-2 overflow-y-auto font-mono text-[10px]">
-          <div className="flex items-center justify-between">
-            <span className="text-zinc-400">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[#868c9b]">
               5-Level Cascade (Defaults → Global → Workspace → Template → Instance)
             </span>
             <Button
               onClick={() => onExportWorkspaceToml?.()}
-              className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-800"
+              className="shrink-0 rounded border border-[#2a2f3d] bg-[#161922] px-2 py-0.5 text-[10px] text-[#e6e8ee] hover:bg-[#1e2330]"
             >
               Export .atworkspace.toml
             </Button>
@@ -401,11 +405,11 @@ export function PaperOmsPanel({
               return (
                 <li
                   key={s.key}
-                  className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900/50 px-2 py-1"
+                  className="flex items-center justify-between gap-2 rounded border border-[#232733] bg-[#161922] px-2 py-1"
                 >
                   <div className="min-w-0 truncate">
-                    <span className="text-zinc-200">{s.key}</span>
-                    <span className="ml-1.5 rounded bg-zinc-800 px-1 py-0.5 text-[9px] uppercase text-zinc-400">
+                    <span className="text-[#e6e8ee]">{s.key}</span>
+                    <span className="ml-1.5 rounded bg-[#1e2330] px-1 py-0.5 text-[9px] uppercase text-[#868c9b]">
                       {s.source_layer}
                     </span>
                   </div>
@@ -420,17 +424,17 @@ export function PaperOmsPanel({
                             if (e.key === "Enter") commitEditSetting(s.key);
                             if (e.key === "Escape") setEditingSettingKey(null);
                           }}
-                          className="w-24 rounded border border-amber-500/60 bg-zinc-950 px-1.5 py-0.5 font-mono text-[10px] text-amber-200 focus:outline-none"
+                          className="w-20 rounded border border-sky-400/60 bg-[#0c0d11] px-1.5 py-0.5 font-mono text-[10px] text-sky-200 focus:outline-none"
                         />
                         <Button
                           onClick={() => commitEditSetting(s.key)}
-                          className="rounded border border-amber-500/60 bg-amber-950/60 px-1.5 py-0.5 text-[9px] text-amber-200 hover:bg-amber-900/60"
+                          className="rounded border border-sky-500/60 bg-sky-950/60 px-1.5 py-0.5 text-[9px] text-sky-200 hover:bg-sky-900/60"
                         >
                           Save
                         </Button>
                         <Button
                           onClick={() => setEditingSettingKey(null)}
-                          className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:text-zinc-200"
+                          className="rounded border border-[#2a2f3d] bg-[#161922] px-1.5 py-0.5 text-[9px] text-[#868c9b] hover:text-[#e6e8ee]"
                         >
                           Cancel
                         </Button>
@@ -446,14 +450,14 @@ export function PaperOmsPanel({
                           <>
                             <Button
                               onClick={() => beginEditSetting(s)}
-                              className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-400 hover:text-zinc-200"
+                              className="rounded border border-[#2a2f3d] bg-[#101217] px-1.5 py-0.5 text-[9px] text-[#9aa0ae] hover:text-[#e6e8ee]"
                             >
                               Override
                             </Button>
                             {s.is_overridden && (
                               <Button
                                 onClick={() => onResetSetting?.(s.key)}
-                                className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[9px] text-zinc-300 hover:bg-zinc-800"
+                                className="rounded border border-[#2a2f3d] bg-[#161922] px-1.5 py-0.5 text-[9px] text-[#cfd4e0] hover:bg-[#1e2330]"
                               >
                                 Reset
                               </Button>
@@ -471,7 +475,7 @@ export function PaperOmsPanel({
           {exportedToml && (
             <pre
               data-testid="exported-workspace-toml"
-              className="max-h-28 overflow-auto rounded border border-zinc-800 bg-black/70 p-2 text-[9px] text-emerald-300"
+              className="max-h-28 overflow-auto rounded border border-[#232733] bg-[#0c0d11] p-2 text-[9px] text-emerald-300"
             >
               {exportedToml}
             </pre>
