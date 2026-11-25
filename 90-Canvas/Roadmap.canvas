@@ -6,37 +6,37 @@
       "text": "## Phase 0: Charter & Questions\nStatus: Complete (Defaults Logged)",
       "x": -400,
       "y": 0,
-      "width": 240,
+      "width": 250,
       "height": 110,
       "color": "4"
     },
     {
       "id": "p1",
       "type": "text",
-      "text": "## Phase 1: Research R01\u2013R10\nStatus: In Progress (Parallel)",
+      "text": "## Phase 1: Research R01\u2013R10\nStatus: VERIFIED (Gate Passed)\n15 docs \u00b7 279 primary sources",
       "x": -100,
       "y": 0,
-      "width": 240,
-      "height": 110,
-      "color": "5"
+      "width": 260,
+      "height": 120,
+      "color": "4"
     },
     {
       "id": "p2",
       "type": "text",
-      "text": "## Phase 2: Spikes S01\u2013S08\nGate: Measured Numbers",
-      "x": 200,
+      "text": "## Phase 2: Spikes S01\u2013S08\nStatus: Ready (Pre-Build Hygiene Hold)\nGate: Measured Numbers",
+      "x": 210,
       "y": 0,
-      "width": 240,
-      "height": 110,
-      "color": "3"
+      "width": 260,
+      "height": 120,
+      "color": "5"
     },
     {
       "id": "p3",
       "type": "text",
       "text": "## Phase 3: Architecture & ADRs\nGate: Abel Approval + Red Team",
-      "x": 500,
+      "x": 520,
       "y": 0,
-      "width": 240,
+      "width": 250,
       "height": 110,
       "color": "6"
     },
@@ -44,9 +44,9 @@
       "id": "p4",
       "type": "text",
       "text": "## Phase 4: Roadmap & Stories\nGate: Abel Approval + Red Team",
-      "x": 800,
+      "x": 820,
       "y": 0,
-      "width": 240,
+      "width": 250,
       "height": 110,
       "color": "2"
     },
@@ -54,9 +54,9 @@
       "id": "p5",
       "type": "text",
       "text": "## Phase 5: Red Team & Plan of Record\nFinal Deliverable",
-      "x": 1100,
+      "x": 1120,
       "y": 0,
-      "width": 240,
+      "width": 250,
       "height": 110,
       "color": "1"
     }

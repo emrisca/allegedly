@@ -13,8 +13,9 @@ WHERE status = "blocked"
 SORT updated DESC
 ```
 
-## Live Summary
+## Live Summary (Phase 1 Gate)
 | Item | Blocker | Owner | Next Action |
 |---|---|---|---|
-| Obsidian `userIgnoreFilters` | Obsidian is currently running on `/Users/abelmora/Documents/Obsidian`; editing `.obsidian/app.json` while open risks overwrite | Abel | Add `node_modules`, `target`, `dist`, `build`, `.git`, `.venv`, `spikes/*/node_modules` in Obsidian Settings → Files & links → Excluded files, and disable "Detect all file extensions" before Phase 2 installs |
-| Phase 3 Architecture & ADRs | Gate requires Phase 1 + Phase 2 completion and Abel's approval | Orchestrator | Complete Phase 1 & Phase 2, then request gate approval |
+| **Phase 2 Spikes (`S01`–`S08`)** | Section 0.2 hard precondition: `.obsidian/app.json` does not yet have `userIgnoreFilters` (Obsidian is running on `/Users/abelmora/Documents/Obsidian`), and Round 1 `Q8` (in-repo `spikes/` vs external `~/Documents/Projects/motiveview-spikes/`) is awaiting Abel's reply | Abel / Orchestrator | Either (a) add `node_modules`, `target`, `dist`, `build`, `.git`, `.venv`, `spikes/*/node_modules` to Obsidian → Settings → Files & links → Excluded files (and turn OFF *Detect all file extensions*), or (b) confirm external build/spike paths; then Ember launches Spikes `S01`–`S08` |
+| **Phase 3 Architecture & ADRs** | Gate requires Phase 2 measured spike numbers + Abel's explicit approval | Orchestrator | Present Phase 2 Spike Gate report and request approval |
+| **Phase 4 Roadmap & Stories** | Gate requires Phase 3 Red-Team pass + Abel's explicit approval | Orchestrator | Present Phase 3 Architecture Gate report and request approval |
