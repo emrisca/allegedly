@@ -123,3 +123,18 @@ updated: 2026-11-25
 - **Desktop Runtime & UI Wiring (`allegedly-app`, `apps/desktop/src-tauri`, `@allegedly/ipc-client`, `apps/desktop`):**
   - Wired `run_study`, `get_replay_status`, `control_replay`, `get_settings_cascade`, `update_setting_override`, `reset_setting_override`, and `export_workspace_toml` across Rust Tauri commands and `OfflineSimTransportAdapter`.
   - Added `@ui-sdk/react` `ReplayBar` (`Play/Pause/Step/Reset`, `1x/5x/50x/Max`, scrubber, `SV-09` `SHA-256` verification badge), imperative LWC `LineSeries` study overlays in `ChartPanel`, and upgraded `PaperOmsPanel` with the full **5-Tier Provenance Ledger**, **Studies** runner (built-ins + sandboxed Luau), and **TOML Cascade** inspector (`0` critical/serious `axe-core` WCAG AA violations).
+
+## 2026-11-25 — Stage D Slice 5 Complete (macOS `arm64` `.app` Bundle, `UV-05` M2 Verified, `UV-06` Public Live Soak Verified & Real-World Fixes)
+- **macOS `arm64` Release Tauri v2 Bundle & `UV-05` / `SV-01` Verification (`scripts/ci/measure-macos-bundle.mjs`):**
+  - Built standalone release Tauri v2 binary (`allegedly-desktop`) embedding compiled React 19 + LWC v5.3 + WebGL2 + Dockview frontend into external `CARGO_TARGET_DIR` (`0` in-vault `target/` dirs).
+  - Packaged `Allegedly.app`: **`12.07 MB`** uncompressed (**`3.36 MB`** `.tar.gz`, `3.3×` under `< 40 MB` budget).
+  - Offline cold start across 3 runs: **`1,647 ms` p95** (`233 ms` / `276 ms` warm, `< 2,000 ms` budget).
+  - `SV-01` zero-network startup verified via `lsof -nP -i`: **`0` outbound sockets** across main process and all `WKWebView` helpers across all 3 runs.
+  - `UV-05` full macOS OS process-tree idle RAM (explicitly capturing `launchd`-parented `com.apple.WebKit.{GPU,Networking,WebContent}` XPC helpers): **`167.05 MB` max** (`95.94 MB` main + `71.11 MB` across 3 WebKit helpers — `133 MB` below `< 300 MB` budget). Windows `WebView2` + `.msi` remain honestly pending.
+- **`UV-06` Public Read-Only Live Soak (`crates/allegedly-ingest/src/bin/live_soak.rs`, `.github/workflows/ci-pre-release-soak.yml`):**
+  - Built zero-credential, zero-float (`SV-08`) public Kraken WS v2 + Coinbase AdvTrade soak binary and ran it live on Apple M2.
+  - Real-world live soak exposed and immediately fixed **3 production bugs** loopback tests could not catch:
+    1. `rustls 0.23` required explicit `ring` `CryptoProvider::install_default()` for live `wss://` TLS (fixed in `ws_client.rs` & `live_soak.rs`; `ring` avoids Windows CMake/NASM build requirements).
+    2. Kraken WS v2 emits tiny crypto trade sizes in scientific notation (e.g., `5e-5`) — upgraded pure-integer `parse_decimal_e9` (`crates/allegedly-core/src/fixed.rs`) to parse ASCII scientific notation without floats (`SV-08` still `0` floats).
+    3. Coinbase AdvTrade increments `sequence_num` across all envelopes (`subscriptions` + `market_trades`) — fixed envelope-level sequence tracking.
+  - Post-fix 30s live soak (`SOL/USD` + `BTC/USD`, `0` credentials): **`962` real ticks** (`767` Coinbase + `195` Kraken), **`0` parse errors, `0` sequence gaps, `0` storage drops**. Full 30-minute soak (`>= 1,000` trades/venue) and Databento `.dbn.zst` fixture remain explicitly pending in `Unverified-Claims.md`.

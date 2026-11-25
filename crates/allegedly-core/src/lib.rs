@@ -26,6 +26,8 @@ mod tests {
         let neg = PriceE9::parse("-0.000125").unwrap();
         assert_eq!(neg.0, -125_000);
         assert_eq!(neg.to_string(), "-0.000125");
+        assert_eq!(QtyE9::parse("5e-5").unwrap().0, 50_000);
+        assert_eq!(QtyE9::parse("1.25E-6").unwrap().0, 1_250);
 
         let ticks = p.to_ticks(250_000_000).unwrap();
         assert_eq!(ticks.0, 268_938);

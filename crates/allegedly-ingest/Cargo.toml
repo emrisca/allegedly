@@ -13,6 +13,7 @@ allegedly-core.workspace = true
 allegedly-ipc.workspace = true
 crc32fast.workspace = true
 rtrb.workspace = true
+rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

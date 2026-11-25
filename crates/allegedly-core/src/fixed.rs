@@ -67,8 +67,8 @@ pub struct TimestampNs(pub i64);
 #[repr(transparent)]
 pub struct Bps(pub i32);
 
-/// Parse an exact ASCII decimal string (e.g., "67234.50", "-0.000125") into scaled 1e9 i64
-/// without ever touching binary floating-point parsing.
+/// Parse an exact ASCII decimal or scientific-notation string (e.g., "67234.50", "-0.000125", "1.5e-5")
+/// into scaled 1e9 i64 without ever touching binary floating-point parsing (SV-08).
 pub fn parse_decimal_e9(input: &str) -> Result<i64, FixedError> {
     let s = input.trim();
     if s.is_empty() {
@@ -85,7 +85,19 @@ pub fn parse_decimal_e9(input: &str) -> Result<i64, FixedError> {
         return Err(FixedError::InvalidDecimal(input.to_string()));
     }
 
-    let mut parts = rest.split('.');
+    // Optional ASCII exponent (e.g. "5e-5" from Kraken WS v2 JSON numbers)
+    let (mantissa, exp10): (&str, i32) = if let Some(idx) = rest.find(['e', 'E']) {
+        let (m, e_part) = rest.split_at(idx);
+        let e_str = &e_part[1..];
+        let parsed_exp = e_str
+            .parse::<i32>()
+            .map_err(|_| FixedError::InvalidDecimal(input.to_string()))?;
+        (m, parsed_exp)
+    } else {
+        (rest, 0)
+    };
+
+    let mut parts = mantissa.split('.');
     let int_part = parts.next().unwrap_or("");
     let frac_part = parts.next();
     if parts.next().is_some() {
@@ -95,39 +107,57 @@ pub fn parse_decimal_e9(input: &str) -> Result<i64, FixedError> {
         return Err(FixedError::InvalidDecimal(input.to_string()));
     }
 
-    let mut whole: i128 = 0;
+    // Collect significant digits in pure integer i128 without floats
+    let mut digits_val: i128 = 0;
+    let mut frac_digits: i32 = 0;
     for b in int_part.bytes() {
         if !b.is_ascii_digit() {
             return Err(FixedError::InvalidDecimal(input.to_string()));
         }
-        whole = whole
+        digits_val = digits_val
             .checked_mul(10)
             .and_then(|v| v.checked_add(i128::from(b - b'0')))
             .ok_or(FixedError::Overflow)?;
     }
-
-    let mut frac: i128 = 0;
-    let mut digits = 0usize;
     if let Some(f) = frac_part {
         for b in f.bytes() {
             if !b.is_ascii_digit() {
                 return Err(FixedError::InvalidDecimal(input.to_string()));
             }
-            if digits < 9 {
-                frac = frac * 10 + i128::from(b - b'0');
-                digits += 1;
+            // Keep up to 18 fractional digits before scaling so tiny scientific values stay exact
+            if frac_digits < 18 {
+                digits_val = digits_val
+                    .checked_mul(10)
+                    .and_then(|v| v.checked_add(i128::from(b - b'0')))
+                    .ok_or(FixedError::Overflow)?;
+                frac_digits += 1;
             }
         }
     }
-    while digits < 9 {
-        frac *= 10;
-        digits += 1;
-    }
 
-    let mag = whole
-        .checked_mul(SCALE_E9_I128)
-        .and_then(|v| v.checked_add(frac))
+    // Target scale is 10^9: net shift = 9 + exp10 - frac_digits
+    let shift = 9i32
+        .checked_add(exp10)
+        .and_then(|v| v.checked_sub(frac_digits))
         .ok_or(FixedError::Overflow)?;
+
+    let mag = if shift >= 0 {
+        let mut v = digits_val;
+        for _ in 0..shift {
+            v = v.checked_mul(10).ok_or(FixedError::Overflow)?;
+        }
+        v
+    } else {
+        let mut v = digits_val;
+        for _ in 0..shift.unsigned_abs() {
+            v /= 10;
+            if v == 0 {
+                break;
+            }
+        }
+        v
+    };
+
     let signed = if neg { -mag } else { mag };
     i64::try_from(signed).map_err(|_| FixedError::Overflow)
 }

@@ -2,7 +2,7 @@
 title: Allegedly — Research & Plan of Record (Home)
 type: index
 status: active
-phase: Phase 5 Complete — Plan of Record Locked (Ready for Stage D v0.1 Implementation)
+phase: Stage D v0.1 Implementation — Apple M2 Mac Slices 1-5 Complete (Pending Red-Team Stage D Audit & Windows CI)
 owner: orchestrator
 updated: 2026-11-25
 ---
@@ -22,8 +22,8 @@ updated: 2026-11-25
 | **Phase 2** | 8 Verified Proof-of-Concept Spikes (`S01`–`S08`) | **COMPLETE** (`f7ad53d`) |
 | **Phase 3** | Architecture Specs (9 docs), ADRs (`0001`–`0010`), `Architecture.canvas`, Red-Team Audit | **COMPLETE — Red-Team `PASS` (`18/18` closed)** |
 | **Phase 4** | Roadmap, Milestones (`v0.1`–`v1.0`), Epics/Stories, `v0.1` Sprint Plan & DoD | **COMPLETE — Red-Team `PASS` (`12/12` closed)** |
-| **Phase 5** | Final Holistic Red-Team Audit & `Plan-of-Record.md` | ****COMPLETE** — Red-Team `PASS` (`6/6` closed)** |
-| **v0.1 Build** | Rust Cargo Workspace (`allegedly-*`) + Tauri v2 / React 19 / `ui-sdk` Desktop Shell | Queued after Phase 5 `PASS` |
+| **Phase 5** | Final Holistic Red-Team Audit & `Plan-of-Record.md` | **COMPLETE — Red-Team `PASS` (`6/6` closed)** |
+| **Stage D (`v0.1` Build)** | 9 Rust Crates + Tauri v2 / React 19 / `@ui-sdk/react` / WebGL2 / Luau / SV-09 Replay / M2 `.app` (`12.07 MB`) | **Slices 1–5 Verified on Apple M2 (`darwin-arm64`)** · Windows CI & Red-Team Stage D Audit Active |
 
 ---
 

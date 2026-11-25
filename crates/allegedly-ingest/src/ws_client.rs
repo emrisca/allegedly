@@ -95,6 +95,7 @@ pub async fn run_resilient_ws_session(
     target_ticks: u64,
     max_reconnects: u32,
 ) -> Result<WsSessionStats, WsIngestError> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let mut stats = WsSessionStats {
         ticks_pushed: 0,
         faults_detected: 0,

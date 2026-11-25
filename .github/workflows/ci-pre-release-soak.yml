@@ -1,0 +1,21 @@
+name: CI — Pre-Release Live Public Soak (UV-06)
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration_secs:
+        description: "Soak duration in seconds (default 1800 = 30 minutes)"
+        required: false
+        default: "1800"
+
+jobs:
+  public-marketdata-soak:
+    name: Public Read-Only Kraken + Coinbase Soak (0 Credentials)
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run public read-only live soak (SOL/USD + BTC/USD)
+        run: |
+          cargo run --release -p allegedly-ingest --bin live_soak -- --duration-secs "${{ inputs.duration_secs || '1800' }}"
