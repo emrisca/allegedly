@@ -1,0 +1,39 @@
+# Dependencies & build outputs
+node_modules/
+target/
+dist/
+build/
+.venv/
+spikes/*/node_modules/
+spikes/*/target/
+spikes/*/dist/
+
+# OS & editor noise
+.DS_Store
+*.log
+*.swp
+.idea/
+.vscode/
+
+# Secrets & environment
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# Market data dumps & local recordings (never commit licensed or bulk data)
+*.dbn
+*.dbn.zst
+*.scid
+*.parquet
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+recordings/
+data-dumps/
+
+# Obsidian ephemeral state (if vault root is ever moved here)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json

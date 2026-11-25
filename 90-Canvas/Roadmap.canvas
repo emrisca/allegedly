@@ -1,0 +1,101 @@
+{
+  "nodes": [
+    {
+      "id": "p0",
+      "type": "text",
+      "text": "## Phase 0: Charter & Questions\nStatus: Complete (Defaults Logged)",
+      "x": -400,
+      "y": 0,
+      "width": 240,
+      "height": 110,
+      "color": "4"
+    },
+    {
+      "id": "p1",
+      "type": "text",
+      "text": "## Phase 1: Research R01\u2013R10\nStatus: In Progress (Parallel)",
+      "x": -100,
+      "y": 0,
+      "width": 240,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "p2",
+      "type": "text",
+      "text": "## Phase 2: Spikes S01\u2013S08\nGate: Measured Numbers",
+      "x": 200,
+      "y": 0,
+      "width": 240,
+      "height": 110,
+      "color": "3"
+    },
+    {
+      "id": "p3",
+      "type": "text",
+      "text": "## Phase 3: Architecture & ADRs\nGate: Abel Approval + Red Team",
+      "x": 500,
+      "y": 0,
+      "width": 240,
+      "height": 110,
+      "color": "6"
+    },
+    {
+      "id": "p4",
+      "type": "text",
+      "text": "## Phase 4: Roadmap & Stories\nGate: Abel Approval + Red Team",
+      "x": 800,
+      "y": 0,
+      "width": 240,
+      "height": 110,
+      "color": "2"
+    },
+    {
+      "id": "p5",
+      "type": "text",
+      "text": "## Phase 5: Red Team & Plan of Record\nFinal Deliverable",
+      "x": 1100,
+      "y": 0,
+      "width": 240,
+      "height": 110,
+      "color": "1"
+    }
+  ],
+  "edges": [
+    {
+      "id": "ep01",
+      "fromNode": "p0",
+      "fromSide": "right",
+      "toNode": "p1",
+      "toSide": "left"
+    },
+    {
+      "id": "ep12",
+      "fromNode": "p1",
+      "fromSide": "right",
+      "toNode": "p2",
+      "toSide": "left"
+    },
+    {
+      "id": "ep23",
+      "fromNode": "p2",
+      "fromSide": "right",
+      "toNode": "p3",
+      "toSide": "left"
+    },
+    {
+      "id": "ep34",
+      "fromNode": "p3",
+      "fromSide": "right",
+      "toNode": "p4",
+      "toSide": "left"
+    },
+    {
+      "id": "ep45",
+      "fromNode": "p4",
+      "fromSide": "right",
+      "toNode": "p5",
+      "toSide": "left"
+    }
+  ]
+}

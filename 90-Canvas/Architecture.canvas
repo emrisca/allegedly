@@ -1,0 +1,90 @@
+{
+  "nodes": [
+    {
+      "id": "n-charter",
+      "type": "file",
+      "file": "01-Charter/Charter.md",
+      "x": -300,
+      "y": -200,
+      "width": 260,
+      "height": 120,
+      "color": "4"
+    },
+    {
+      "id": "n-constraints",
+      "type": "file",
+      "file": "01-Charter/Constraints.md",
+      "x": 40,
+      "y": -200,
+      "width": 260,
+      "height": 120,
+      "color": "1"
+    },
+    {
+      "id": "n-ui",
+      "type": "text",
+      "text": "## UI & Chart Renderer\n(R01, R02, R10 \u2014 TBD in Phase 3)",
+      "x": -300,
+      "y": 20,
+      "width": 260,
+      "height": 120,
+      "color": "5"
+    },
+    {
+      "id": "n-core",
+      "type": "text",
+      "text": "## Rust Core Engine\nData Ingest \u00b7 Orderflow \u00b7 Study Runtime \u00b7 Fixed-Point Math\n(R03, R05, R06)",
+      "x": 40,
+      "y": 20,
+      "width": 300,
+      "height": 120,
+      "color": "6"
+    },
+    {
+      "id": "n-storage",
+      "type": "text",
+      "text": "## Local-First Storage & Replay\nHot Ring \u00b7 Warm SQLite/DuckDB \u00b7 Cold Parquet\n(R07, S08)",
+      "x": 40,
+      "y": 210,
+      "width": 300,
+      "height": 120,
+      "color": "3"
+    },
+    {
+      "id": "n-exec",
+      "type": "text",
+      "text": "## Execution & Plugin ABI\nBrokers \u00b7 Prop-Safe Adapters \u00b7 Providers\n(R04, R08, R09)",
+      "x": 420,
+      "y": 20,
+      "width": 280,
+      "height": 120,
+      "color": "2"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "fromNode": "n-ui",
+      "fromSide": "right",
+      "toNode": "n-core",
+      "toSide": "left",
+      "label": "Binary IPC"
+    },
+    {
+      "id": "e2",
+      "fromNode": "n-core",
+      "fromSide": "bottom",
+      "toNode": "n-storage",
+      "toSide": "top",
+      "label": "Ticks / Bars / Layouts"
+    },
+    {
+      "id": "e3",
+      "fromNode": "n-core",
+      "fromSide": "right",
+      "toNode": "n-exec",
+      "toSide": "left",
+      "label": "Plugin ABI"
+    }
+  ]
+}
