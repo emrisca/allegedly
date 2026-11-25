@@ -1,70 +1,82 @@
 ---
-title: Allegedly — Start Here (MOC)
-type: moc
+title: Allegedly — Research & Plan of Record (Home)
+type: index
 status: active
-phase: Phase 2 Complete — Gate Ready (Awaiting Abel Approval for Phase 3)
+phase: Phase 3 Complete — Advancing to Phase 4 (Roadmap)
 owner: orchestrator
-updated: 2026-11-24
-code_refs: []
+updated: 2026-11-25
 ---
 
-# Allegedly — Plan of Record (MOC)
+# Allegedly — Research & Plan of Record
 
-> *"Allegedly a trading terminal."*
+> *"Allegedly a trading terminal."* — **A fast, local-first, Apache-2.0 desktop trading terminal (macOS + Windows for v0.1–v1.0; Linux deferred post-v1.0) combining TradingView-grade charting & scripting with MotiveWave-grade order-flow, volume/TPO profiles, DOM execution, and deterministic replay.**
 
-> **Mission:** Produce a long-lived, evidence-backed development plan for **Allegedly** *(chosen brand after retiring working title `MotiveView`; see [[R09-Legal-Licensing]] & [[Compliance-Notes]])*: a free, open-source (`Apache-2.0`), local-first desktop trading terminal (**macOS & Windows** for `v0.1`–`v1.0`; **Linux** deferred to a future milestone) combining **TradingView's UI/UX clarity** with **MotiveWave's order-flow & analytical depth**.
->
-> **GitHub Repository:** https://github.com/emrisca/allegedly (`Apache-2.0`, public)
->
-> **Current Phase:** **Phase 2 Complete (`S01`–`S08` ALL `verified`)** — Ready at **Phase 2 Gate** for Abel's approval to begin **Phase 3 (Architecture & ADRs)** (`ui-sdk` adopted in `AGENTS.md`; macOS & Windows first, Linux deferred to post-v1.0).
+---
 
-## 01 — Charter & Decisions
-- [[Charter]] — Mission, scope, phase gates, and Definition of Done
-- [[Constraints]] — Non-negotiables, performance budgets, safety rails, evidence protocol
-- [[Principles]] — Verified UX & Sovereignty Principles + 20-assertion **Sovereignty Checklist (`SV-01`–`SV-20`)**
-- [[Assumptions]] — Logged Phase 0 defaults (`A01`–`A08`)
-- [[Questions-For-Abel]] — Batched Round 1 design-tree frontier (`Q1`–`Q8`)
-- [[Glossary]] — Canonical domain language (`domain-modeling` format)
+## Current Phase Status
 
-## 02 — Research Tracks (Phase 1 — ALL `verified`)
-- [[_Sources]] — Master consolidated bibliography (`P0` + `R01`–`R10`)
-- [[R01-Charting-Rendering]] — Lightweight Charts `v5.3.0` + synchronized raw WebGL2 order-flow canvas
-- [[R02-Shell-UI-Stack]] — Tauri v2 (`2.12.7`) + React 19 + **UI SDK** (`@ui-sdk/react` / `@ui-sdk/core`, `Apache-2.0`, see `AGENTS.md`) + Tailwind v4 + Dockview MIT core (Electron & shadcn/Radix fallbacks)
-- [[R03-Market-Data]] & [[Provider-Capability-Matrix]] — Brutal Truths, US-verified Kraken/Coinbase defaults, Databento `.dbn`, tick-side inference
-- [[R04-Execution-Brokers-Props]] — Broker APIs, DTC boundaries, 8-firm prop legality audit (4 `DO-NOT-BUILD`), OMS semantics
-- [[R05-Orderflow-Profile-Tooling]] — Exact `i64`/`i128` fixed-point math for Footprint, Volume Profile, TPO, CVD, Heatmap, DOM, T&S, VWAP
-- [[R06-Scripting-Indicator-Engine]] — Rust `mv-studies` → Wasmtime → Rhai/Luau → clean-room Pine-inspired DSL
-- [[R07-Storage-Replay-Backtest]] — Hot SPSC rings → SQLite WAL → Hive Parquet (`arrow-rs`), optional DuckDB & NautilusTrader sidecars
-- [[R08-Prior-Art]] — Verified FOSS prior art & [[Adopt-Build-Fork]] ledger (12 Adopt, 0 Fork, 6 justified Build)
-- [[R09-Legal-Licensing]] — **`Apache-2.0`** chosen, [[License-Registry]], [[Compliance-Notes]], 5 clean-room rename options
-- [[R10-UX-Teardown-Control-Model]] — TradingView vs MotiveWave teardown, 3-tier settings compression, unified Object Tree + Analyses
+| Phase | Scope | Gate / Status |
+|---|---|---|
+| **Phase 0** | Charter, Constraints, Assumptions, Glossary, Defaults | **COMPLETE** (`beb3369`, `1c12c8b`) |
+| **Phase 1** | 10 Research Tracks (`R01`–`R10`), Principles (`P1`–`P10`), Risks, Legal/Licenses | **COMPLETE** (`b0b3d97`) |
+| **Phase 2** | 8 Verified Proof-of-Concept Spikes (`S01`–`S08`) | **COMPLETE** (`f7ad53d`) |
+| **Phase 3** | Architecture Specs (9 docs), ADRs (`0001`–`0010`), `Architecture.canvas`, Red-Team Audit | **COMPLETE — Red-Team `PASS` (`18/18` closed)** |
+| **Phase 4** | Roadmap, Milestones (`v0.1`–`v1.0`), Epics/Stories, `v0.1` Sprint Plan & DoD | **NEXT (In Progress)** |
+| **Phase 5** | Final Holistic Red-Team Audit & `Plan-of-Record.md` | Queued |
+| **v0.1 Build** | Rust Cargo Workspace (`allegedly-*`) + Tauri v2 / React 19 / `ui-sdk` Desktop Shell | Queued after Phase 5 `PASS` |
 
-## 03 — Spikes (Phase 2 — ALL `verified`, Numbers Not Opinions)
-- [[S01-Chart-WebGL-Sync]] — **`PASS-WITH-CAVEAT`**: `ISeriesPrimitive` achieved `0.000 CSS px` drift; `0.30–0.40 ms` WebGL2 draw (`~10.6k` quads); discovered Rust-backed `5,000`-bar viewport windowing is required to hold `60.0 fps` during live `series.update()`
-- [[S02-Tauri-IPC-Throughput]] — **`PASS-WITH-CAVEAT`**: Native Tauri `tauri::ipc::Response` `100k` bars in `3.0 ms` (`9.7×` faster than JSON); `16 ms`-batched streaming sustained `100,450 msgs/s` (`1–2 ms` RTT); release binary `2.68 MB` gzip
-- [[S03-Dockview-Multiwindow]] — **`PASS-WITH-CAVEAT`**: MIT-only `dockview` + `dockview-react` `8.9.1` (`0` enterprise deps); 9 panels serialize/restore in `0.20 / 5.30 ms` p95; `0.60 ms` p95 pop-out sync; `+0.109 MB` over 20 cycles (`0` DOM/listener leaks)
-- [[S04-CSS-Layout-Perf]] — **`PASS`**: Canvas2D DOM Ladder + Tape at `60 Hz` / `2,000` deltas/s hit `60.2 fps`, `0` stalls `> 20 ms`, `0.00 ms` Layout/RecalcStyle (`4.9×–5.3×` less CPU than React/DOM)
-- [[S05-Live-Ingest-TickVault]] — **`PASS-WITH-CAVEAT`**: Live 60s Kraken + Coinbase soak (`100.00%` Kraken CRC32, `6.1×` empirical Coinbase maker→taker inversion proof); `17.73M events/s` ingest (`KC-05` cleared `886×`); `dbn v0.75.0` `18.43M rec/s`; `14/14` release tests pass
-- [[S06-OMS-Paper-Execution]] — **`PASS-WITH-CAVEAT`**: Zero-float `i64` OMS; SQLite WAL append `119.75 µs` p50; 50-order Kill-Switch `6.13–7.04 ms` p50 (`0` stray orders); 500-order WAL crash reconcile in `6.15 ms` (`0` orphans); `54` wire-mock HTTP faults (`0` duplicates); `7/7` release tests pass
-- [[S07-Scripting-Sandbox]] — **`PASS-WITH-CAVEAT`**: **Adopt Luau (`mlua`, `+0.47 MiB` gzip), reject Rhai** (`10.05×` faster batch, `19.41×` faster live p99); Wasmtime `+3.32%` vs Native (`+1.74 MiB` gzip); `12/12` hostile sandbox escapes blocked; `0.000e0` numerical drift
-- [[S08-Storage-100M-Replay]] — **`PASS-WITH-CAVEAT`**: 100M-tick Hive Parquet Zstd write `22.51M ticks/s` (`4.26 B/tick`), streaming replay `102.55M ticks/s` at `34.44 MiB` peak RSS; 1h random seek `5.22 ms` cold p50 (`99.58%` pruned); Dyadic VRVP `0.0271 ms` p99 (`9.2×` faster than `0.25 ms` target); `+2.91 MiB` gzip binary delta
+---
 
-## 04 — Architecture & ADRs (Phase 3 — Gate: Abel Approval + Red Team)
-- [[Adopt-Build-Fork]] — Master 18-subsystem Adopt/Build/Fork ledger (`status: verified`)
-- `04-Architecture/ADRs/` — Numbered ADRs (created in Phase 3 after Phase 2 measurements)
+## 01 — Charter & Governance
+- [[Charter]] — Mission, non-goals, target user personas, locked platform scope (macOS + Windows first; Linux deferred post-v1.0)
+- [[Constraints]] — Hard budgets (`< 40 MB` installer, `< 2.0 s` cold start, `< 300 MB` idle RAM, `$0` core, `Apache-2.0`, zero telemetry)
+- [[Principles]] — `P1`–`P10` architectural & sovereignty principles + 20-rule Sovereignty Verification Checklist (`SV-01`–`SV-20`)
+- [[Assumptions]] — Logged defaults & explicit Abel decisions (`ui-sdk`, macOS+Windows scope, brand, workspace paths)
+- [[Glossary]] — Canonical domain & architectural vocabulary (updated with Phase 3 terms)
+- [[Questions-For-Abel]] — Resolved decision ledger
 
-## 05 — Roadmap (Phase 4 — Gate: Abel Approval + Red Team)
-- `05-Roadmap/Epics/`, `05-Roadmap/Stories/`, `Dependency-Graph`, `Critical-Path`, `Milestones`
+## 02 — Research (`R01`–`R10`, All Verified)
+- [[R01-Charting-Rendering]] | [[R02-Shell-UI-Stack]] | [[R03-Market-Data]] | [[Provider-Capability-Matrix]]
+- [[R04-Execution-Brokers-Props]] | [[R05-Orderflow-Profile-Tooling]] | [[R06-Scripting-Indicator-Engine]]
+- [[R07-Storage-Replay-Backtest]] | [[R08-Prior-Art]] | [[R09-Legal-Licensing]] | [[R10-UX-Teardown-Control-Model]]
+
+## 03 — Proof-of-Concept Spikes (`S01`–`S08`, All Verified on Apple M2)
+- [[S01-Chart-WebGL-Sync]] (`0.000 CSS px` sync drift, `0.30–0.40 ms` WebGL2 draw, `5,000`-bar Rust viewport window)
+- [[S02-Tauri-IPC-Throughput]] (`3.0 ms` `100k`-bar binary IPC, `100,450 msgs/s` 16ms-batched channel, `2.68 MB` gzip release binary)
+- [[S03-Dockview-Multiwindow]] (MIT `dockview` `8.9.1`, `0.60 ms` p95 pop-out sync, `0` leaks over 20 cycles)
+- [[S04-CSS-Layout-Perf]] (Canvas2D DOM + Tape `60.2 fps`, `0.00 ms` Layout/RecalcStyle, `4.9×–5.3×` less CPU)
+- [[S05-Live-Ingest-TickVault]] (`17.73M events/s` ingest, `100.00%` Kraken CRC32, `6.1×` Coinbase inversion proof, `14/14` tests)
+- [[S06-OMS-Paper-Execution]] (`i64` zero-float OMS, `119.75 µs` WAL append, `6.13–7.04 ms` 50-order Kill-Switch, `54` HTTP fault tests)
+- [[S07-Scripting-Sandbox]] (Luau `mlua` adopted over Rhai at `10.05×` batch / `19.41×` live p99; Wasmtime `+3.32%` vs Native; `12/12` escapes blocked)
+- [[S08-Storage-100M-Replay]] (`102.55M ticks/s` streaming replay at `34.44 MiB` RSS; `5.22 ms` cold 1h seek; `0.0271 ms` p99 Dyadic VRVP)
+
+## 04 — Architecture & ADRs (Phase 3 — Red-Team `PASS`)
+- [[C4-Architecture]] — System Context, Container, Component, Thread/SPSC Topology, and `allegedly-*` Crate Map
+- [[Data-Model]] — Fixed-point `PriceE9`/`QtyE9`/`TimestampNs`, 5-tier `ProvenanceTier`, `BookState`, `32 B` `FootprintCell`, `u128` `TpoRow`, 12-state `OrderState`
+- [[IPC-Contract]] — Aligned Binary Wire Framing (`40 B` trades, `32 B` footprints, `16 B` status), `state_rev: u64`, Risk-Reduction Bypass Rule
+- [[Plugin-ABI]] — Flat SoA `ByteView` ABI, Luau & Wasmtime determinism, `<= 64 MiB` global study memory pool
+- [[Error-Observability]] — Local-only ring-buffer diagnostics, Active 5-Tier Provenance Ledger, zero telemetry
+- [[Testing-Strategy]] — Complete `SV-01`–`SV-20` CI verification matrix, deterministic replay fixtures, legacy-prefix ban
+- [[Release-Signing-Update]] — macOS Developer ID / notarization, Windows Authenticode, opt-in updates (`updates.checkOnStartup = false`)
+- [[Docs-Strategy]] — Local-first documentation, clean-room scripting reference, ADR & Glossary workflow
+- [[Adopt-Build-Fork]] — Master 18-subsystem Adopt/Build/Fork ledger aligned to locked Phase 3 ADRs
+- **ADRs:**
+  - [[0001-license-brand-and-platform-scope|ADR-0001]] | [[0002-desktop-shell-and-binary-ipc|ADR-0002]] | [[0003-chart-base-and-viewport-windowing|ADR-0003]] | [[0004-orderflow-gpu-and-hotpath-renderer|ADR-0004]] | [[0005-study-runtime-and-scripting-language|ADR-0005]]
+  - [[0006-tiered-storage-and-replay|ADR-0006]] | [[0007-backtest-engine-adopt-vs-build|ADR-0007]] | [[0008-market-data-provider-abstraction-and-provenance|ADR-0008]] | [[0009-oms-broker-and-prop-firm-strategy|ADR-0009]] | [[0010-ui-kit-docking-and-settings-as-code|ADR-0010]]
+
+## 05 — Roadmap (Phase 4 — In Progress)
+- `05-Roadmap/Milestones.md`, `05-Roadmap/Epics-and-Stories.md`, `05-Roadmap/Sprint-Plan-v0.1.md`, `05-Roadmap/v0.1-Definition-of-Done.md`
 
 ## 06 — Risk, Licensing & Compliance
-- [[Risk-Register]] — Active risks (`RK-01`–`RK-10`) updated with Phase 1 evidence
+- [[Risk-Register]] — Active risks (`RK-01` deferred post-v1.0; `RK-02`–`RK-10` tracked)
 - [[Kill-Criteria]] — Pre-committed stop/pivot triggers (`KC-01`–`KC-07`)
-- [[License-Registry]] — Complete dependency/linkage/compatibility matrix + `cargo-deny` CI gate
-- [[Compliance-Notes]] — TradingView, Pine, MotiveWave EULA, Sierra `.scid`/DTC, CME data, prop rules, OS Keychain, Trademark analysis
+- [[License-Registry]] — Complete dependency/linkage/compatibility matrix + `cargo-deny` CI gate (updated with Phase 3 deps & `ui-sdk` pin)
+- [[Compliance-Notes]] — TradingView, Pine, MotiveWave EULA, Sierra `.scid`/DTC ban, CME data, prop rules, OS Keychain, Trademark screening
 
-## 07 — Reviews & Plan of Record (Phase 5)
-- `07-Reviews/Red-Team-*.md` — Adversarial audits
-- `07-Reviews/Plan-of-Record.md` — Final executive summary + first 10 executable tasks
+## 07 — Reviews & Plan of Record
+- [[Red-Team-Phase3]] — **Verdict: `PASS`** (`18/18` findings verified closed on `2026-11-25`)
+- `07-Reviews/Red-Team-Phase4.md` — Planned after Phase 4 drafting
+- `07-Reviews/Red-Team-Phase5.md` & `Plan-of-Record.md` — Phase 5 final consolidation
 
 ## 08 — Dashboards & Visual Maps
 - [[Open-Questions]] | [[Unverified-Claims]] | [[Blocked-Items]] | [[ADR-Status]]

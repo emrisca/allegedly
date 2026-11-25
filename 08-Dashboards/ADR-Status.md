@@ -1,29 +1,31 @@
 ---
 title: Dashboard — ADR Status
 type: dashboard
-owner: architect
-updated: 2026-11-24
+owner: orchestrator
+updated: 2026-11-25
 ---
 
-# Architecture Decision Records (ADR) Dashboard
+# ADR Status Dashboard
 
-> Per `domain-modeling` (`ADR-FORMAT.md`), ADRs are created in `04-Architecture/ADRs/` in **Phase 3** now that Phase 1 evidence and Phase 2 measured numbers (`S01`–`S08`) are complete.
+> **Phase 3 Complete (`2026-11-25`):** All 10 foundational ADRs (`0001`–`0010`) are authored, reconciled with [[Adopt-Build-Fork]], and cleared by [[Red-Team-Phase3]] (**Verdict: `PASS`**, `0` open findings).
 
 ```dataview
-TABLE status, updated, code_refs
+TABLE status, date, supersedes, updated
 FROM "04-Architecture/ADRs"
 SORT file.name ASC
 ```
 
-## Phase 3 ADRs Ready to Draft (Backed by Phase 1 + Phase 2 Evidence)
-| Proposed ADR | Decision Topic | Evidence-Locked Direction | Backing Spikes |
+## Locked Phase 3 ADRs (`0001`–`0010`)
+
+| ADR | Decision | Status | Anchored Evidence |
 |---|---|---|---|
-| `0001` | Application License, Brand & Platform Scope | `Apache-2.0`, **Allegedly** (`emrisca/allegedly`), **macOS & Windows first** (`v0.1`–`v1.0`), Linux post-v1.0 ([[R09-Legal-Licensing]], [[Assumptions]]) | Locked by Abel |
-| `0002` | Desktop Shell & Binary IPC Contract | **Tauri v2 (`2.12.7`)** + `tauri::ipc::Response` (bulk `3.0 ms` / `100k` bars) + `16 ms`-batched `Channel<InvokeResponseBody>` (`100k+ msgs/s`) behind `TransportAdapter` (loopback WS fallback) | [[S02-Tauri-IPC-Throughput]] |
-| `0003` | Chart Base, Windowing & Order-Flow WebGL2 Layer | **Lightweight Charts `v5.3.0`** + **`ISeriesPrimitive` paneView sync (`0.000 px` drift)** + **Rust-backed `5,000`-bar viewport windowing** (`60.0 fps` live updates) + raw WebGL2 overlay (`0.3–0.4 ms`) | [[S01-Chart-WebGL-Sync]] |
-| `0004` | Study Runtime & Scripting Language | **Tiered:** Native Rust `mv-studies` → **Wasmtime `v51.0.0`** minimal (`+3.32%` vs Native, `+1.74 MiB` gzip) → **Luau (`mlua v0.12.3`, `+0.47 MiB` gzip; decisively beats Rhai by `10–21×`)** → clean-room Pine-inspired DSL | [[S07-Scripting-Sandbox]] |
-| `0005` | Tiered Storage, Tick-Vault & Deterministic Replay | Rust `rtrb` SPSC (`67.65M ticks/s`) → `SQLite` WAL metadata catalog → **Hive Parquet Zstd (`arrow-rs`, `4.26 B/tick`, `102.55M ticks/s` replay at `34.4 MiB` RSS, `5.22 ms` cold 1h seek)** + exact `i64`/`i128` Footprint & Dyadic VRVP (`0.0271 ms` p99); DuckDB & DataFusion kept out of core | [[S08-Storage-100M-Replay]] |
-| `0006` | Backtest & Execution Sidecar Boundary | Lean Rust replay/backtest in-core + `NautilusTrader` (`LGPL-3.0-only`) strictly out-of-process sidecar over Parquet/IPC ([[Adopt-Build-Fork]]) | [[S08-Storage-100M-Replay]], [[R09-Legal-Licensing]] |
-| `0007` | Market-Data Providers, Normalization & Provenance | US-safe `$0` **Kraken WS v2** (`100%` CRC32) + **Coinbase Adv WS** (mandatory maker→taker inversion, `6.1×` proven) + `.atvault` + **Databento `dbn v0.75.0`** (`18.43M rec/s`) + 5-tier provenance badges | [[S05-Live-Ingest-TickVault]] |
-| `0008` | Deterministic OMS, Risk Gate & Broker/Prop Policy | Zero-float `i64` OMS + SQLite WAL (`119.8 µs` p50) + Panic Kill-Switch (`6–7 ms` / 50 orders) + `PaperOnly` / `LIVE_ARMED=false` boot rail + Alpaca/tastytrade/clean-room IBKR adapters; 4 prop firms + Rithmic/CQG `DO-NOT-BUILD` | [[S06-OMS-Paper-Execution]] |
-| `0009` | UI Kit (`ui-sdk`), Docking & Hot-Path Rendering | **React 19 + `ui-sdk` (`@ui-sdk/react` / `@ui-sdk/core`, `Apache-2.0`, see `AGENTS.md`) + Tailwind v4 + `Dockview` MIT core (`dockview` + `dockview-react` `8.9.1`, `0` enterprise deps)** + **Canvas2D DOM Ladder & Time & Sales (`0.00 ms` Layout/Style, `60.2 fps`)** + 3-tier TOML/JSON settings | [[S03-Dockview-Multiwindow]], [[S04-CSS-Layout-Perf]] |
+| [[0001-license-brand-and-platform-scope\|ADR-0001]] | `Apache-2.0` license, **Allegedly** brand (`allegedly-*` crates, `.at*` extensions, zero `mv-*` residue), macOS + Windows `v0.1`–`v1.0` (Linux post-v1.0) | `accepted` | [[Charter]], [[R09-Legal-Licensing]], [[Compliance-Notes]] |
+| [[0002-desktop-shell-and-binary-ipc\|ADR-0002]] | Tauri v2 + Rust core + binary IPC (`tauri::ipc::Response` + `16 ms` batched `Channel`); `< 40 MB` installer, `< 2.0 s` cold start, `< 300 MB` idle RAM | `accepted` | [[S02-Tauri-IPC-Throughput]], [[IPC-Contract]] |
+| [[0003-chart-base-and-viewport-windowing\|ADR-0003]] | Lightweight Charts v5.3 (`Apache-2.0`) + Rust `5,000`-bar viewport windowing (`6,000`-bar hysteresis/idle trim + full-history Rust study warmup) | `accepted` | [[S01-Chart-WebGL-Sync]], [[R01-Charting-Rendering]] |
+| [[0004-orderflow-gpu-and-hotpath-renderer\|ADR-0004]] | Raw WebGL2 Footprint/Profile/Heatmap primitive (`0.000 CSS px` drift, `0.30–0.40 ms` draw) + Canvas2D DOM Ladder & Time & Sales (`60.2 fps`, `0.00 ms` layout) | `accepted` | [[S01-Chart-WebGL-Sync]], [[S04-CSS-Layout-Perf]] |
+| [[0005-study-runtime-and-scripting-language\|ADR-0005]] | Adopt **Luau** (`mlua`, `+0.47 MiB` gzip) over Rhai (`10.05×` batch / `19.41×` live p99) + **Wasmtime** (`+1.74 MiB` gzip) with flat SoA `ByteView` ABI & `<= 64 MiB` global pool | `accepted` | [[S07-Scripting-Sandbox]], [[Plugin-ABI]] |
+| [[0006-tiered-storage-and-replay\|ADR-0006]] | Hive-partitioned `.atvault` Parquet + SQLite WAL (`PRAGMA fullfsync = ON` on macOS for OMS WAL) + `16`-ary Dyadic Segment Tree VRVP (`0.0271 ms` p99, `102.55M ticks/s` replay) | `accepted` | [[S08-Storage-100M-Replay]], [[Data-Model]] |
+| [[0007-backtest-engine-adopt-vs-build\|ADR-0007]] | In-process deterministic Rust study/replay backtester (`allegedly-replay`) + optional out-of-process `DuckDB` (`MIT`) / `nautilus_trader` (`LGPL-3.0-only`) IPC/Parquet sidecars | `accepted` | [[S08-Storage-100M-Replay]], [[R07-Storage-Replay-Backtest]], [[License-Registry]] |
+| [[0008-market-data-provider-abstraction-and-provenance\|ADR-0008]] | Provider-agnostic `allegedly-ingest` (Kraken WS v2 + Coinbase WS `$0` US defaults, Databento DBN, Dukascopy `.bi5`, Synthetic Sim), strict per-provider `rtrb` SPSC → Dispatcher, 5-tier `ProvenanceTier` & fail-closed `BookState` | `accepted` | [[S05-Live-Ingest-TickVault]], [[R03-Market-Data]], [[C4-Architecture]] |
+| [[0009-oms-broker-and-prop-firm-strategy\|ADR-0009]] | Zero-float `i64` 12-state `OrderState` OMS, SQLite WAL crash reconciliation, panic Kill-Switch, **Risk-Reduction Bypass Rule**, in-process retail brokers (Alpaca/tastytrade/IBKR Web) vs out-of-process sidecars, 4 prop firms `DO-NOT-BUILD` | `accepted` | [[S06-OMS-Paper-Execution]], [[R04-Execution-Brokers-Props]] |
+| [[0010-ui-kit-docking-and-settings-as-code\|ADR-0010]] | React 19 + `ui-sdk` (`@ui-sdk/react` / `@ui-sdk/core` pinned `"0.1.0-beta.17"`, `Apache-2.0`, per `AGENTS.md`) + Tailwind v4 + MIT `dockview` `8.9.1` (`0` enterprise deps) + 3-tier TOML settings (`state_rev: u64`) | `accepted` | [[S03-Dockview-Multiwindow]], [[S04-CSS-Layout-Perf]], [[R10-UX-Teardown-Control-Model]] |

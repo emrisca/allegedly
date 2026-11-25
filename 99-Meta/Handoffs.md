@@ -2,7 +2,7 @@
 title: Agent Handoff Log
 type: meta
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 ---
 
 # Agent Handoff Log
@@ -16,3 +16,7 @@ updated: 2026-11-24
 | 2026-11-24 | `orchestrator` (Ember) | `MV Scripting & Storage` | `R06-Scripting-Indicator-Engine.md`, `R07-Storage-Replay-Backtest.md` | **Done (`verified`)** — Staged study runtime, Parquet/SQLite vault, DuckDB/Nautilus sidecars |
 | 2026-11-24 | `orchestrator` (Ember) | `MV Prior Art & Legal` | `R08-Prior-Art.md`, `Adopt-Build-Fork.md`, `R09-Legal-Licensing.md`, `License-Registry.md`, `Compliance-Notes.md` | **Done (`verified`)** — `Apache-2.0` selected, 12 Adopt / 6 Build, 5 clean-room names |
 | 2026-11-24 | `orchestrator` (Ember) | Abel | **Phase 1 Gate Report** + Round 1 (`Q1`–`Q8`) & Round 2 (Name + Hygiene) | **Awaiting** Obsidian `Excluded files` / spike-path confirmation before running `pnpm install` / `cargo build` in Phase 2 |
+| 2026-11-24 | `orchestrator` (Ember) | `Allegedly Spikes UI / Core / Data / OMS` | Phase 2 Spikes `S01`–`S08` & Phase 3 Architecture/ADRs (`0001`–`0010`) | **Done (`verified`)** — All 8 spikes measured; all 9 arch specs + 10 ADRs + `Architecture.canvas` authored |
+| 2026-11-24 | `orchestrator` (Ember) | `Allegedly Red Team` | Phase 3 Adversarial Audit (`07-Reviews/Red-Team-Phase3.md`) | **Done (`PASS-WITH-REQUIRED-FIXES`)** — 18 findings (`5` Blockers, `8` Majors, `4` Minors, `1` Nit) |
+| 2026-11-24 | `orchestrator` (Ember) | `Allegedly Spikes UI / Core / Data / OMS` | Remediate all 18 Phase 3 Red-Team findings (`RT3-01`–`RT3-18`) | **Done (`verified`)** — All 18 findings patched cleanly across `04-Architecture/`, `License-Registry.md`, `Architecture.canvas` |
+| 2026-11-25 | `orchestrator` (Ember) | `Allegedly Red Team` | Phase 3 Red-Team Re-Verification Pass (`07-Reviews/Red-Team-Phase3.md`) | **Done (`PASS`)** — **18/18 CLOSED** (`0` open Blockers/Majors/Minors/Nits); Phase 3 Gate cleared |

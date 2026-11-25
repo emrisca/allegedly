@@ -2,7 +2,7 @@
 title: Dashboard — Open Questions
 type: dashboard
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 ---
 
 # Open Questions Dashboard
@@ -16,8 +16,8 @@ WHERE status = "awaiting-abel" OR contains(file.name, "Questions")
 SORT updated DESC
 ```
 
-## Live Summary (Phase 2 Gate Ready)
+## Live Summary (Phase 3 Complete — Overnight Autonomous Execution)
 | File | Topic | Status | Waiting On |
 |---|---|---|---|
-| [[Questions-For-Abel]] | Phase 0/1 Decisions: `Q1` (macOS + Windows first; Linux future), `Q7` (FOSS Desktop-only), `Q8` (in-repo spikes), Brand (**Allegedly**), UI kit (**`ui-sdk`**) **RESOLVED**; remaining defaults (`Q2`–`Q6`) accepted unless Abel overrides | `mostly-resolved` (defaults active in [[Assumptions]]) | Abel (optional override at Phase 2 Gate) |
-| [[03-Spikes/S01-Chart-WebGL-Sync\|Phase 2 Gate (`S01`–`S08`)]] | Explicit approval to advance from Phase 2 (all 8 spikes verified) into **Phase 3 (Architecture & ADRs)** using `grill-with-docs` | `awaiting-abel-gate` | Abel |
+| [[Questions-For-Abel]] | Phase 0/1 Decisions: `Q1` (macOS + Windows first; Linux post-v1.0), `Q7` (FOSS Desktop-only), `Q8` (in-repo spikes), Brand (**Allegedly**), UI kit (**`ui-sdk`**) **RESOLVED**; defaults `Q2`–`Q6` active in [[Assumptions]] | `resolved` | None (Abel may override anytime) |
+| **Overnight Autonomous Authorization (`2026-11-25`)** | Abel explicitly authorized autonomous progression through Phase 3, Phase 4, Phase 5, and `v0.1` implementation without pausing for manual phase-gate sign-offs | `authorized` | Review morning summary & commits |

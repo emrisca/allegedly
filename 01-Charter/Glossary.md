@@ -3,7 +3,7 @@ title: Allegedly Domain Glossary
 type: glossary
 status: living
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 code_refs: []
 ---
 
@@ -96,3 +96,25 @@ _Avoid_: Provider, gateway (a gateway is a broker's technical transport)
 **Bracket Order**:
 An entry order atomically linked to a protective stop-loss and one or more profit-target orders governed by One-Cancels-Other (OCO) semantics.
 _Avoid_: ATM strategy (vendor-specific branding), combo order
+
+## Architecture & Safety Language (Locked in Phase 3)
+
+**ProvenanceTier**:
+The canonical 5-tier data honesty classification attached to every Bar, Tick, Footprint Bar, Volume Profile, TPO Profile, and Book Level: `ExactL3Mbo` (`EXACT: L3-MBO`), `ExactTickAggr` (`EXACT: TICK-AGGR`), `EstimatedL1Quote` (`ESTIMATED: L1-QUOTE`), `EstimatedTickRule` (`ESTIMATED: TICK-RULE`), and `SyntheticIntrabar` (`SYNTHETIC: 1m-INTRABAR`), paired with orthogonal modifier flags (`PartialVenue`, `OtcIndicative`, `Delayed`).
+_Avoid_: Data quality enum, tier badge
+
+**BookState**:
+The canonical 5-state order-book health machine (`Live`, `Stale`, `Rebuilding`, `Disconnected`, `Halted`) enforced across `allegedly-ingest`, `allegedly-oms`, binary IPC, and the plugin ABI. Any non-`Live` state blocks risk-increasing live entries while preserving the Risk-Reduction Bypass Rule.
+_Avoid_: Feed status, connection flag
+
+**Risk-Reduction Bypass Rule**:
+The non-negotiable OMS safety invariant ensuring that whenever `BookState != Live` OR `RECONCILING == true`, all new risk-increasing live orders are rejected fail-closed while risk-reducing actions (`oms.cancel_order`, `oms.cancel_all`, `oms.trigger_kill_switch` / `flatten_all`, `oms.reconcile_now`, and verified `reduce_only: true` closing orders) ALWAYS remain permitted.
+_Avoid_: Stale lockout, emergency override
+
+**Tick Vault (`.atvault`)**:
+The local-first, Hive-partitioned Apache Parquet + SQLite WAL archive format owned by `allegedly-storage` storing normalized fixed-point `i64` (`1e-9`) ticks, books, and provenance headers for deterministic streaming replay (`SV-07`, `SV-14`).
+_Avoid_: Cache DB, `.mvdepth`, `.scid`
+
+**Workspace Revision (`state_rev`)**:
+A strictly monotonic `u64` counter owned by the Rust core and included on every multi-window layout and drawing mutation (`IPC-Contract.md`) to prevent stale pop-out window writes from clobbering newer state.
+_Avoid_: Layout timestamp, version hash

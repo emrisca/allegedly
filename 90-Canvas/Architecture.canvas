@@ -1,15 +1,248 @@
 {
-	"nodes":[
-		{"id":"n-charter","type":"file","file":"01-Charter/Charter.md","x":-300,"y":-200,"width":260,"height":120,"color":"4"},
-		{"id":"n-constraints","type":"file","file":"01-Charter/Constraints.md","x":40,"y":-200,"width":260,"height":120,"color":"1"},
-		{"id":"n-ui","type":"text","text":"## UI & Chart Renderer\n(R01, R02, R10 — TBD in Phase 3)","x":-300,"y":20,"width":260,"height":120,"color":"5"},
-		{"id":"n-core","type":"text","text":"## Rust Core Engine\nData Ingest · Orderflow · Study Runtime · Fixed-Point Math\n(R03, R05, R06)","x":40,"y":20,"width":300,"height":120,"color":"6"},
-		{"id":"n-storage","type":"text","text":"## Local-First Storage & Replay\nHot Ring · Warm SQLite/DuckDB · Cold Parquet\n(R07, S08)","x":40,"y":210,"width":300,"height":120,"color":"3"},
-		{"id":"n-exec","type":"text","text":"## Execution & Plugin ABI\nBrokers · Prop-Safe Adapters · Providers\n(R04, R08, R09)","x":420,"y":20,"width":280,"height":120,"color":"2"}
+	"nodes": [
+		{
+			"id": "n-charter",
+			"type": "file",
+			"file": "01-Charter/Charter.md",
+			"x": -520,
+			"y": -290,
+			"width": 260,
+			"height": 110,
+			"color": "4"
+		},
+		{
+			"id": "n-constraints",
+			"type": "file",
+			"file": "01-Charter/Constraints.md",
+			"x": -220,
+			"y": -290,
+			"width": 260,
+			"height": 110,
+			"color": "1"
+		},
+		{
+			"id": "n-adr0001",
+			"type": "file",
+			"file": "04-Architecture/ADRs/0001-license-brand-and-platform-scope.md",
+			"x": 80,
+			"y": -290,
+			"width": 290,
+			"height": 110,
+			"color": "4"
+		},
+		{
+			"id": "n-c4",
+			"type": "file",
+			"file": "04-Architecture/C4-Architecture.md",
+			"x": 410,
+			"y": -290,
+			"width": 260,
+			"height": 110,
+			"color": "5"
+		},
+		{
+			"id": "n-ui",
+			"type": "text",
+			"text": "## Tauri v2 WebView UI (macOS + Windows)\nReact 19 · ui-sdk 0.1.0-beta.17 (Apache-2.0) · Tailwind 4\nDockview 8.9 (MIT-only) · LWC v5.3 + ISeriesPrimitive\nRaw WebGL2 Orderflow · Canvas2D DOM/Tape\n(ADRs 0001, 0002, 0003, 0004, 0010)",
+			"x": -520,
+			"y": -60,
+			"width": 350,
+			"height": 175,
+			"color": "5"
+		},
+		{
+			"id": "n-ipc",
+			"type": "file",
+			"file": "04-Architecture/IPC-Contract.md",
+			"x": -110,
+			"y": -40,
+			"width": 240,
+			"height": 135,
+			"color": "6"
+		},
+		{
+			"id": "n-core",
+			"type": "text",
+			"text": "## Rust Core Process (allegedly-*, Apache-2.0)\nPer-Provider rtrb SPSC → Single-Thread Dispatcher\nIngest (Kraken/Coinbase/DBN/.bi5) · Fixed-Point i64/i128\nOrderflow 32B Slab + 16-ary VRVP + u128 TPO\nStudies: Native → Wasmtime v51 → Luau (mlua)\nOMS + WAL + Kill-Switch + In-Process BrokerAdapters\n(ADRs 0001, 0005, 0006, 0008, 0009)",
+			"x": 190,
+			"y": -75,
+			"width": 380,
+			"height": 205,
+			"color": "4"
+		},
+		{
+			"id": "n-brokers",
+			"type": "text",
+			"text": "## External Venues & Retail Brokers\nMarket Data: Kraken WS v2 · Coinbase WS · DBN · .bi5\nIn-Process Clean Brokers: Local Paper Sim · Alpaca\ntastytrade · IBKR (rust-ibapi MIT)\n4 Prop Firms + Rithmic/CQG: DO-NOT-BUILD\n(ADRs 0008, 0009)",
+			"x": 190,
+			"y": 355,
+			"width": 380,
+			"height": 155,
+			"color": "2"
+		},
+		{
+			"id": "n-data",
+			"type": "file",
+			"file": "04-Architecture/Data-Model.md",
+			"x": 190,
+			"y": 175,
+			"width": 380,
+			"height": 120,
+			"color": "3"
+		},
+		{
+			"id": "n-storage",
+			"type": "text",
+			"text": "## Local-First Tiered Storage\nHot: Dedicated Storage rtrb SPSC\nWarm: .atvault / .atdepth + SQLite WAL\nCold: Hive Parquet 2.0 Zstd (4.26 B/tick)\nSettings-as-Code: workspace/template/analysis/theme.toml\n(ADR 0006 · S05 · S08)",
+			"x": -210,
+			"y": 175,
+			"width": 350,
+			"height": 150,
+			"color": "3"
+		},
+		{
+			"id": "n-plugin",
+			"type": "file",
+			"file": "04-Architecture/Plugin-ABI.md",
+			"x": 630,
+			"y": -60,
+			"width": 290,
+			"height": 140,
+			"color": "2"
+		},
+		{
+			"id": "n-sidecars",
+			"type": "text",
+			"text": "## Optional Out-of-Process Sidecars\nNautilusTrader (LGPL-3.0-only, Parquet/JSON-RPC isolated)\nDuckDB v2.0.1 (MIT, read-only ad-hoc SQL over Parquet)\nQuantConnect Lean (Apache-2.0, optional backtest)\nZero Static Linking in allegedly-* Core\n(ADRs 0001, 0006, 0007)",
+			"x": 630,
+			"y": 155,
+			"width": 340,
+			"height": 165,
+			"color": "1"
+		},
+		{
+			"id": "n-ops",
+			"type": "text",
+			"text": "## Ops, Quality, Release & Docs ($0 Core)\n[[Error-Observability]] · [[Testing-Strategy]]\n[[Release-Signing-Update]] (Opt-In Minisign + SignPath)\n[[Docs-Strategy]] · [[AGENTS]] (ui-sdk)\nDev Tool: allegedly-docgen · SV-01..SV-20 CI Gates",
+			"x": -520,
+			"y": 175,
+			"width": 280,
+			"height": 150,
+			"color": "6"
+		}
 	],
-	"edges":[
-		{"id":"e1","fromNode":"n-ui","fromSide":"right","toNode":"n-core","toSide":"left","label":"Binary IPC"},
-		{"id":"e2","fromNode":"n-core","fromSide":"bottom","toNode":"n-storage","toSide":"top","label":"Ticks / Bars / Layouts"},
-		{"id":"e3","fromNode":"n-core","fromSide":"right","toNode":"n-exec","toSide":"left","label":"Plugin ABI"}
+	"edges": [
+		{
+			"id": "e0a",
+			"fromNode": "n-charter",
+			"fromSide": "right",
+			"toNode": "n-constraints",
+			"toSide": "left",
+			"label": "Non-Negotiables"
+		},
+		{
+			"id": "e0b",
+			"fromNode": "n-constraints",
+			"fromSide": "right",
+			"toNode": "n-adr0001",
+			"toSide": "left",
+			"label": "License, Brand & OS Scope"
+		},
+		{
+			"id": "e0c",
+			"fromNode": "n-adr0001",
+			"fromSide": "right",
+			"toNode": "n-c4",
+			"toSide": "left",
+			"label": "Governs Topology"
+		},
+		{
+			"id": "e0d",
+			"fromNode": "n-c4",
+			"fromSide": "bottom",
+			"toNode": "n-core",
+			"toSide": "top",
+			"label": "System Blueprint"
+		},
+		{
+			"id": "e0e",
+			"fromNode": "n-charter",
+			"fromSide": "bottom",
+			"toNode": "n-ui",
+			"toSide": "top",
+			"label": "P1-P8 / SV-01..SV-20"
+		},
+		{
+			"id": "e1",
+			"fromNode": "n-ui",
+			"fromSide": "right",
+			"toNode": "n-ipc",
+			"toSide": "left",
+			"label": "TransportAdapter"
+		},
+		{
+			"id": "e2",
+			"fromNode": "n-ipc",
+			"fromSide": "right",
+			"toNode": "n-core",
+			"toSide": "left",
+			"label": "Binary SoA / 16ms Channel"
+		},
+		{
+			"id": "e3",
+			"fromNode": "n-core",
+			"fromSide": "bottom",
+			"toNode": "n-data",
+			"toSide": "top",
+			"label": "Canonical i64/i128 Model"
+		},
+		{
+			"id": "e4",
+			"fromNode": "n-data",
+			"fromSide": "left",
+			"toNode": "n-storage",
+			"toSide": "right",
+			"label": "Parquet / .atvault / WAL"
+		},
+		{
+			"id": "e5",
+			"fromNode": "n-core",
+			"fromSide": "right",
+			"toNode": "n-plugin",
+			"toSide": "left",
+			"label": "5 Extension Points"
+		},
+		{
+			"id": "e6",
+			"fromNode": "n-plugin",
+			"fromSide": "bottom",
+			"toNode": "n-sidecars",
+			"toSide": "top",
+			"label": "Process Boundary"
+		},
+		{
+			"id": "e7",
+			"fromNode": "n-core",
+			"fromSide": "bottom",
+			"toNode": "n-brokers",
+			"toSide": "top",
+			"label": "In-Process Adapters (TLS / WS / REST)"
+		},
+		{
+			"id": "e8",
+			"fromNode": "n-ops",
+			"fromSide": "top",
+			"toNode": "n-ui",
+			"toSide": "bottom",
+			"label": "Playwright / SV Gates"
+		},
+		{
+			"id": "e9",
+			"fromNode": "n-ops",
+			"fromSide": "right",
+			"toNode": "n-storage",
+			"toSide": "left",
+			"label": "Logging, Signing & Docs"
+		}
 	]
 }

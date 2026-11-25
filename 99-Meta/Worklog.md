@@ -2,7 +2,7 @@
 title: Allegedly Worklog
 type: meta
 owner: orchestrator
-updated: 2026-11-24
+updated: 2026-11-25
 ---
 
 # Allegedly Worklog
@@ -53,3 +53,15 @@ updated: 2026-11-24
 - **Automation Housekeeping:** Paused temporary `limit_reset` continuation automation (`452b1528-84b1-4247-accd-2067c42ae1f6`) and verified `enabled=false`, `nextRunAt=null`.
 - **Gate Status:** Stopped at **Phase 2 Gate** awaiting Abel's approval to begin **Phase 3 (Architecture & ADRs)**.
 
+
+## 2026-11-25 — Phase 3 Complete (Architecture, ADRs 0001–0010 & Red-Team `PASS`)
+- **Phase 3 Deliverables Completed:** Authored all 9 architecture specifications (`C4-Architecture.md`, `Data-Model.md`, `IPC-Contract.md`, `Plugin-ABI.md`, `Error-Observability.md`, `Testing-Strategy.md`, `Release-Signing-Update.md`, `Docs-Strategy.md`, reconciled `Adopt-Build-Fork.md`), all 10 foundational ADRs (`0001`–`0010`), updated `06-Risk/License-Registry.md`, and updated `90-Canvas/Architecture.canvas` (`13` nodes, `14` edges, `0` orphans).
+- **Adversarial Red-Team Audit & Remediation (`07-Reviews/Red-Team-Phase3.md`):** Initial audit returned `PASS-WITH-REQUIRED-FIXES` with `18` findings (`5` Blockers, `8` Majors, `4` Minors, `1` Nit). All 4 specialists remediated `RT3-01`–`RT3-18` in parallel:
+  - Fixed binary IPC wire layouts (`40 B` trades with `qty_e9: i64`, `24 B` `VOLUME_PROFILE_SOA`, `16 B` aligned `STREAM_STATUS_FRAME`, `32 B` `FootprintCell`), unified 5-tier `ProvenanceTier` & 5-state `BookState` verbatim across specs (`RT3-01`).
+  - Locked `updates.checkOnStartup = false` by default for `P1`/`SV-01` zero-network offline boot (`RT3-02`).
+  - Restored locked Charter `< 300 MB` idle RAM ceiling (`Constraints #5`, `SV-13`) (`RT3-03`).
+  - Purged retired `mv-*` crate names and `.mv*` file extensions across `04-Architecture/` and `90-Canvas/Architecture.canvas` (`RT3-04`).
+  - Codified the **Risk-Reduction Bypass Rule** (`reduce_only`, `cancel_order`, `cancel_all`, `trigger_kill_switch`/`flatten_all`, `reconcile_now` always permitted during `BookState != Live` or `RECONCILING`) (`RT3-05`).
+  - Fixed strict per-provider `rtrb` SPSC → Dispatcher → `StorageRing` topology (`RT3-06`), complete 20-row `SV-01`–`SV-20` traceability (`RT3-07`), flat SoA `ByteView` ABI + Cranelift/IEEE-754 determinism + `<= 64 MiB` global study memory pool (`RT3-08`), `6,000`-bar hysteresis trim & `state_rev: u64` (`RT3-09`), canonical 12-state `OrderState` + macOS `PRAGMA fullfsync = ON` batched WAL policy + `u128` `TpoRow` (`RT3-10`), `Adopt-Build-Fork.md` reconciliation (`RT3-11`), link/scope hygiene (`RT3-12`), `Architecture.canvas` fixes (`RT3-13`), and all Minors/Nits (`RT3-14`–`RT3-18`).
+- **Independent Re-Verification:** **Allegedly Red Team** re-verified all 18 findings and upgraded `07-Reviews/Red-Team-Phase3.md` to **`verdict: PASS`** (**18/18 CLOSED**, `0` open findings).
+- **Vault Trackers Updated:** Synced `00-Start-Here.md`, `01-Charter/Glossary.md`, `08-Dashboards/*`, and `99-Meta/Handoffs.md`. Advancing directly to **Phase 4 (Roadmap & Stories)** per Abel's overnight autonomous authorization.
