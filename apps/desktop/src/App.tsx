@@ -34,6 +34,10 @@ import {
   type QuickRangePreset,
   type WorkspaceLayoutMode,
 } from "@allegedly/ui-chrome";
+import {
+  IndicatorsDialog,
+  type IndicatorLayerState,
+} from "./components/indicators-dialog";
 import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { ReplayBar } from "./components/replay-bar";
 import { RightIconRail, type RightDrawerTab } from "./components/right-icon-rail";
@@ -53,6 +57,7 @@ import {
 import { DomLadderPanel } from "./panels/dom-ladder-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
 import { WatchlistPanel } from "./panels/watchlist-panel";
+import type { OverlayVisibility } from "./render/webgl2-orderflow-overlay";
 
 const DEFAULT_BOOT_CONFIG: BootConfig = {
   updates_check_on_startup: false,
@@ -197,6 +202,13 @@ export function App({ transport: providedTransport }: AppProps) {
     loadStoredChartTemplates,
   );
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [indicatorsOpen, setIndicatorsOpen] = useState<boolean>(false);
+  const [overlayVisibility, setOverlayVisibility] = useState<OverlayVisibility>({
+    footprint: false,
+    vrvp: false,
+    tpo: false,
+  });
+  const [showVolume, setShowVolume] = useState<boolean>(() => chartSettings.statusLine.volume);
   const [candleStyle, setCandleStyle] = useState<CandleVisualStyle>("monochrome");
   const [activeTool, setActiveTool] = useState<DrawingToolKind>("cursor");
   const [magnetEnabled, setMagnetEnabled] = useState<boolean>(true);
@@ -534,11 +546,11 @@ export function App({ transport: providedTransport }: AppProps) {
   );
 
   const handleRunLuauStudy = useCallback(
-    (script: string) => {
+    (script: string, id = "luau-custom", customLabel?: string) => {
       setStudyError(null);
       const snap = seriesSnapshotRef.current;
       const req: StudyRunRequest = {
-        id: "luau-custom",
+        id,
         luau_script: script,
         closes: snap.closes,
         volumes: snap.volumes,
@@ -548,7 +560,10 @@ export function App({ transport: providedTransport }: AppProps) {
       void transport
         .invokeJson<StudyRunRequest, StudyRunResponse>("run_study", req)
         .then((res) => {
-          setActiveStudies((prev) => [...prev.filter((s) => s.id !== res.id), res]);
+          const labeled: StudyRunResponse = customLabel
+            ? { ...res, label: customLabel }
+            : res;
+          setActiveStudies((prev) => [...prev.filter((s) => s.id !== labeled.id), labeled]);
         })
         .catch((err: unknown) => {
           setStudyError(err instanceof Error ? err.message : String(err));
@@ -556,6 +571,14 @@ export function App({ transport: providedTransport }: AppProps) {
     },
     [transport],
   );
+
+  const handleToggleOverlayLayer = useCallback((layer: keyof IndicatorLayerState) => {
+    if (layer === "volume") {
+      setShowVolume((prev) => !prev);
+      return;
+    }
+    setOverlayVisibility((prev) => ({ ...prev, [layer]: !prev[layer] }));
+  }, []);
 
   const handleClearStudies = useCallback(() => {
     setActiveStudies([]);
@@ -624,16 +647,15 @@ export function App({ transport: providedTransport }: AppProps) {
 
   const studyOverlays = useMemo<StudyOverlaySeries[]>(
     () =>
-      activeStudies
-        .filter((s) => s.overlay)
-        .map((s) => ({
-          id: s.id,
-          label: s.label,
-          color:
-            STUDY_COLORS[s.id.split("-")[0]] ??
-            (s.id.startsWith("luau") ? STUDY_COLORS.luau : "#38bdf8"),
-          values: s.values,
-        })),
+      activeStudies.map((s) => ({
+        id: s.id,
+        label: s.label,
+        overlay: s.overlay,
+        color:
+          STUDY_COLORS[s.id.split("-")[0]] ??
+          (s.id.startsWith("luau") ? STUDY_COLORS.luau : "#38bdf8"),
+        values: s.values,
+      })),
     [activeStudies],
   );
 
@@ -704,11 +726,13 @@ export function App({ transport: providedTransport }: AppProps) {
         onSettingsOpenChange={setSettingsOpen}
         replayOpen={replayOpen}
         onToggleReplay={() => setReplayOpen((v) => !v)}
-        studiesActiveCount={activeStudies.length}
-        onOpenStudies={() => {
-          setLayoutMode("focus");
-          setRightTab((curr) => (curr === "studies" ? null : "studies"));
-        }}
+        studiesActiveCount={
+          activeStudies.length +
+          Number(overlayVisibility.vrvp) +
+          Number(overlayVisibility.footprint) +
+          Number(overlayVisibility.tpo)
+        }
+        onOpenStudies={() => setIndicatorsOpen(true)}
         tradeOpen={rightTab === "trade"}
         onToggleTrade={() => {
           setLayoutMode("focus");
@@ -799,6 +823,12 @@ export function App({ transport: providedTransport }: AppProps) {
                 }}
                 activeOrders={account.orders}
                 onAlertsCountChange={setAlertsCount}
+                overlayVisibility={overlayVisibility}
+                onToggleOverlayVisibility={(key) =>
+                  setOverlayVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+                }
+                showVolume={showVolume}
+                onShowVolumeChange={setShowVolume}
               />
             </div>
 
@@ -913,6 +943,12 @@ export function App({ transport: providedTransport }: AppProps) {
                   }}
                   activeOrders={account.orders}
                   onAlertsCountChange={setAlertsCount}
+                  overlayVisibility={overlayVisibility}
+                  onToggleOverlayVisibility={(key) =>
+                    setOverlayVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+                  }
+                  showVolume={showVolume}
+                  onShowVolumeChange={setShowVolume}
                 />
               ),
             }}
@@ -962,6 +998,24 @@ export function App({ transport: providedTransport }: AppProps) {
           onClose={() => setReplayOpen(false)}
         />
       )}
+
+      <IndicatorsDialog
+        open={indicatorsOpen}
+        onOpenChange={setIndicatorsOpen}
+        activeStudies={activeStudies}
+        studyError={studyError}
+        layerState={{
+          volume: showVolume,
+          vrvp: overlayVisibility.vrvp,
+          footprint: overlayVisibility.footprint,
+          tpo: overlayVisibility.tpo,
+        }}
+        onRunBuiltinStudy={handleRunBuiltinStudy}
+        onRemoveStudy={handleRemoveStudy}
+        onRunLuauStudy={handleRunLuauStudy}
+        onClearStudies={handleClearStudies}
+        onToggleLayer={handleToggleOverlayLayer}
+      />
 
       <StatusBar
         transportKind={transport.kind}

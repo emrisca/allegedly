@@ -14,7 +14,8 @@ import { ChromeToolbar, StatusBar } from "@allegedly/ui-chrome";
 import { ReplayBar } from "./components/replay-bar";
 import { DEFAULT_FAVORITE_TOOLS } from "./drawings/drawing-engine";
 import { LeftDrawingRail } from "./components/left-drawing-rail";
-import { ChartOverlayToolbar } from "./panels/chart-panel";
+import { IndicatorsDialog } from "./components/indicators-dialog";
+import { ActiveIndicatorsLegend, ChartOverlayToolbar } from "./panels/chart-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
 
 const BOOT_CONFIG = {
@@ -385,5 +386,187 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle floating favorites drawing toolbar" }));
     expect(onToggleFloatingBar).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens centered IndicatorsDialog (Favorites, My scripts, Technicals, Fundamentals), searches/stars/runs studies, and passes axe-core", async () => {
+    const onRunBuiltinStudy = vi.fn();
+    const onRemoveStudy = vi.fn();
+    const onRunLuauStudy = vi.fn();
+    const onToggleLayer = vi.fn();
+    const onOpenStudies = vi.fn();
+
+    const { container } = render(
+      <div>
+        <ChromeToolbar
+          symbol="NQ1!"
+          timeframe="D"
+          bootConfig={BOOT_CONFIG}
+          stateRev={0}
+          onSymbolChange={() => {}}
+          onTimeframeChange={() => {}}
+          onKillSwitch={() => {}}
+          onResetLayout={() => {}}
+          onOpenStudies={onOpenStudies}
+        />
+        <IndicatorsDialog
+          open={true}
+          onOpenChange={() => {}}
+          activeStudies={[
+            {
+              id: "vwap-1",
+              label: "VWAP",
+              overlay: true,
+              values: [25700, 25710],
+              memory_pool_reserved_bytes: 0,
+              memory_pool_peak_bytes: 0,
+              memory_pool_cap_bytes: 2 * 1024 * 1024,
+            },
+          ]}
+          layerState={{
+            volume: true,
+            vrvp: false,
+            footprint: false,
+            tpo: false,
+          }}
+          onRunBuiltinStudy={onRunBuiltinStudy}
+          onRemoveStudy={onRemoveStudy}
+          onRunLuauStudy={onRunLuauStudy}
+          onClearStudies={() => {}}
+          onToggleLayer={onToggleLayer}
+        />
+      </div>,
+    );
+
+    // Top toolbar Indicators button invokes onOpenStudies
+    fireEvent.click(screen.getByRole("button", { name: "Open Indicators and Luau Studies" }));
+    expect(onOpenStudies).toHaveBeenCalledTimes(1);
+
+    // Modal title, search input, and sidebar categories render
+    expect(screen.getByRole("dialog", { name: "Indicators, metrics, and strategies" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Favorites" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "My scripts" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Technicals" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Fundamentals" })).toBeTruthy();
+
+    await expectZeroCriticalOrSeriousAxe(document.body);
+    expect(container).toBeTruthy();
+
+    // Activating an indicator from Favorites calls onRunBuiltinStudy
+    fireEvent.click(screen.getByRole("button", { name: /^Relative strength index/i }));
+    expect(onRunBuiltinStudy).toHaveBeenCalledWith("wilder_rsi", 14);
+
+    // Activating Session volume profile toggles vrvp layer
+    fireEvent.click(screen.getByRole("button", { name: /^Session volume profile$/i }));
+    expect(onToggleLayer).toHaveBeenCalledWith("vrvp");
+
+    // Searching filters across all categories
+    const search = screen.getByLabelText("Search indicators, metrics, and strategies");
+    fireEvent.change(search, { target: { value: "Cumulative volume delta" } });
+    expect(screen.getByRole("button", { name: /^Cumulative volume delta/i })).toBeTruthy();
+    fireEvent.change(search, { target: { value: "" } });
+
+    // Switching to My scripts and saving/running Luau script invokes onRunLuauStudy
+    fireEvent.click(screen.getByRole("tab", { name: "My scripts" }));
+    const nameInput = screen.getByLabelText("Luau script name");
+    fireEvent.change(nameInput, { target: { value: "VWAP Deviation Band" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save & Add to Chart/i }));
+    expect(onRunLuauStudy).toHaveBeenCalledWith(
+      expect.stringContaining("close"),
+      expect.stringContaining("luau-"),
+      "VWAP Deviation Band",
+    );
+
+    // Fundamentals reports honest local offline status
+    fireEvent.click(screen.getByRole("tab", { name: "Fundamentals" }));
+    expect(document.body.textContent).toContain("OFFLINE_MODE");
+  });
+
+  it("renders ActiveIndicatorsLegend rows with hide/show eye toggle, remove, collapse chevron, and passes axe-core", async () => {
+    const onToggleExpanded = vi.fn();
+    const onToggleVolumeHidden = vi.fn();
+    const onRemoveVolume = vi.fn();
+    const onToggleStudyHidden = vi.fn();
+    const onRemoveStudy = vi.fn();
+    const onToggleOrderflowHidden = vi.fn();
+    const onRemoveOrderflow = vi.fn();
+
+    const { container, rerender } = render(
+      <ActiveIndicatorsLegend
+        studyOverlays={[
+          { id: "vwap-1", label: "VWAP Session", color: "#3b82f6", values: [7369.22] },
+          { id: "sma-20", label: "SMA (20)", color: "#34d399", values: [7340.1] },
+        ]}
+        hiddenStudyIds={new Set(["sma-20"])}
+        showVolumeRow={true}
+        volumeHidden={false}
+        activeOrderflowRows={[
+          { key: "vrvp", label: "Session Volume Profile", badge: "VRVP", color: "#38bdf8" },
+        ]}
+        hiddenOrderflowLayers={new Set()}
+        expanded={true}
+        indicatorInputs={true}
+        indicatorValues={true}
+        formatPriceValue={(v) => v.toFixed(2)}
+        onToggleExpanded={onToggleExpanded}
+        onToggleVolumeHidden={onToggleVolumeHidden}
+        onRemoveVolume={onRemoveVolume}
+        onToggleStudyHidden={onToggleStudyHidden}
+        onRemoveStudy={onRemoveStudy}
+        onToggleOrderflowHidden={onToggleOrderflowHidden}
+        onRemoveOrderflow={onRemoveOrderflow}
+      />,
+    );
+
+    expect(container.textContent).toContain("Vol");
+    expect(container.textContent).toContain("VWAP Session");
+    expect(container.textContent).toContain("7369.22");
+    expect(container.textContent).toContain("SMA (20)");
+    expect(container.textContent).toContain("Session Volume Profile");
+
+    await expectZeroCriticalOrSeriousAxe(container);
+
+    // Hidden study displays Show button, visible displays Hide
+    fireEvent.click(screen.getByRole("button", { name: "Show SMA (20)" }));
+    expect(onToggleStudyHidden).toHaveBeenCalledWith("sma-20");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove VWAP Session" }));
+    expect(onRemoveStudy).toHaveBeenCalledWith("vwap-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide Volume" }));
+    expect(onToggleVolumeHidden).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Volume" }));
+    expect(onRemoveVolume).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse active indicators" }));
+    expect(onToggleExpanded).toHaveBeenCalledTimes(1);
+
+    // Collapsed view hides rows and renders expand toggle with count
+    rerender(
+      <ActiveIndicatorsLegend
+        studyOverlays={[
+          { id: "vwap-1", label: "VWAP Session", color: "#3b82f6", values: [7369.22] },
+        ]}
+        hiddenStudyIds={new Set()}
+        showVolumeRow={true}
+        volumeHidden={false}
+        activeOrderflowRows={[]}
+        hiddenOrderflowLayers={new Set()}
+        expanded={false}
+        indicatorInputs={true}
+        indicatorValues={true}
+        formatPriceValue={(v) => v.toFixed(2)}
+        onToggleExpanded={onToggleExpanded}
+        onToggleVolumeHidden={onToggleVolumeHidden}
+        onRemoveVolume={onRemoveVolume}
+        onToggleStudyHidden={onToggleStudyHidden}
+        onRemoveStudy={onRemoveStudy}
+        onToggleOrderflowHidden={onToggleOrderflowHidden}
+        onRemoveOrderflow={onRemoveOrderflow}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Expand active indicators" }).textContent).toContain("2");
+    await expectZeroCriticalOrSeriousAxe(container);
   });
 });

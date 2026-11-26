@@ -74,6 +74,7 @@ export interface StudyOverlaySeries {
   id: string;
   label: string;
   color: string;
+  overlay?: boolean;
   values: Array<number | null>;
 }
 
@@ -149,8 +150,57 @@ export interface ChartPanelProps {
   onOpenObjectTree?: () => void;
   activeOrders?: readonly ChartOrderOverlay[];
   onAlertsCountChange?: (count: number) => void;
+  /** Controlled orderflow & volume layer visibility synced with Indicators modal */
+  overlayVisibility?: OverlayVisibility;
+  onToggleOverlayVisibility?: (key: keyof OverlayVisibility) => void;
+  showVolume?: boolean;
+  onShowVolumeChange?: (next: boolean) => void;
   /** Render legacy inline toolbar when used standalone */
   showInlineToolbar?: boolean;
+}
+
+function formatCompactVolume(val: number): string {
+  if (!Number.isFinite(val)) return "—";
+  const abs = Math.abs(val);
+  if (abs >= 1e9) return `${(val / 1e9).toFixed(2)} B`;
+  if (abs >= 1e6) return `${(val / 1e6).toFixed(2)} M`;
+  if (abs >= 1e3) return `${(val / 1e3).toFixed(2)} K`;
+  return Math.round(val).toLocaleString("en-US");
+}
+
+function LegendEyeIcon({ hidden }: { hidden: boolean }) {
+  return hidden ? (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.35"
+    >
+      <path
+        d="M2.2 8c1.5-2.6 3.5-3.9 5.8-3.9 2.3 0 4.3 1.3 5.8 3.9-1.5 2.6-3.5 3.9-5.8 3.9-2.3 0-4.3-1.3-5.8-3.9Z"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="1.6" />
+      <path d="M3 13 13 3" strokeLinecap="round" />
+    </svg>
+  ) : (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.35"
+    >
+      <path
+        d="M2.2 8c1.5-2.6 3.5-3.9 5.8-3.9 2.3 0 4.3 1.3 5.8 3.9-1.5 2.6-3.5 3.9-5.8 3.9-2.3 0-4.3-1.3-5.8-3.9Z"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="8" r="1.6" />
+    </svg>
+  );
 }
 
 function getPrecisionDigits(cfg: ChartSettings, defaultDecimals: number): number {
@@ -270,6 +320,241 @@ export interface ChartOverlayToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   onClearDrawings: () => void;
+}
+
+export interface ActiveOrderflowLegendRow {
+  key: keyof OverlayVisibility;
+  label: string;
+  badge: string;
+  color: string;
+}
+
+export interface ActiveIndicatorsLegendProps {
+  studyOverlays: readonly StudyOverlaySeries[];
+  hiddenStudyIds: ReadonlySet<string>;
+  showVolumeRow: boolean;
+  volumeHidden: boolean;
+  volLegendRef?: { current: HTMLSpanElement | null };
+  studyValRefs?: { current: Map<string, HTMLSpanElement> };
+  activeOrderflowRows: readonly ActiveOrderflowLegendRow[];
+  hiddenOrderflowLayers: ReadonlySet<keyof OverlayVisibility>;
+  expanded: boolean;
+  indicatorInputs: boolean;
+  indicatorValues: boolean;
+  formatPriceValue: (v: number) => string;
+  onToggleExpanded: () => void;
+  onToggleVolumeHidden: () => void;
+  onRemoveVolume: () => void;
+  onToggleStudyHidden: (id: string) => void;
+  onRemoveStudy?: (id: string) => void;
+  onToggleOrderflowHidden: (key: keyof OverlayVisibility) => void;
+  onRemoveOrderflow: (key: keyof OverlayVisibility) => void;
+}
+
+export function ActiveIndicatorsLegend({
+  studyOverlays,
+  hiddenStudyIds,
+  showVolumeRow,
+  volumeHidden,
+  volLegendRef,
+  studyValRefs,
+  activeOrderflowRows,
+  hiddenOrderflowLayers,
+  expanded,
+  indicatorInputs,
+  indicatorValues,
+  formatPriceValue,
+  onToggleExpanded,
+  onToggleVolumeHidden,
+  onRemoveVolume,
+  onToggleStudyHidden,
+  onRemoveStudy,
+  onToggleOrderflowHidden,
+  onRemoveOrderflow,
+}: ActiveIndicatorsLegendProps) {
+  const totalLegendItems =
+    (showVolumeRow ? 1 : 0) + studyOverlays.length + activeOrderflowRows.length;
+  if (totalLegendItems === 0) return null;
+
+  return (
+    <div
+      data-testid="active-indicators-legend"
+      className="pointer-events-auto mt-1 flex flex-col items-start gap-0.5 text-[12px]"
+    >
+      {expanded && (
+        <div className="flex flex-col items-start gap-0.5">
+          {showVolumeRow && (
+            <div className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85">
+              <span className={volumeHidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>Vol</span>
+              {!volumeHidden && (
+                <span
+                  ref={(el) => {
+                    if (volLegendRef) volLegendRef.current = el;
+                  }}
+                  className="font-mono text-[12px] tabular-nums text-[#ef5350]"
+                >
+                  —
+                </span>
+              )}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={volumeHidden ? "Show Volume" : "Hide Volume"}
+                  onClick={onToggleVolumeHidden}
+                  className={
+                    volumeHidden
+                      ? "rounded p-0.5 text-[#9aa1b2] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                      : "rounded p-0.5 text-[#868c9b] opacity-0 transition-opacity hover:text-white group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                  }
+                >
+                  <LegendEyeIcon hidden={volumeHidden} />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Remove Volume"
+                  onClick={onRemoveVolume}
+                  className="rounded px-0.5 text-[13px] leading-none text-[#787e8d] opacity-0 transition-opacity hover:text-rose-300 group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
+          {studyOverlays.map((st) => {
+            const hidden = hiddenStudyIds.has(st.id);
+            const lastVal = [...st.values]
+              .reverse()
+              .find((v): v is number => typeof v === "number" && Number.isFinite(v));
+            const titleText = indicatorInputs
+              ? st.label
+              : st.label.replace(/\s*\([^)]*\)/g, "");
+            return (
+              <div
+                key={st.id}
+                className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
+              >
+                <span className={hidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>
+                  {titleText}
+                </span>
+                {!hidden && indicatorValues && lastVal !== undefined && (
+                  <span
+                    ref={(el) => {
+                      if (!studyValRefs) return;
+                      if (el) studyValRefs.current.set(st.id, el);
+                      else studyValRefs.current.delete(st.id);
+                    }}
+                    style={{ color: st.color }}
+                    className="font-mono text-[12px] tabular-nums"
+                  >
+                    {formatPriceValue(lastVal)}
+                  </span>
+                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={hidden ? `Show ${st.label}` : `Hide ${st.label}`}
+                    onClick={() => onToggleStudyHidden(st.id)}
+                    className={
+                      hidden
+                        ? "rounded p-0.5 text-[#9aa1b2] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                        : "rounded p-0.5 text-[#868c9b] opacity-0 transition-opacity hover:text-white group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                    }
+                  >
+                    <LegendEyeIcon hidden={hidden} />
+                  </button>
+                  {onRemoveStudy && (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${st.label}`}
+                      onClick={() => onRemoveStudy(st.id)}
+                      className="rounded px-0.5 text-[13px] leading-none text-[#787e8d] opacity-0 transition-opacity hover:text-rose-300 group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {activeOrderflowRows.map((layer) => {
+            const hidden = hiddenOrderflowLayers.has(layer.key);
+            return (
+              <div
+                key={layer.key}
+                className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
+              >
+                <span className={hidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>
+                  {layer.label}
+                </span>
+                {!hidden && (
+                  <span
+                    style={{ color: layer.color }}
+                    className="font-mono text-[11px] tabular-nums"
+                  >
+                    {layer.badge}
+                  </span>
+                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={hidden ? `Show ${layer.label}` : `Hide ${layer.label}`}
+                    onClick={() => onToggleOrderflowHidden(layer.key)}
+                    className={
+                      hidden
+                        ? "rounded p-0.5 text-[#9aa1b2] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                        : "rounded p-0.5 text-[#868c9b] opacity-0 transition-opacity hover:text-white group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                    }
+                  >
+                    <LegendEyeIcon hidden={hidden} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${layer.label}`}
+                    onClick={() => onRemoveOrderflow(layer.key)}
+                    className="rounded px-0.5 text-[13px] leading-none text-[#787e8d] opacity-0 transition-opacity hover:text-rose-300 group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        type="button"
+        aria-label={
+          expanded ? "Collapse active indicators" : "Expand active indicators"
+        }
+        aria-expanded={expanded}
+        onClick={onToggleExpanded}
+        className="mt-0.5 inline-flex h-5 items-center gap-1 rounded border border-[#2c3140] bg-[#16181f]/90 px-1.5 text-[10px] text-[#9aa1b2] hover:bg-[#232733] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+      >
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 12 12"
+          className="h-3 w-3"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
+          {expanded ? (
+            <path d="M2.5 7.5 6 4l3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+          ) : (
+            <path d="M2.5 4.5 6 8l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+          )}
+        </svg>
+        {!expanded && (
+          <span className="font-mono text-[10px] tabular-nums text-[#cfd4e0]">
+            {totalLegendItems}
+          </span>
+        )}
+      </button>
+    </div>
+  );
 }
 
 export function ChartOverlayToolbar({
@@ -685,6 +970,10 @@ export function ChartPanel({
   onOpenObjectTree,
   activeOrders = [],
   onAlertsCountChange,
+  overlayVisibility: controlledOverlayVisibility,
+  onToggleOverlayVisibility,
+  showVolume: controlledShowVolume,
+  onShowVolumeChange,
   showInlineToolbar = false,
 }: ChartPanelProps) {
   const effectiveSettings = chartSettings ?? DEFAULT_CHART_SETTINGS;
@@ -693,6 +982,10 @@ export function ChartPanel({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const pointerSurfaceRef = useRef<HTMLDivElement | null>(null);
   const ohlcRef = useRef<HTMLSpanElement | null>(null);
+  const volLegendRef = useRef<HTMLSpanElement | null>(null);
+  const lastVolSampleRef = useRef<{ vol: number; isUp: boolean } | null>(null);
+  const studyValRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
+  const studyLatestRef = useRef<Map<string, number>>(new Map());
 
   const [floatingBarPos, setFloatingBarPos] = useState<{ x: number; y: number } | null>(() => {
     if (typeof window === "undefined" || !window.localStorage) return null;
@@ -726,12 +1019,24 @@ export function ChartPanel({
   } | null>(null);
   const pendingTextInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [visibility, setVisibility] = useState<OverlayVisibility>({
+  const [localVisibility, setLocalVisibility] = useState<OverlayVisibility>({
     footprint: false,
     vrvp: false,
     tpo: false,
   });
-  const [showVolume, setShowVolume] = useState<boolean>(effectiveSettings.statusLine.volume);
+  const visibility = controlledOverlayVisibility ?? localVisibility;
+  const [localShowVolume, setLocalShowVolume] = useState<boolean>(effectiveSettings.statusLine.volume);
+  const showVolume = controlledShowVolume ?? localShowVolume;
+  const setShowVolume = (updater: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof updater === "function" ? updater(showVolume) : updater;
+    setLocalShowVolume(next);
+    onShowVolumeChange?.(next);
+  };
+  const [volumeHidden, setVolumeHidden] = useState<boolean>(false);
+  const [hiddenOrderflowLayers, setHiddenOrderflowLayers] = useState<Set<keyof OverlayVisibility>>(
+    () => new Set(),
+  );
+  const [indicatorsLegendExpanded, setIndicatorsLegendExpanded] = useState<boolean>(true);
   const [contextMenu, setContextMenu] = useState<ChartContextMenuState | null>(null);
   const [lockCursorByTime, setLockCursorByTime] = useState<boolean>(false);
   const [tableViewOpen, setTableViewOpen] = useState<boolean>(false);
@@ -773,8 +1078,13 @@ export function ChartPanel({
 
   const effectiveLogScale = controlledLogScale ?? priceScaleMode === PriceScaleMode.Logarithmic;
 
-  const visibilityRef = useRef<OverlayVisibility>(visibility);
-  visibilityRef.current = visibility;
+  const effectiveOverlayVisibility: OverlayVisibility = {
+    footprint: visibility.footprint && !hiddenOrderflowLayers.has("footprint"),
+    vrvp: visibility.vrvp && !hiddenOrderflowLayers.has("vrvp"),
+    tpo: visibility.tpo && !hiddenOrderflowLayers.has("tpo"),
+  };
+  const visibilityRef = useRef<OverlayVisibility>(effectiveOverlayVisibility);
+  visibilityRef.current = effectiveOverlayVisibility;
 
   const activeToolRef = useRef<DrawingToolKind>(activeTool);
   activeToolRef.current = activeTool;
@@ -913,11 +1223,16 @@ export function ChartPanel({
 
   useEffect(() => {
     redrawTriggerRef.current();
-  }, [visibility, drawingsHidden, drawingsLocked]);
+  }, [visibility, hiddenOrderflowLayers, drawingsHidden, drawingsLocked]);
 
   // Sync volume histogram visibility with Status line Volume checkbox
   useEffect(() => {
-    setShowVolume(effectiveSettings.statusLine.volume);
+    setLocalShowVolume(effectiveSettings.statusLine.volume);
+    onShowVolumeChange?.(effectiveSettings.statusLine.volume);
+    if (effectiveSettings.statusLine.volume) {
+      setVolumeHidden(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveSettings.statusLine.volume]);
 
   // Apply all live ChartSettings (Symbol, Canvas, Scales, Date format) to Lightweight Charts
@@ -1209,8 +1524,12 @@ export function ChartPanel({
   }, [symbol, onSubmitOrderAtPrice, onOpenOrderTicket]);
 
   useEffect(() => {
-    volumeSeriesRef.current?.applyOptions({ visible: showVolume });
-  }, [showVolume]);
+    volumeSeriesRef.current?.applyOptions({ visible: showVolume && !volumeHidden });
+    if (showVolume && !volumeHidden && volLegendRef.current && lastVolSampleRef.current) {
+      volLegendRef.current.textContent = formatCompactVolume(lastVolSampleRef.current.vol);
+      volLegendRef.current.style.color = lastVolSampleRef.current.isUp ? "#26a69a" : "#ef5350";
+    }
+  }, [showVolume, volumeHidden]);
 
   useEffect(() => {
     const chart = chartApiRef.current;
@@ -1332,7 +1651,7 @@ export function ChartPanel({
     const volumeSeries: ISeriesApi<"Histogram"> = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "",
-      visible: showVolume,
+      visible: showVolume && !volumeHidden,
     });
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.85, bottom: 0 },
@@ -1365,10 +1684,21 @@ export function ChartPanel({
         const sign = diff >= 0 ? "+" : "";
         segments.push(`${sign}${f(diff)} (${sign}${pct.toFixed(2)}%)`);
       }
-      if (cfg.statusLine.volume && typeof vol === "number") {
-        segments.push(`Vol ${Math.round(vol).toLocaleString("en-US")}`);
-      }
+      void vol;
       return segments.join("   ");
+    };
+
+    const updateVolLegend = (bar?: CandlestickData<UTCTimestamp>, vol?: number) => {
+      if (typeof vol === "number" && Number.isFinite(vol)) {
+        const isUp = !bar || bar.close >= bar.open;
+        lastVolSampleRef.current = { vol, isUp };
+        if (volLegendRef.current) {
+          volLegendRef.current.textContent = formatCompactVolume(vol);
+          volLegendRef.current.style.color = isUp ? "#26a69a" : "#ef5350";
+        }
+      } else if (volLegendRef.current) {
+        volLegendRef.current.textContent = "—";
+      }
     };
 
     const publishSeriesSnapshot = () => {
@@ -1380,6 +1710,7 @@ export function ChartPanel({
       if (lastBar && ohlcRef.current) {
         ohlcRef.current.textContent = formatOhlc(lastBar, lastVol);
       }
+      updateVolLegend(lastBar, lastVol);
       if (seriesSnapshotRef) {
         seriesSnapshotRef.current = {
           times,
@@ -1524,15 +1855,37 @@ export function ChartPanel({
           lastCrosshairPriceRef.current = p;
         }
       }
-      if (!ohlcRef.current) return;
       const bar = param.seriesData.get(candleSeries) as CandlestickData<UTCTimestamp> | undefined;
       const vPoint = param.seriesData.get(volumeSeries) as HistogramData<UTCTimestamp> | undefined;
+      const lastBar = activeCandles[activeCandles.length - 1];
+      const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
+      if (ohlcRef.current) {
+        if (bar && typeof bar.open === "number") {
+          ohlcRef.current.textContent = formatOhlc(bar, vPoint?.value);
+        } else if (lastBar) {
+          ohlcRef.current.textContent = formatOhlc(lastBar, lastVol);
+        }
+      }
       if (bar && typeof bar.open === "number") {
-        ohlcRef.current.textContent = formatOhlc(bar, vPoint?.value);
+        updateVolLegend(bar, vPoint?.value);
       } else {
-        const lastBar = activeCandles[activeCandles.length - 1];
-        const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
-        if (lastBar) ohlcRef.current.textContent = formatOhlc(lastBar, lastVol);
+        updateVolLegend(lastBar, lastVol);
+      }
+      // Update active study legend values imperatively on crosshair hover (0 React re-renders)
+      const digits = getPrecisionDigits(chartSettingsRef.current, symMeta.decimals);
+      for (const [id, valEl] of studyValRefs.current.entries()) {
+        const series = studyLineSeriesRef.current.get(id);
+        const pt = series ? (param.seriesData.get(series) as LineData<UTCTimestamp> | undefined) : undefined;
+        const val =
+          pt && typeof pt.value === "number" && Number.isFinite(pt.value)
+            ? pt.value
+            : studyLatestRef.current.get(id);
+        if (typeof val === "number" && Number.isFinite(val)) {
+          valEl.textContent = val.toLocaleString("en-US", {
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits,
+          });
+        }
       }
     });
 
@@ -1989,7 +2342,10 @@ export function ChartPanel({
       }
     }
     const times = latestTimesRef.current;
+    const latestMap = new Map<string, number>();
     for (const st of studyOverlays) {
+      const isOverlay = st.overlay !== false;
+      const scaleId = isOverlay ? "right" : `osc-${st.id}`;
       let series = map.get(st.id);
       if (!series) {
         series = chart.addSeries(LineSeries, {
@@ -1997,12 +2353,19 @@ export function ChartPanel({
           lineWidth: 2,
           priceLineVisible: false,
           lastValueVisible: true,
+          priceScaleId: scaleId,
         });
+        if (!isOverlay) {
+          chart.priceScale(scaleId).applyOptions({
+            scaleMargins: { top: 0.72, bottom: 0.04 },
+            visible: false,
+          });
+        }
         map.set(st.id, series);
       }
       series.applyOptions({
         visible: !hiddenStudyIds.has(st.id),
-        lastValueVisible: effectiveSettings.scales.indicatorsLabel === "value",
+        lastValueVisible: isOverlay && effectiveSettings.scales.indicatorsLabel === "value",
       });
       const n = Math.min(times.length, st.values.length);
       const pts: LineData<UTCTimestamp>[] = [];
@@ -2012,12 +2375,30 @@ export function ChartPanel({
           pts.push({ time: times[i], value: v });
         }
       }
+      const lastNonNull = [...st.values].reverse().find((v): v is number => v !== null && Number.isFinite(v));
+      if (lastNonNull !== undefined) {
+        latestMap.set(st.id, lastNonNull);
+      }
       series.setData(pts);
     }
+    studyLatestRef.current = latestMap;
   }, [studyOverlays, hiddenStudyIds, symbol, timeframe, effectiveSettings.scales.indicatorsLabel]);
 
   const handleToggleVisibility = (key: keyof OverlayVisibility) => {
-    setVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (onToggleOverlayVisibility) {
+      onToggleOverlayVisibility(key);
+    } else {
+      setLocalVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+    }
+  };
+
+  const toggleOrderflowLayerHidden = (key: keyof OverlayVisibility) => {
+    setHiddenOrderflowLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
 
   const toggleStudyVisibility = (id: string) => {
@@ -2334,61 +2715,61 @@ export function ChartPanel({
           )}
 
           {effectiveSettings.statusLine.indicatorTitles && (
-            <div className="pointer-events-auto mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-              {studyOverlays.map((st) => {
-                const hidden = hiddenStudyIds.has(st.id);
-                const lastVal = st.values[st.values.length - 1];
-                const titleText = effectiveSettings.statusLine.indicatorInputs
-                  ? st.label
-                  : st.label.replace(/\s*\([^)]*\)/g, "");
-                return (
-                  <span
-                    key={st.id}
-                    className="inline-flex items-center gap-1.5 rounded bg-[#151821]/75 px-1.5 py-0.5 text-[#b8becd] hover:bg-[#1e2230]"
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{ backgroundColor: st.color }}
-                      className="h-2 w-2 rounded-full"
-                    />
-                    <span className={hidden ? "line-through opacity-50" : ""}>{titleText}</span>
-                    {effectiveSettings.statusLine.indicatorValues &&
-                      typeof lastVal === "number" &&
-                      Number.isFinite(lastVal) && (
-                        <span className="font-mono text-[10px] text-[#8d94a5]">
-                          {formatPriceValue(lastVal)}
-                        </span>
-                      )}
-                    <button
-                      type="button"
-                      aria-label={hidden ? `Show ${st.label}` : `Hide ${st.label}`}
-                      onClick={() => toggleStudyVisibility(st.id)}
-                      className="text-[#868c9b] hover:text-white"
-                    >
-                      {hidden ? "○" : "◉"}
-                    </button>
-                    {onRemoveStudy && (
-                      <button
-                        type="button"
-                        aria-label={`Remove ${st.label}`}
-                        onClick={() => onRemoveStudy(st.id)}
-                        className="text-[#6f7687] hover:text-rose-300"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
-
-              {(visibility.footprint || visibility.vrvp || visibility.tpo) && (
-                <span className="inline-flex items-center gap-1.5 rounded bg-[#151821]/75 px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
-                  {visibility.footprint && <span className="text-emerald-300">Footprint</span>}
-                  {visibility.vrvp && <span className="text-sky-300">VRVP</span>}
-                  {visibility.tpo && <span className="text-amber-300">TPO</span>}
-                </span>
-              )}
-            </div>
+            <ActiveIndicatorsLegend
+              studyOverlays={studyOverlays}
+              hiddenStudyIds={hiddenStudyIds}
+              showVolumeRow={showVolume}
+              volumeHidden={volumeHidden}
+              volLegendRef={volLegendRef}
+              studyValRefs={studyValRefs}
+              activeOrderflowRows={[
+                ...(visibility.vrvp
+                  ? [
+                      {
+                        key: "vrvp" as const,
+                        label: "Session Volume Profile",
+                        badge: "VRVP",
+                        color: "#38bdf8",
+                      },
+                    ]
+                  : []),
+                ...(visibility.footprint
+                  ? [
+                      {
+                        key: "footprint" as const,
+                        label: "Footprint Bid/Ask",
+                        badge: "FP",
+                        color: "#34d399",
+                      },
+                    ]
+                  : []),
+                ...(visibility.tpo
+                  ? [
+                      {
+                        key: "tpo" as const,
+                        label: "TPO Market Profile",
+                        badge: "TPO",
+                        color: "#f59e0b",
+                      },
+                    ]
+                  : []),
+              ]}
+              hiddenOrderflowLayers={hiddenOrderflowLayers}
+              expanded={indicatorsLegendExpanded}
+              indicatorInputs={effectiveSettings.statusLine.indicatorInputs}
+              indicatorValues={effectiveSettings.statusLine.indicatorValues}
+              formatPriceValue={formatPriceValue}
+              onToggleExpanded={() => setIndicatorsLegendExpanded((v) => !v)}
+              onToggleVolumeHidden={() => setVolumeHidden((v) => !v)}
+              onRemoveVolume={() => {
+                setVolumeHidden(false);
+                setShowVolume(false);
+              }}
+              onToggleStudyHidden={toggleStudyVisibility}
+              onRemoveStudy={onRemoveStudy}
+              onToggleOrderflowHidden={toggleOrderflowLayerHidden}
+              onRemoveOrderflow={handleToggleVisibility}
+            />
           )}
         </div>
 
