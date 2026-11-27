@@ -13,6 +13,8 @@ export interface OverlayVisibility {
   vrvp: boolean;
   tpo: boolean;
   marketStructure?: boolean;
+  vwapKeyLevels?: boolean;
+  tradingSessions?: boolean;
 }
 
 export interface OverlayRenderData {

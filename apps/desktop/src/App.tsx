@@ -322,6 +322,8 @@ export function App({ transport: providedTransport }: AppProps) {
     vrvp: false,
     tpo: false,
     marketStructure: false,
+    vwapKeyLevels: false,
+    tradingSessions: false,
   });
   const [showVolume, setShowVolume] = useState<boolean>(() => chartSettings.statusLine.volume);
   const [candleStyle, setCandleStyle] = useState<CandleVisualStyle>("monochrome");
@@ -1162,7 +1164,9 @@ export function App({ transport: providedTransport }: AppProps) {
           Number(overlayVisibility.vrvp) +
           Number(overlayVisibility.footprint) +
           Number(overlayVisibility.tpo) +
-          Number(Boolean(overlayVisibility.marketStructure))
+          Number(Boolean(overlayVisibility.marketStructure)) +
+          Number(Boolean(overlayVisibility.vwapKeyLevels)) +
+          Number(Boolean(overlayVisibility.tradingSessions))
         }
         onOpenStudies={() => setIndicatorsOpen(true)}
         tradeOpen={rightTab === "trade"}
@@ -1525,6 +1529,8 @@ export function App({ transport: providedTransport }: AppProps) {
           footprint: overlayVisibility.footprint,
           tpo: overlayVisibility.tpo,
           marketStructure: Boolean(overlayVisibility.marketStructure),
+          vwapKeyLevels: Boolean(overlayVisibility.vwapKeyLevels),
+          tradingSessions: Boolean(overlayVisibility.tradingSessions),
         }}
         onRunBuiltinStudy={handleRunBuiltinStudy}
         onRemoveStudy={handleRemoveStudy}

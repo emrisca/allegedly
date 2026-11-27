@@ -96,6 +96,22 @@ import {
 } from "../drawings/volume-profile";
 import { DrawingToolIcon } from "../components/drawing-tool-icons";
 import {
+  TradingSessionsSettingsDialog,
+  VwapKeyLevelsSettingsDialog,
+} from "../components/custom-indicator-settings-dialogs";
+import {
+  drawVwapKeyLevelsOverlay,
+  loadStoredVwapKeyLevelsConfig,
+  saveStoredVwapKeyLevelsConfig,
+  type VwapKeyLevelsConfig,
+} from "../indicators/vwap-key-levels";
+import {
+  drawTradingSessionsOverlay,
+  loadStoredTradingSessionsConfig,
+  saveStoredTradingSessionsConfig,
+  type TradingSessionsConfig,
+} from "../indicators/trading-sessions";
+import {
   DrawingQuickStyleBar,
   DrawingSettingsDialog,
   VolumeProfileSettingsDialog,
@@ -563,7 +579,7 @@ export function ActiveIndicatorsLegend({
 
           {activeOrderflowRows.map((layer) => {
             const hidden = hiddenOrderflowLayers.has(layer.key);
-            const hasSettings = Boolean(onOpenOrderflowSettings && layer.key === "vrvp");
+            const hasSettings = Boolean(onOpenOrderflowSettings && (layer.key === "vrvp" || layer.key === "vwapKeyLevels" || layer.key === "tradingSessions"));
             return (
               <div
                 key={layer.key}
@@ -1090,6 +1106,8 @@ interface PrimitiveDrawContext {
   getCandles: () => readonly CandlestickData<UTCTimestamp>[];
   getVolumes: () => readonly HistogramData<UTCTimestamp>[];
   getSessionVpConfig: () => VolumeProfileConfig;
+  getVwapKeyLevelsConfig: () => VwapKeyLevelsConfig;
+  getTradingSessionsConfig: () => TradingSessionsConfig;
   getBarType: () => ChartBarType;
   getPnfColumns: () => readonly PointAndFigureColumn[];
   getBarStepSec: () => number;
@@ -1243,6 +1261,34 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
               data.tickSizeFloat,
               this.source.getSessionVpConfig(),
               false,
+            );
+            context.restore();
+          }
+
+          if (data.visibility.tradingSessions && candles.length >= 2) {
+            context.save();
+            drawTradingSessionsOverlay(
+              context,
+              w,
+              h,
+              candles,
+              bridge,
+              this.source.getTradingSessionsConfig(),
+              this.source.getTimeframe(),
+            );
+            context.restore();
+          }
+
+          if (data.visibility.vwapKeyLevels && candles.length >= 2) {
+            context.save();
+            drawVwapKeyLevelsOverlay(
+              context,
+              w,
+              h,
+              candles,
+              volumes,
+              bridge,
+              this.source.getVwapKeyLevelsConfig(),
             );
             context.restore();
           }
@@ -1474,6 +1520,8 @@ export function ChartPanel({
     vrvp: false,
     tpo: false,
     marketStructure: false,
+    vwapKeyLevels: false,
+    tradingSessions: false,
   });
   const visibility = controlledOverlayVisibility ?? localVisibility;
   const [localShowVolume, setLocalShowVolume] = useState<boolean>(effectiveSettings.statusLine.volume);
@@ -1538,6 +1586,10 @@ export function ChartPanel({
     tpo: visibility.tpo && !hiddenOrderflowLayers.has("tpo"),
     marketStructure:
       Boolean(visibility.marketStructure) && !hiddenOrderflowLayers.has("marketStructure"),
+    vwapKeyLevels:
+      Boolean(visibility.vwapKeyLevels) && !hiddenOrderflowLayers.has("vwapKeyLevels"),
+    tradingSessions:
+      Boolean(visibility.tradingSessions) && !hiddenOrderflowLayers.has("tradingSessions"),
   };
   const visibilityRef = useRef<OverlayVisibility>(effectiveOverlayVisibility);
   visibilityRef.current = effectiveOverlayVisibility;
@@ -1631,6 +1683,19 @@ export function ChartPanel({
     loadStoredVpDefaults(),
   );
   const [vpSettingsOpen, setVpSettingsOpen] = useState(false);
+  const [vwapKeyLevelsConfig, setVwapKeyLevelsConfig] = useState<VwapKeyLevelsConfig>(
+    loadStoredVwapKeyLevelsConfig,
+  );
+  const vwapKeyLevelsConfigRef = useRef<VwapKeyLevelsConfig>(vwapKeyLevelsConfig);
+  vwapKeyLevelsConfigRef.current = vwapKeyLevelsConfig;
+  const [vwapKeyLevelsSettingsOpen, setVwapKeyLevelsSettingsOpen] = useState(false);
+
+  const [tradingSessionsConfig, setTradingSessionsConfig] = useState<TradingSessionsConfig>(
+    loadStoredTradingSessionsConfig,
+  );
+  const tradingSessionsConfigRef = useRef<TradingSessionsConfig>(tradingSessionsConfig);
+  tradingSessionsConfigRef.current = tradingSessionsConfig;
+  const [tradingSessionsSettingsOpen, setTradingSessionsSettingsOpen] = useState(false);
   const sessionVpConfigRef = useRef<VolumeProfileConfig>(sessionVpConfig);
   sessionVpConfigRef.current = sessionVpConfig;
 
@@ -1768,7 +1833,7 @@ export function ChartPanel({
 
   useEffect(() => {
     redrawTriggerRef.current();
-  }, [visibility, hiddenOrderflowLayers, drawingsHidden, drawingsLocked, sessionVpConfig]);
+  }, [visibility, hiddenOrderflowLayers, drawingsHidden, drawingsLocked, sessionVpConfig, vwapKeyLevelsConfig, tradingSessionsConfig]);
 
   // Sync volume histogram visibility with Status line Volume checkbox
   useEffect(() => {
@@ -2505,6 +2570,8 @@ export function ChartPanel({
       getCandles: () => activeCandles,
       getVolumes: () => activeVolumes,
       getSessionVpConfig: () => sessionVpConfigRef.current,
+      getVwapKeyLevelsConfig: () => vwapKeyLevelsConfigRef.current,
+      getTradingSessionsConfig: () => tradingSessionsConfigRef.current,
       getBarType: () => barType,
       getPnfColumns: () => activePnfColumns,
       getBarStepSec: () => Math.max(60, timeframeToSeconds(timeframe)),
@@ -4056,6 +4123,26 @@ export function ChartPanel({
                       },
                     ]
                   : []),
+                ...(visibility.vwapKeyLevels
+                  ? [
+                      {
+                        key: "vwapKeyLevels" as const,
+                        label: `VWAP Key Levels (${vwapKeyLevelsConfig.source})`,
+                        badge: "M/PW/W",
+                        color: vwapKeyLevelsConfig.monthVwapColor,
+                      },
+                    ]
+                  : []),
+                ...(visibility.tradingSessions
+                  ? [
+                      {
+                        key: "tradingSessions" as const,
+                        label: `Trading Sessions (${tradingSessionsConfig.timezone.replace("America/", "").replace("Etc/", "").replace("_", " ")})`,
+                        badge: /^(\d+)(s|m|h)$/i.test(timeframe) ? "TYO/LDN/NY" : "Intraday",
+                        color: tradingSessionsConfig.newYorkColor,
+                      },
+                    ]
+                  : []),
               ]}
               hiddenOrderflowLayers={hiddenOrderflowLayers}
               expanded={indicatorsLegendExpanded}
@@ -4074,6 +4161,8 @@ export function ChartPanel({
               onToggleOrderflowHidden={toggleOrderflowLayerHidden}
               onOpenOrderflowSettings={(key) => {
                 if (key === "vrvp") setVpSettingsOpen(true);
+                if (key === "vwapKeyLevels") setVwapKeyLevelsSettingsOpen(true);
+                if (key === "tradingSessions") setTradingSessionsSettingsOpen(true);
               }}
               onRemoveOrderflow={handleToggleVisibility}
             />
@@ -4247,6 +4336,30 @@ export function ChartPanel({
               ? "pointer-events-none absolute inset-0 z-15 h-full w-full"
               : "pointer-events-auto absolute inset-0 z-15 h-full w-full cursor-crosshair"
           }
+        />
+
+        <VwapKeyLevelsSettingsDialog
+          open={vwapKeyLevelsSettingsOpen}
+          config={vwapKeyLevelsConfig}
+          onOpenChange={setVwapKeyLevelsSettingsOpen}
+          onChange={(next) => {
+            setVwapKeyLevelsConfig(next);
+            saveStoredVwapKeyLevelsConfig(next);
+            vwapKeyLevelsConfigRef.current = next;
+            requestOverlayRedrawRef.current?.();
+          }}
+        />
+
+        <TradingSessionsSettingsDialog
+          open={tradingSessionsSettingsOpen}
+          config={tradingSessionsConfig}
+          onOpenChange={setTradingSessionsSettingsOpen}
+          onChange={(next) => {
+            setTradingSessionsConfig(next);
+            saveStoredTradingSessionsConfig(next);
+            tradingSessionsConfigRef.current = next;
+            requestOverlayRedrawRef.current?.();
+          }}
         />
 
         {/* Bottom-Right Price Scale Context Menu */}

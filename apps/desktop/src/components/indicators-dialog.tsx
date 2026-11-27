@@ -17,6 +17,8 @@ export interface IndicatorLayerState {
   footprint: boolean;
   tpo: boolean;
   marketStructure?: boolean;
+  vwapKeyLevels?: boolean;
+  tradingSessions?: boolean;
 }
 
 export interface SavedLuauScript {
@@ -60,6 +62,8 @@ const SAVED_LUAU_SCRIPTS_KEY = "allegedly.luauScripts.v1";
 export const DEFAULT_INDICATOR_FAVORITES: readonly string[] = [
   "wilder_rsi-14",
   "layer-vrvp",
+  "layer-vwap-key-levels",
+  "layer-trading-sessions",
   "layer-market-structure",
   "layer-volume",
   "vwap-1",
@@ -201,6 +205,24 @@ const BUILTIN_CATALOG: readonly CatalogEntry[] = [
     typeLabel: "Structure",
     color: "#089981",
     action: { kind: "layer", layer: "marketStructure" },
+  },
+  {
+    id: "layer-vwap-key-levels",
+    name: "VWAP Key Levels (Monthly / Weekly / Prev Week / Yearly)",
+    keywords: "vwap key levels monthly weekly previous week yearly vah val mvah mvwap mval pwvwap wvwap bands",
+    source: "Chart Layer",
+    typeLabel: "Overlay",
+    color: "#9c50be",
+    action: { kind: "layer", layer: "vwapKeyLevels" },
+  },
+  {
+    id: "layer-trading-sessions",
+    name: "Trading Sessions (Tokyo / London / New York)",
+    keywords: "trading sessions tokyo london new york killzone asia ny highlight boxes timezone",
+    source: "Chart Layer",
+    typeLabel: "Sessions",
+    color: "#305dd0",
+    action: { kind: "layer", layer: "tradingSessions" },
   },
 ];
 
