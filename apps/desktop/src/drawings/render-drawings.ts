@@ -7,7 +7,28 @@ import {
   type AnchorPoint,
   type DrawingObject,
   type PlacedDrawingKind,
+  loadStoredVpDefaults,
+  type VolumeProfileConfig,
 } from "./drawing-engine";
+import {
+  computeFixedRangeVolumeProfile,
+  detectMarketStructure,
+  type VpCandleInput,
+} from "./volume-profile";
+
+function colorWithAlpha(hex: string, alpha: number): string {
+  const clean = hex.replace("#", "").trim();
+  if (clean.length === 6) {
+    const r = Number.parseInt(clean.slice(0, 2), 16);
+    const g = Number.parseInt(clean.slice(2, 4), 16);
+    const b = Number.parseInt(clean.slice(4, 6), 16);
+    if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) {
+      const a = Math.max(0, Math.min(1, alpha));
+      return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
+    }
+  }
+  return hex;
+}
 
 interface PixelPoint {
   x: number | null;
@@ -87,8 +108,9 @@ function drawBadge(
   ctx.restore();
 }
 
-function drawVolumeHistogram(
+export function drawVolumeHistogram(
   ctx: CanvasRenderingContext2D,
+  w: number,
   leftX: number,
   rightX: number,
   candles: readonly CandlestickData<UTCTimestamp>[],
@@ -96,100 +118,281 @@ function drawVolumeHistogram(
   startSec: number,
   endSec: number,
   bridge: CoordinateBridge,
-  color: string,
+  tickFloat: number,
+  vpConfig?: VolumeProfileConfig,
+  isSelected = false,
 ) {
+  const cfg = vpConfig ?? loadStoredVpDefaults();
   const minSec = Math.min(startSec, endSec);
   const maxSec = Math.max(startSec, endSec);
-  let lowPrice = Number.POSITIVE_INFINITY;
-  let highPrice = Number.NEGATIVE_INFINITY;
-  const subset: Array<{ high: number; low: number; close: number; open: number; vol: number }> = [];
+  const subset: VpCandleInput[] = [];
 
   for (let i = 0; i < candles.length; i++) {
     const c = candles[i];
     const t = Number(c.time);
     if (t >= minSec && t <= maxSec) {
-      if (c.low < lowPrice) lowPrice = c.low;
-      if (c.high > highPrice) highPrice = c.high;
       subset.push({
+        time: t,
+        open: c.open,
         high: c.high,
         low: c.low,
         close: c.close,
-        open: c.open,
-        vol: volumes[i]?.value ?? 1,
+        volume: volumes[i]?.value ?? 1,
       });
     }
   }
-  if (subset.length === 0 || !Number.isFinite(lowPrice) || highPrice <= lowPrice) return;
+  const profile = computeFixedRangeVolumeProfile(subset, tickFloat, cfg);
+  if (!profile) return;
 
-  const bucketCount = 24;
-  const step = (highPrice - lowPrice) / bucketCount;
-  const upVol = new Float64Array(bucketCount);
-  const dnVol = new Float64Array(bucketCount);
-  for (const bar of subset) {
-    const mid = (bar.high + bar.low + bar.close) / 3;
-    const idx = Math.max(0, Math.min(bucketCount - 1, Math.floor((mid - lowPrice) / step)));
-    if (bar.close >= bar.open) upVol[idx] += bar.vol;
-    else dnVol[idx] += bar.vol;
-  }
+  const originX = Math.min(leftX, rightX);
+  const rawEndX = Math.max(leftX, rightX);
+  const boxEndX = cfg.extendRight ? Math.max(rawEndX, w) : rawEndX;
+  const boxSpanW = Math.max(48, boxEndX - originX);
+  const histSpanW = Math.max(48, rawEndX - originX);
+  const widthFrac = Math.max(0.05, Math.min(1, cfg.widthPercent / 100));
+  const maxBarW = Math.max(12, (cfg.extendRight ? boxSpanW : histSpanW) * widthFrac);
 
-  let maxTot = 0;
-  let pocIdx = 0;
-  for (let i = 0; i < bucketCount; i++) {
-    const tot = upVol[i] + dnVol[i];
-    if (tot > maxTot) {
-      maxTot = tot;
-      pocIdx = i;
+  const topY = bridge.priceToY(profile.highPrice);
+  const botY = bridge.priceToY(profile.lowPrice);
+
+  ctx.save();
+  ctx.setLineDash([]);
+
+  // 1. Histogram Box background
+  if (cfg.showHistogramBox && topY !== null && botY !== null) {
+    const boxY = Math.min(topY, botY);
+    const boxH = Math.abs(botY - topY);
+    ctx.fillStyle = colorWithAlpha(cfg.histogramBoxColor, cfg.histogramBoxOpacity);
+    ctx.fillRect(originX, boxY, boxSpanW, boxH);
+    if (isSelected) {
+      ctx.strokeStyle = "rgba(41, 98, 255, 0.7)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.strokeRect(originX, boxY, boxSpanW, boxH);
+      ctx.setLineDash([]);
     }
   }
-  if (maxTot <= 0) return;
 
-  const spanW = Math.max(48, Math.abs(rightX - leftX));
-  const originX = Math.min(leftX, rightX);
-  const maxBarW = spanW * 0.42;
+  // 2. Volume Profile Histogram Rows (Up/Down, Total, or Delta; Left or Right placement)
+  if (cfg.showProfile && profile.bins.length > 0) {
+    const upOut = colorWithAlpha(cfg.upVolumeColor, cfg.upVolumeOpacity);
+    const dnOut = colorWithAlpha(cfg.downVolumeColor, cfg.downVolumeOpacity);
+    const upVa = colorWithAlpha(cfg.valueAreaUpColor, cfg.valueAreaUpOpacity);
+    const dnVa = colorWithAlpha(cfg.valueAreaDownColor, cfg.valueAreaDownOpacity);
 
-  for (let i = 0; i < bucketCount; i++) {
-    const pLow = lowPrice + i * step;
-    const pHigh = pLow + step;
-    const yTop = bridge.priceToY(pHigh);
-    const yBot = bridge.priceToY(pLow);
-    if (yTop === null || yBot === null) continue;
-    const rowH = Math.max(2, Math.abs(yBot - yTop) - 1);
-    const top = Math.min(yTop, yBot);
-    const tot = upVol[i] + dnVol[i];
-    const barW = (tot / maxTot) * maxBarW;
-    const upW = tot > 0 ? (upVol[i] / tot) * barW : 0;
-    const dnW = barW - upW;
+    const anchorRight = cfg.placement === "right";
+    const rightAnchorX = cfg.extendRight ? boxEndX : rawEndX;
 
-    ctx.fillStyle = i === pocIdx ? "rgba(250, 204, 21, 0.72)" : "rgba(56, 189, 248, 0.42)";
-    ctx.fillRect(originX, top, upW, rowH);
-    ctx.fillStyle = i === pocIdx ? "rgba(245, 158, 11, 0.78)" : "rgba(239, 83, 80, 0.36)";
-    ctx.fillRect(originX + upW, top, dnW, rowH);
+    for (let i = 0; i < profile.bins.length; i++) {
+      const bin = profile.bins[i];
+      if (bin.totalVol <= 0) continue;
+      const yTop = bridge.priceToY(bin.priceHigh);
+      const yBot = bridge.priceToY(bin.priceLow);
+      if (yTop === null || yBot === null) continue;
+      const top = Math.min(yTop, yBot);
+      const rawH = Math.abs(yBot - yTop);
+      const rowH = rawH >= 3 ? rawH - 0.6 : Math.max(1, rawH);
+
+      if (cfg.volumeMode === "delta") {
+        const denom = Math.max(1e-9, profile.maxAbsDelta);
+        const barW = (Math.abs(bin.deltaVol) / denom) * maxBarW;
+        const fill =
+          bin.deltaVol >= 0
+            ? bin.inValueArea
+              ? upVa
+              : upOut
+            : bin.inValueArea
+              ? dnVa
+              : dnOut;
+        ctx.fillStyle = fill;
+        const x = anchorRight ? rightAnchorX - barW : originX;
+        ctx.fillRect(x, top, barW, rowH);
+      } else if (cfg.volumeMode === "total") {
+        const barW = (bin.totalVol / profile.maxTotalVol) * maxBarW;
+        ctx.fillStyle = bin.inValueArea ? upVa : upOut;
+        const x = anchorRight ? rightAnchorX - barW : originX;
+        ctx.fillRect(x, top, barW, rowH);
+      } else {
+        // Up/Down stacked bar
+        const barW = (bin.totalVol / profile.maxTotalVol) * maxBarW;
+        const upW = bin.totalVol > 0 ? (bin.upVol / bin.totalVol) * barW : 0;
+        const dnW = Math.max(0, barW - upW);
+        const cUp = bin.inValueArea ? upVa : upOut;
+        const cDn = bin.inValueArea ? dnVa : dnOut;
+        if (anchorRight) {
+          ctx.fillStyle = cDn;
+          ctx.fillRect(rightAnchorX - barW, top, dnW, rowH);
+          ctx.fillStyle = cUp;
+          ctx.fillRect(rightAnchorX - upW, top, upW, rowH);
+        } else {
+          ctx.fillStyle = cUp;
+          ctx.fillRect(originX, top, upW, rowH);
+          ctx.fillStyle = cDn;
+          ctx.fillRect(originX + upW, top, dnW, rowH);
+        }
+      }
+
+      if (cfg.showValues && rawH >= 10) {
+        const labelVal =
+          bin.totalVol >= 1000
+            ? `${(bin.totalVol / 1000).toFixed(1)}K`
+            : Math.round(bin.totalVol).toString();
+        ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillStyle = "#d1d4dc";
+        const tx = anchorRight ? rightAnchorX - maxBarW - 34 : originX + 3;
+        ctx.fillText(labelVal, tx, top + rawH * 0.72);
+      }
+    }
   }
 
-  const pocY = bridge.priceToY(lowPrice + (pocIdx + 0.5) * step);
-  if (pocY !== null) {
-    ctx.save();
-    ctx.strokeStyle = "#facc15";
+  // 3. Optional HVN (High Volume Nodes) & LVN (Low Volume Nodes) bands
+  if (cfg.showHvnLvn) {
+    ctx.font = "bold 9px ui-monospace, SFMono-Regular, Menlo, monospace";
+    for (const idx of profile.hvnIndices) {
+      const bin = profile.bins[idx];
+      if (!bin) continue;
+      const y = bridge.priceToY(bin.priceMid);
+      if (y === null) continue;
+      ctx.fillStyle = "rgba(41, 98, 255, 0.14)";
+      ctx.fillRect(originX, y - 5, boxSpanW, 10);
+      ctx.fillStyle = "#93c5fd";
+      ctx.fillText("HVN", originX + boxSpanW - 26, y + 3);
+    }
+    for (const idx of profile.lvnIndices) {
+      const bin = profile.bins[idx];
+      if (!bin) continue;
+      const y = bridge.priceToY(bin.priceMid);
+      if (y === null) continue;
+      ctx.strokeStyle = "rgba(255, 152, 0, 0.75)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(originX, y);
+      ctx.lineTo(originX + boxSpanW, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ffb74d";
+      ctx.fillText("LVN", originX + boxSpanW - 26, y - 3);
+    }
+  }
+
+  // 4. Developing POC & Developing Value Area curves
+  if ((cfg.showDevelopingPoc || cfg.showDevelopingVa) && profile.developing.length > 1) {
+    const drawDevCurve = (
+      getter: (pt: NonNullable<typeof profile>["developing"][number]) => number,
+      stroke: string,
+      dash: number[],
+    ) => {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash(dash);
+      ctx.beginPath();
+      let started = false;
+      for (const pt of profile.developing) {
+        const dx = bridge.timeToX(pt.time);
+        const dy = bridge.priceToY(getter(pt));
+        if (dx === null || dy === null) continue;
+        if (!started) {
+          ctx.moveTo(dx, dy);
+          started = true;
+        } else {
+          ctx.lineTo(dx, dy);
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    if (cfg.showDevelopingVa) {
+      drawDevCurve((p) => p.vahPrice, cfg.developingVaColor, [3, 3]);
+      drawDevCurve((p) => p.valPrice, cfg.developingVaColor, [3, 3]);
+    }
+    if (cfg.showDevelopingPoc) {
+      drawDevCurve((p) => p.pocPrice, cfg.developingPocColor, []);
+    }
+  }
+
+  // 5. Key AMT Levels: VAH, VAL, POC
+  const drawLevelLine = (price: number, stroke: string, widthPx: number, tag: string) => {
+    const ly = bridge.priceToY(price);
+    if (ly === null) return;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = widthPx;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(originX, ly);
+    ctx.lineTo(boxEndX, ly);
+    ctx.stroke();
+    if (isSelected) {
+      ctx.font = "bold 9px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillStyle = stroke;
+      ctx.fillText(tag, Math.min(boxEndX - 28, w - 34), ly - 4);
+    }
+  };
+
+  if (cfg.showVah) drawLevelLine(profile.vahPrice, cfg.vahColor, cfg.vahWidth, "VAH");
+  if (cfg.showVal) drawLevelLine(profile.valPrice, cfg.valColor, cfg.valWidth, "VAL");
+  if (cfg.showPoc) drawLevelLine(profile.pocPrice, cfg.pocColor, cfg.pocWidth, "POC");
+
+  ctx.restore();
+}
+
+/**
+ * Renders Market Structure swing labels (HH, HL, LH, LL) and Break of Structure (BOS) lines
+ * matching Abel's 01Market Structure.md notes.
+ */
+export function drawMarketStructureOverlay(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  candles: readonly CandlestickData<UTCTimestamp>[],
+  bridge: CoordinateBridge,
+) {
+  if (candles.length < 15) return;
+  const input = candles.map((c) => ({
+    time: Number(c.time),
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+  }));
+  const { pivots, breaks } = detectMarketStructure(input, 5);
+  ctx.save();
+
+  // BOS horizontal dashed lines
+  ctx.font = "bold 9px ui-monospace, SFMono-Regular, Menlo, monospace";
+  for (const brk of breaks) {
+    const x1 = bridge.timeToX(brk.fromTime);
+    const x2 = bridge.timeToX(brk.toTime);
+    const y = bridge.priceToY(brk.price);
+    if (x1 === null || x2 === null || y === null || y < 6 || y > h - 6) continue;
+    const stroke = brk.direction === "bullish" ? "#089981" : "#f23645";
+    ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.25;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    ctx.moveTo(originX, pocY);
-    ctx.lineTo(originX + spanW, pocY);
+    ctx.moveTo(x1, y);
+    ctx.lineTo(x2, y);
     ctx.stroke();
-    ctx.restore();
+    ctx.setLineDash([]);
+    ctx.fillStyle = stroke;
+    const midX = Math.max(8, Math.min(w - 28, (x1 + x2) / 2 - 10));
+    ctx.fillText(brk.label, midX, brk.direction === "bullish" ? y - 4 : y + 10);
   }
 
-  // Subtle range frame
-  const topY = bridge.priceToY(highPrice);
-  const botY = bridge.priceToY(lowPrice);
-  if (topY !== null && botY !== null) {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = 0.55;
-    ctx.setLineDash([3, 3]);
-    ctx.strokeRect(originX, Math.min(topY, botY), spanW, Math.abs(botY - topY));
-    ctx.restore();
+  // HH / HL / LH / LL swing badges
+  ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, sans-serif";
+  for (const pv of pivots) {
+    const x = bridge.timeToX(pv.time);
+    const y = bridge.priceToY(pv.price);
+    if (x === null || y === null || x < 4 || x > w - 4 || y < 12 || y > h - 12) continue;
+    const isBull = pv.kind === "HH" || pv.kind === "HL";
+    const fill = isBull ? "#089981" : "#f23645";
+    ctx.fillStyle = fill;
+    ctx.textAlign = "center";
+    ctx.fillText(pv.kind, x, pv.isHigh ? y - 8 : y + 14);
   }
+  ctx.textAlign = "left";
+  ctx.restore();
 }
 
 export function drawVectorDrawing(
@@ -601,9 +804,10 @@ export function drawVectorDrawing(
         const rx = Math.min(p0.x, p1.x);
         const rw = Math.max(110, Math.abs(p1.x - p0.x));
         const entryY = p0.y;
+        const rr = Math.max(0.25, Math.min(20, style?.rrRatio ?? 2));
         const dist = Math.max(24, Math.abs(p1.y - p0.y));
         const tpY = isShort ? entryY + dist : entryY - dist;
-        const slY = isShort ? entryY - dist * 0.5 : entryY + dist * 0.5;
+        const slY = isShort ? entryY - dist / rr : entryY + dist / rr;
 
         // Profit zone (teal/emerald)
         ctx.fillStyle = "rgba(38, 166, 154, 0.22)";
@@ -626,7 +830,14 @@ export function drawVectorDrawing(
 
         ctx.font = "bold 10px ui-monospace, SFMono-Regular, Menlo, monospace";
         ctx.fillStyle = "#e6e8ee";
-        ctx.fillText(isShort ? "SHORT  R:R 2.00" : "LONG  R:R 2.00", rx + 6, entryY - 5);
+        const entryPrice = Number(p0.anchor.priceTick) * tickFloat;
+        const targetPrice = Number(p1.anchor.priceTick) * tickFloat;
+        const targetPct = entryPrice > 0 ? (Math.abs(targetPrice - entryPrice) / entryPrice) * 100 : 0;
+        ctx.fillText(
+          `${isShort ? "SHORT" : "LONG"}  R:R ${rr.toFixed(2)}  (${targetPct.toFixed(2)}%)`,
+          rx + 6,
+          entryY - 5,
+        );
       }
       break;
 
@@ -669,30 +880,73 @@ export function drawVectorDrawing(
     case "anchored_vwap":
       if (p0) {
         const startSec = p0.anchor.timeSec;
+        const showBands = Boolean(style?.avwapShowBands);
+        const mult = style?.avwapBandMult ?? 1;
         let cpv = 0;
+        let cp2v = 0;
         let cv = 0;
-        ctx.beginPath();
-        let started = false;
+        const mainPts: Array<{ x: number; y: number }> = [];
+        const upperPts: Array<{ x: number; y: number }> = [];
+        const lowerPts: Array<{ x: number; y: number }> = [];
+
         for (let i = 0; i < candles.length; i++) {
           const c = candles[i];
           if (Number(c.time) < startSec) continue;
-          const vol = volumes[i]?.value ?? 1;
+          const vol = Math.max(0.0001, volumes[i]?.value ?? 1);
           const typ = (c.high + c.low + c.close) / 3;
           cpv += typ * vol;
+          cp2v += typ * typ * vol;
           cv += vol;
-          if (cv <= 0) continue;
+          const mean = cpv / cv;
+          const variance = Math.max(0, cp2v / cv - mean * mean);
+          const std = Math.sqrt(variance);
+
           const vx = bridge.timeToX(Number(c.time));
-          const vy = bridge.priceToY(cpv / cv);
-          if (vx !== null && vy !== null && vy >= 0 && vy <= h) {
-            if (!started) {
-              ctx.moveTo(vx, vy);
-              started = true;
-            } else {
-              ctx.lineTo(vx, vy);
+          const vy = bridge.priceToY(mean);
+          if (vx !== null && vy !== null && vy >= -h && vy <= h * 2) {
+            mainPts.push({ x: vx, y: vy });
+            if (showBands) {
+              const uy = bridge.priceToY(mean + std * mult);
+              const ly = bridge.priceToY(mean - std * mult);
+              if (uy !== null && ly !== null) {
+                upperPts.push({ x: vx, y: uy });
+                lowerPts.push({ x: vx, y: ly });
+              }
             }
           }
         }
-        ctx.stroke();
+
+        if (showBands && upperPts.length >= 2 && lowerPts.length >= 2) {
+          ctx.save();
+          ctx.fillStyle = colorWithAlpha(color, 0.1);
+          ctx.beginPath();
+          ctx.moveTo(upperPts[0].x, upperPts[0].y);
+          for (let i = 1; i < upperPts.length; i++) ctx.lineTo(upperPts[i].x, upperPts[i].y);
+          for (let i = lowerPts.length - 1; i >= 0; i--) ctx.lineTo(lowerPts[i].x, lowerPts[i].y);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = colorWithAlpha(color, 0.55);
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(upperPts[0].x, upperPts[0].y);
+          for (let i = 1; i < upperPts.length; i++) ctx.lineTo(upperPts[i].x, upperPts[i].y);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(lowerPts[0].x, lowerPts[0].y);
+          for (let i = 1; i < lowerPts.length; i++) ctx.lineTo(lowerPts[i].x, lowerPts[i].y);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (mainPts.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(mainPts[0].x, mainPts[0].y);
+          for (let i = 1; i < mainPts.length; i++) ctx.lineTo(mainPts[i].x, mainPts[i].y);
+          ctx.stroke();
+        }
       }
       break;
 
@@ -700,6 +954,7 @@ export function drawVectorDrawing(
       if (p0?.x !== null && p1?.x !== null) {
         drawVolumeHistogram(
           ctx,
+          w,
           p0.x,
           p1.x,
           candles,
@@ -707,7 +962,9 @@ export function drawVectorDrawing(
           p0.anchor.timeSec,
           p1.anchor.timeSec,
           bridge,
-          color,
+          tickFloat,
+          style?.vpConfig,
+          selected,
         );
       }
       break;
@@ -718,6 +975,7 @@ export function drawVectorDrawing(
         const lastX = bridge.timeToX(lastSec) ?? Math.min(w - 64, p0.x + 180);
         drawVolumeHistogram(
           ctx,
+          w,
           p0.x,
           Math.max(p0.x + 80, lastX),
           candles,
@@ -725,7 +983,9 @@ export function drawVectorDrawing(
           p0.anchor.timeSec,
           lastSec,
           bridge,
-          color,
+          tickFloat,
+          style?.vpConfig,
+          selected,
         );
       }
       break;

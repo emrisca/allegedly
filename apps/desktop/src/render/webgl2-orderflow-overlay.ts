@@ -12,6 +12,7 @@ export interface OverlayVisibility {
   footprint: boolean;
   vrvp: boolean;
   tpo: boolean;
+  marketStructure?: boolean;
 }
 
 export interface OverlayRenderData {

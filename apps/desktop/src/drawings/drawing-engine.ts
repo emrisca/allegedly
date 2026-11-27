@@ -1,3 +1,19 @@
+import {
+  cloneVpConfig,
+  DEFAULT_VOLUME_PROFILE_CONFIG,
+  loadStoredVpDefaults,
+  saveStoredVpDefaults,
+  type VolumeProfileConfig,
+} from "./volume-profile";
+
+export {
+  cloneVpConfig,
+  DEFAULT_VOLUME_PROFILE_CONFIG,
+  loadStoredVpDefaults,
+  saveStoredVpDefaults,
+  type VolumeProfileConfig,
+};
+
 export type DrawingToolKind =
   | "cursor"
   | "ruler"
@@ -159,6 +175,10 @@ export interface DrawingObject {
   textColor?: string;
   locked?: boolean;
   visibility?: DrawingVisibility;
+  vpConfig?: VolumeProfileConfig;
+  avwapShowBands?: boolean;
+  avwapBandMult?: number;
+  rrRatio?: number;
 }
 
 export interface DrawingHitResult {
@@ -568,6 +588,10 @@ export class DrawingEngine {
       anchors: anchors.map((a) => ({ ...a })),
       color: color ?? meta.defaultColor ?? "#38bdf8",
       label,
+      ...(kind === "fixed_range_vp" || kind === "anchored_vp"
+        ? { vpConfig: loadStoredVpDefaults() }
+        : {}),
+      ...(kind === "long_position" || kind === "short_position" ? { rrRatio: 2 } : {}),
     };
     this.drawings.push(drawing);
     this.undoStack.push({ type: "add", drawing });
@@ -619,6 +643,11 @@ export class DrawingEngine {
       ...patch,
       anchors: patch.anchors ? patch.anchors.map((a) => ({ ...a })) : this.drawings[idx].anchors,
       visibility: patch.visibility ? { ...patch.visibility } : this.drawings[idx].visibility,
+      vpConfig: patch.vpConfig
+        ? cloneVpConfig(patch.vpConfig)
+        : this.drawings[idx].vpConfig
+          ? cloneVpConfig(this.drawings[idx].vpConfig)
+          : undefined,
     });
     this.drawings[idx] = next;
     this.undoStack.push({ type: "update", id, before, after: cloneDrawing(next) });
@@ -743,6 +772,15 @@ export class DrawingEngine {
       if (d.locked) lines.push("locked = true");
       if (d.fontSize !== undefined) lines.push(`font_size = ${d.fontSize}`);
       if (d.textColor !== undefined) lines.push(`text_color = "${escapeToml(d.textColor)}"`);
+      if (d.avwapShowBands) lines.push("avwap_show_bands = true");
+      if (d.avwapBandMult !== undefined) lines.push(`avwap_band_mult = ${d.avwapBandMult.toFixed(2)}`);
+      if (d.rrRatio !== undefined) lines.push(`rr_ratio = ${d.rrRatio.toFixed(2)}`);
+      if (d.visibility) {
+        lines.push(`visibility_json = "${escapeToml(JSON.stringify(d.visibility))}"`);
+      }
+      if (d.vpConfig) {
+        lines.push(`vp_config_json = "${escapeToml(JSON.stringify(d.vpConfig))}"`);
+      }
       const anchorStrs = d.anchors.map(
         (a) => `{ time_sec = ${a.timeSec}, price_tick = "${a.priceTick.toString()}" }`,
       );
@@ -796,6 +834,27 @@ export class DrawingEngine {
       const locked = matchTomlBool(block, "locked") ?? undefined;
       const fontSize = matchTomlNum(block, "font_size") ?? undefined;
       const textColor = matchTomlStr(block, "text_color") ?? undefined;
+      const avwapShowBands = matchTomlBool(block, "avwap_show_bands") ?? undefined;
+      const avwapBandMult = matchTomlFloat(block, "avwap_band_mult") ?? undefined;
+      const rrRatio = matchTomlFloat(block, "rr_ratio") ?? undefined;
+      const visJson = matchTomlStr(block, "visibility_json");
+      let visibility: DrawingVisibility | undefined;
+      if (visJson) {
+        try {
+          visibility = { ...DEFAULT_DRAWING_VISIBILITY, ...(JSON.parse(visJson) as Partial<DrawingVisibility>) };
+        } catch {
+          visibility = undefined;
+        }
+      }
+      const vpJson = matchTomlStr(block, "vp_config_json");
+      let vpConfig: VolumeProfileConfig | undefined;
+      if (vpJson) {
+        try {
+          vpConfig = cloneVpConfig(JSON.parse(vpJson) as Partial<VolumeProfileConfig>);
+        } catch {
+          vpConfig = undefined;
+        }
+      }
       parsed.push({
         id,
         kind,
@@ -812,6 +871,11 @@ export class DrawingEngine {
         ...(locked ? { locked } : {}),
         ...(fontSize !== undefined ? { fontSize } : {}),
         ...(textColor !== undefined ? { textColor } : {}),
+        ...(avwapShowBands ? { avwapShowBands } : {}),
+        ...(avwapBandMult !== undefined ? { avwapBandMult } : {}),
+        ...(rrRatio !== undefined ? { rrRatio } : {}),
+        ...(visibility ? { visibility } : {}),
+        ...(vpConfig ? { vpConfig } : {}),
       });
     }
     this.drawings = parsed;
@@ -947,6 +1011,24 @@ export function hitTestDrawing(
     // 3. Single-anchor text/marker badges
     if (pts.length === 1 && p0?.x !== null && p0.y !== null) {
       if (px >= p0.x - 16 && px <= p0.x + 120 && py >= p0.y - 24 && py <= p0.y + 24) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+
+    // 3b. Fixed Range & Anchored Volume Profile hit test across vertical profile band
+    if (d.kind === "fixed_range_vp" && p0?.x !== null && p1?.x !== null) {
+      const minX = Math.min(p0.x, p1.x) - BODY_TOL;
+      const maxX = d.vpConfig?.extendRight
+        ? canvasWidth
+        : Math.max(p0.x, p1.x) + BODY_TOL;
+      if (px >= minX && px <= maxX && py >= 0 && py <= canvasHeight) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+    if (d.kind === "anchored_vp" && p0?.x !== null) {
+      if (px >= p0.x - BODY_TOL && px <= canvasWidth && py >= 0 && py <= canvasHeight) {
         return { drawing: d, hitKind: "body", anchorIndex: -1 };
       }
       continue;

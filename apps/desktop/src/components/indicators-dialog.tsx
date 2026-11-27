@@ -16,6 +16,7 @@ export interface IndicatorLayerState {
   vrvp: boolean;
   footprint: boolean;
   tpo: boolean;
+  marketStructure?: boolean;
 }
 
 export interface SavedLuauScript {
@@ -59,6 +60,7 @@ const SAVED_LUAU_SCRIPTS_KEY = "allegedly.luauScripts.v1";
 export const DEFAULT_INDICATOR_FAVORITES: readonly string[] = [
   "wilder_rsi-14",
   "layer-vrvp",
+  "layer-market-structure",
   "layer-volume",
   "vwap-1",
   "sma-20",
@@ -191,6 +193,15 @@ const BUILTIN_CATALOG: readonly CatalogEntry[] = [
     color: "#f59e0b",
     action: { kind: "layer", layer: "tpo" },
   },
+  {
+    id: "layer-market-structure",
+    name: "Market Structure (HH/HL/LH/LL & BOS)",
+    keywords: "market structure hh hl lh ll bos break of structure swing trend icc",
+    source: "Chart Layer",
+    typeLabel: "Structure",
+    color: "#089981",
+    action: { kind: "layer", layer: "marketStructure" },
+  },
 ];
 
 function loadFavorites(): string[] {
@@ -289,7 +300,7 @@ export function IndicatorsDialog({
   const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
 
   const isEntryActive = (entry: CatalogEntry): boolean => {
-    if (entry.action.kind === "layer") return layerState[entry.action.layer];
+    if (entry.action.kind === "layer") return Boolean(layerState[entry.action.layer]);
     return activeStudyIds.has(entry.id);
   };
 
@@ -357,7 +368,8 @@ export function IndicatorsDialog({
     Number(layerState.volume) +
     Number(layerState.vrvp) +
     Number(layerState.footprint) +
-    Number(layerState.tpo);
+    Number(layerState.tpo) +
+    Number(Boolean(layerState.marketStructure));
   const totalActiveCount = activeStudies.length + activeLayerCount;
 
   const handleSaveLuauScript = (runAfterSave: boolean) => {

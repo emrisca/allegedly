@@ -247,6 +247,7 @@ export function App({ transport: providedTransport }: AppProps) {
     footprint: false,
     vrvp: false,
     tpo: false,
+    marketStructure: false,
   });
   const [showVolume, setShowVolume] = useState<boolean>(() => chartSettings.statusLine.volume);
   const [candleStyle, setCandleStyle] = useState<CandleVisualStyle>("monochrome");
@@ -773,6 +774,56 @@ export function App({ transport: providedTransport }: AppProps) {
     setActiveStudies((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
+  const activeStudiesRef = useRef(activeStudies);
+  activeStudiesRef.current = activeStudies;
+  const studyConfigsRef = useRef(studyConfigs);
+  studyConfigsRef.current = studyConfigs;
+
+  const handleSeriesUpdated = useCallback(() => {
+    const studies = activeStudiesRef.current;
+    if (studies.length === 0) return;
+    const snap = seriesSnapshotRef.current;
+    if (snap.closes.length === 0) return;
+    const configs = studyConfigsRef.current;
+    for (const st of studies) {
+      const cfg = configs[st.id];
+      const sourceSeries = extractPriceSource(snap, cfg?.source ?? "close");
+      const kindPrefix = st.id.split("-")[0] as BuiltinStudyKind;
+      const parsedPeriod = Number.parseInt(st.id.split("-")[1] ?? "14", 10);
+      const req: StudyRunRequest = cfg?.luauScript
+        ? {
+            id: st.id,
+            luau_script: cfg.luauScript,
+            closes: sourceSeries,
+            volumes: snap.volumes,
+            buy_volumes: snap.buyVolumes,
+            sell_volumes: snap.sellVolumes,
+          }
+        : {
+            id: st.id,
+            builtin: cfg?.builtin ?? kindPrefix,
+            period: cfg?.period ?? (Number.isFinite(parsedPeriod) ? parsedPeriod : 14),
+            closes: sourceSeries,
+            volumes: snap.volumes,
+            buy_volumes: snap.buyVolumes,
+            sell_volumes: snap.sellVolumes,
+          };
+      void transport
+        .invokeJson<StudyRunRequest, StudyRunResponse>("run_study", req)
+        .then((res) => {
+          const updated: StudyRunResponse = cfg?.label ? { ...res, label: cfg.label } : res;
+          setActiveStudies((prev) =>
+            prev.some((x) => x.id === updated.id)
+              ? prev.map((x) => (x.id === updated.id ? updated : x))
+              : prev,
+          );
+        })
+        .catch(() => {
+          // Non-fatal during rapid live bar updates
+        });
+    }
+  }, [transport]);
+
   const handleUpdateSetting = useCallback(
     (key: string, value: string) => {
       void transport
@@ -924,7 +975,8 @@ export function App({ transport: providedTransport }: AppProps) {
           activeStudies.length +
           Number(overlayVisibility.vrvp) +
           Number(overlayVisibility.footprint) +
-          Number(overlayVisibility.tpo)
+          Number(overlayVisibility.tpo) +
+          Number(Boolean(overlayVisibility.marketStructure))
         }
         onOpenStudies={() => setIndicatorsOpen(true)}
         tradeOpen={rightTab === "trade"}
@@ -1028,6 +1080,8 @@ export function App({ transport: providedTransport }: AppProps) {
                 }
                 showVolume={showVolume}
                 onShowVolumeChange={setShowVolume}
+                dataSource={dataSource}
+                onSeriesUpdated={handleSeriesUpdated}
               />
             </div>
 
@@ -1149,6 +1203,8 @@ export function App({ transport: providedTransport }: AppProps) {
                   }
                   showVolume={showVolume}
                   onShowVolumeChange={setShowVolume}
+                  dataSource={dataSource}
+                  onSeriesUpdated={handleSeriesUpdated}
                 />
               ),
             }}
@@ -1209,6 +1265,7 @@ export function App({ transport: providedTransport }: AppProps) {
           vrvp: overlayVisibility.vrvp,
           footprint: overlayVisibility.footprint,
           tpo: overlayVisibility.tpo,
+          marketStructure: Boolean(overlayVisibility.marketStructure),
         }}
         onRunBuiltinStudy={handleRunBuiltinStudy}
         onRemoveStudy={handleRemoveStudy}
