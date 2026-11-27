@@ -7,3 +7,4 @@ export * from "./workspace-host";
 export * from "./color-picker";
 export * from "./app-appearance";
 export * from "./market-providers";
+export * from "./primitives";

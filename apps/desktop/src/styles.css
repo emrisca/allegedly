@@ -154,6 +154,38 @@
     font-size: inherit;
   }
 
+  [data-slot="switch"],
+  [data-slot="switch"][data-checked] {
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-slot="switch-thumb"],
+  [data-slot="switch-thumb"][data-checked] {
+    width: auto;
+    height: auto;
+    margin: 0;
+    margin-inline-start: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  [data-slot="checkbox"],
+  [data-slot="radio"] {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   :is(
     [data-slot="button"],
     [data-slot="toggle"],

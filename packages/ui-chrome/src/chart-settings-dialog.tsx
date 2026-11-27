@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@ui-sdk/react/dialog";
-import { Switch, SwitchThumb } from "@ui-sdk/react/switch";
+import { UiSettingRow, UiSwitch } from "./primitives";
 import { ColorPickerButton } from "./color-picker";
 import {
   APP_THEME_PRESETS,
@@ -1778,35 +1778,33 @@ export function ChartSettingsDialog({
               </div>
             </TabsPanel>
 
-            {/* 8. WORKSPACE DISPLAY (preserves @ui-sdk/react Switch a11y test contract) */}
-            <TabsPanel value="display" className="space-y-3">
+            {/* 8. WORKSPACE DISPLAY (uses shadcn.io/ui-patterned UiSwitch over @ui-sdk/react) */}
+            <TabsPanel value="display" className="space-y-2.5">
               <div className={SECTION_HDR_CLS}>Workspace Display</div>
-              <div className="flex items-center justify-between rounded-lg border border-[#23262f] bg-[#181a20] px-3 py-2.5">
-                <span id="compact-density-label" className="text-xs text-[#d4d8e2]">
-                  Compact Orderflow Table Density
-                </span>
-                <Switch
-                  checked={compactDensity}
-                  onCheckedChange={onCompactDensityChange}
-                  aria-labelledby="compact-density-label"
-                  className="inline-flex h-5 w-9 items-center rounded-full bg-[#2c303a] p-0.5 transition-colors data-checked:bg-sky-500"
-                >
-                  <SwitchThumb className="h-4 w-4 rounded-full bg-white transition-transform data-checked:translate-x-4" />
-                </Switch>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-[#23262f] bg-[#181a20] px-3 py-2.5">
-                <span id="prov-overlay-label" className="text-xs text-[#d4d8e2]">
-                  Show Active 5-Tier Provenance Badge
-                </span>
-                <Switch
-                  checked={showProvenanceOverlay}
-                  onCheckedChange={onShowProvenanceOverlayChange}
-                  aria-labelledby="prov-overlay-label"
-                  className="inline-flex h-5 w-9 items-center rounded-full bg-[#2c303a] p-0.5 transition-colors data-checked:bg-sky-500"
-                >
-                  <SwitchThumb className="h-4 w-4 rounded-full bg-white transition-transform data-checked:translate-x-4" />
-                </Switch>
-              </div>
+              <UiSettingRow
+                labelId="compact-density-label"
+                label="Compact Orderflow Table Density"
+                description="Use tighter row height in DOM Ladder, Time & Sales, and execution tables."
+                control={
+                  <UiSwitch
+                    checked={compactDensity}
+                    onCheckedChange={onCompactDensityChange}
+                    aria-labelledby="compact-density-label"
+                  />
+                }
+              />
+              <UiSettingRow
+                labelId="prov-overlay-label"
+                label="Show Active 5-Tier Provenance Badge"
+                description="Display feed fidelity and tick-aggregation provenance in the workspace chrome."
+                control={
+                  <UiSwitch
+                    checked={showProvenanceOverlay}
+                    onCheckedChange={onShowProvenanceOverlayChange}
+                    aria-labelledby="prov-overlay-label"
+                  />
+                }
+              />
             </TabsPanel>
 
             {/* 9. SAFETY & OFFLINE BOOT */}
