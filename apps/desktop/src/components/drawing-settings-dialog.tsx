@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@ui-sdk/react/dialog";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
+import { ColorPickerButton } from "@allegedly/ui-chrome";
 import {
   DEFAULT_DRAWING_VISIBILITY,
   getDrawingToolMeta,
@@ -174,12 +175,12 @@ function VpColorOpacityRow({
         <span className="text-[#b2b5be]">{label}</span>
       )}
       <div className="flex items-center gap-2.5">
-        <input
-          aria-label={`${label} color`}
-          type="color"
+        <ColorPickerButton
+          ariaLabel={`${label} color`}
           value={color}
-          onChange={(e) => onColorChange(e.target.value)}
-          className="h-7 w-9 cursor-pointer rounded border border-[#2a2e39] bg-[#131722]"
+          opacity={opacity}
+          onChange={onColorChange}
+          onOpacityChange={onOpacityChange}
         />
         <input
           aria-label={`${label} opacity`}
@@ -227,12 +228,10 @@ function VpLineRow({
         <span>{label}</span>
       </label>
       <div className="flex items-center gap-2">
-        <input
-          aria-label={`${label} color`}
-          type="color"
+        <ColorPickerButton
+          ariaLabel={`${label} color`}
           value={color}
-          onChange={(e) => onColorChange(e.target.value)}
-          className="h-7 w-9 cursor-pointer rounded border border-[#2a2e39] bg-[#131722]"
+          onChange={onColorChange}
         />
         {width !== undefined && onWidthChange && (
           <div className="flex items-center gap-1">
@@ -462,12 +461,6 @@ function StrokePreviewLine({
   );
 }
 
-const CHECKER_BG = {
-  backgroundImage:
-    "linear-gradient(45deg, #2a2e39 25%, transparent 25%), linear-gradient(-45deg, #2a2e39 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2e39 75%), linear-gradient(-45deg, transparent 75%, #2a2e39 75%)",
-  backgroundSize: "8px 8px",
-  backgroundPosition: "0 0, 0 4px, 4px -4px, -4px 0",
-} as const;
 
 function TvModalCloseButton() {
   return (
@@ -679,7 +672,6 @@ export function DrawingSettingsDialog({
   const [avwapBandMult, setAvwapBandMult] = useState(1);
   const [rrRatio, setRrRatio] = useState(2);
   const [savedDefaultFlash, setSavedDefaultFlash] = useState(false);
-  const [openPicker, setOpenPicker] = useState<"border" | "middle" | "bg" | null>(null);
 
   const tickFloat = Math.max(1e-9, Number(tickSizeE9) / 1e9);
 
@@ -711,7 +703,6 @@ export function DrawingSettingsDialog({
     setAvwapBandMult(drawing.avwapBandMult ?? 1);
     setRrRatio(drawing.rrRatio ?? 2);
     setSavedDefaultFlash(false);
-    setOpenPicker(null);
   }, [open, drawing, tickFloat, decimals]);
 
   if (!drawing) return null;
@@ -952,260 +943,110 @@ export function DrawingSettingsDialog({
                 )}
 
                 {/* Border / Line row */}
-                <div className="space-y-2.5">
-                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
-                    <span className="text-[#d1d4dc]">{isRectangle ? "Border" : "Line"}</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        aria-label={isRectangle ? "Border style" : "Line style"}
-                        onClick={() => setOpenPicker((p) => (p === "border" ? null : "border"))}
-                        className={`flex h-9 items-center gap-2.5 rounded-md border px-2.5 transition-colors ${
-                          openPicker === "border"
-                            ? "border-[#2962ff] bg-[#181c27]"
-                            : "border-[#363a45] bg-[#181c27] hover:border-[#4c5265]"
-                        }`}
-                      >
-                        <span
-                          className="h-5 w-5 rounded border border-white/15"
-                          style={{ backgroundColor: color }}
-                        />
-                        <StrokePreviewLine color={color} width={lineWidth} style={lineStyle} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {openPicker === "border" && (
-                    <div className="ml-[160px] space-y-2.5 rounded-lg border border-[#363a45] bg-[#131722] p-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {DRAWING_PRESET_COLORS.map((hex) => (
-                          <button
-                            key={hex}
-                            type="button"
-                            aria-label={`Select drawing color ${hex}`}
-                            onClick={() => setColor(hex)}
+                <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                  <span className="text-[#d1d4dc]">{isRectangle ? "Border" : "Line"}</span>
+                  <div className="flex items-center gap-2">
+                    <ColorPickerButton
+                      ariaLabel={isRectangle ? "Border style" : "Line style"}
+                      value={color}
+                      onChange={setColor}
+                      lineWidth={lineWidth}
+                      onLineWidthChange={setLineWidth}
+                      lineStyle={lineStyle}
+                      onLineStyleChange={setLineStyle}
+                      triggerClassName="flex h-9 items-center gap-2.5 rounded-md border border-[#363a45] bg-[#181c27] px-2.5 transition-colors hover:border-[#4c5265]"
+                      renderTriggerContent={(hex) => (
+                        <>
+                          <span
+                            className="h-5 w-5 rounded border border-white/15"
                             style={{ backgroundColor: hex }}
-                            className={`h-5 w-5 rounded border ${
-                              color.toLowerCase() === hex.toLowerCase()
-                                ? "border-white ring-2 ring-[#2962ff]"
-                                : "border-[#2a2e39]"
-                            }`}
                           />
-                        ))}
-                        <input
-                          aria-label="Drawing stroke color"
-                          type="color"
-                          value={color}
-                          onChange={(e) => setColor(e.target.value)}
-                          className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
-                        />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {([1, 2, 3, 4] as const).map((w) => (
-                          <button
-                            key={w}
-                            type="button"
-                            onClick={() => setLineWidth(w)}
-                            className={`flex h-7 flex-1 items-center justify-center rounded border font-mono text-[11px] ${
-                              lineWidth === w
-                                ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                                : "border-[#2a2e39] bg-[#181c27] text-[#868993] hover:text-white"
-                            }`}
-                          >
-                            {w}px
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {(["solid", "dashed", "dotted"] as const).map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => setLineStyle(s)}
-                            className={`h-7 flex-1 rounded border text-[11px] capitalize ${
-                              lineStyle === s
-                                ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                                : "border-[#2a2e39] bg-[#181c27] text-[#868993] hover:text-white"
-                            }`}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                          <StrokePreviewLine color={hex} width={lineWidth} style={lineStyle} />
+                        </>
+                      )}
+                    />
+                  </div>
                 </div>
 
                 {/* Middle line row (Rectangle / Channel) */}
                 {supportsMiddleLine && (
-                  <div className="space-y-2.5">
-                    <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
-                      <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
-                        <input
-                          type="checkbox"
-                          checked={showMiddleLine}
-                          onChange={(e) => setShowMiddleLine(e.target.checked)}
-                          className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
-                        />
-                        <span>Middle line</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          aria-label="Middle line style"
-                          onClick={() => {
-                            if (!showMiddleLine) setShowMiddleLine(true);
-                            setOpenPicker((p) => (p === "middle" ? null : "middle"));
-                          }}
-                          className={`flex h-9 items-center gap-2.5 rounded-md border px-2.5 transition-colors ${
-                            openPicker === "middle"
-                              ? "border-[#2962ff] bg-[#181c27]"
-                              : "border-[#363a45] bg-[#181c27] hover:border-[#4c5265]"
-                          } ${showMiddleLine ? "opacity-100" : "opacity-60"}`}
-                        >
-                          <span
-                            className="h-5 w-5 rounded border border-white/15"
-                            style={{ backgroundColor: middleLineColor }}
-                          />
-                          <StrokePreviewLine
-                            color={middleLineColor}
-                            width={1.5}
-                            style={middleLineStyle}
-                          />
-                        </button>
-                      </div>
-                    </div>
-
-                    {openPicker === "middle" && (
-                      <div className="ml-[160px] space-y-2.5 rounded-lg border border-[#363a45] bg-[#131722] p-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {DRAWING_PRESET_COLORS.map((hex) => (
-                            <button
-                              key={hex}
-                              type="button"
-                              onClick={() => setMiddleLineColor(hex)}
+                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                    <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
+                      <input
+                        type="checkbox"
+                        checked={showMiddleLine}
+                        onChange={(e) => setShowMiddleLine(e.target.checked)}
+                        className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
+                      />
+                      <span>Middle line</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <ColorPickerButton
+                        ariaLabel="Middle line style"
+                        value={middleLineColor}
+                        onChange={(hex) => {
+                          if (!showMiddleLine) setShowMiddleLine(true);
+                          setMiddleLineColor(hex);
+                        }}
+                        lineStyle={middleLineStyle}
+                        onLineStyleChange={(s) => {
+                          if (!showMiddleLine) setShowMiddleLine(true);
+                          setMiddleLineStyle(s);
+                        }}
+                        triggerClassName={`flex h-9 items-center gap-2.5 rounded-md border border-[#363a45] bg-[#181c27] px-2.5 transition-colors hover:border-[#4c5265] ${
+                          showMiddleLine ? "opacity-100" : "opacity-60"
+                        }`}
+                        renderTriggerContent={(hex) => (
+                          <>
+                            <span
+                              className="h-5 w-5 rounded border border-white/15"
                               style={{ backgroundColor: hex }}
-                              className={`h-5 w-5 rounded border ${
-                                middleLineColor.toLowerCase() === hex.toLowerCase()
-                                  ? "border-white ring-2 ring-[#2962ff]"
-                                  : "border-[#2a2e39]"
-                              }`}
                             />
-                          ))}
-                          <input
-                            aria-label="Middle line color"
-                            type="color"
-                            value={middleLineColor}
-                            onChange={(e) => setMiddleLineColor(e.target.value)}
-                            className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {(["solid", "dashed", "dotted"] as const).map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() => setMiddleLineStyle(s)}
-                              className={`h-7 flex-1 rounded border text-[11px] capitalize ${
-                                middleLineStyle === s
-                                  ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                                  : "border-[#2a2e39] bg-[#181c27] text-[#868993] hover:text-white"
-                              }`}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                            <StrokePreviewLine
+                              color={hex}
+                              width={1.5}
+                              style={middleLineStyle}
+                            />
+                          </>
+                        )}
+                      />
+                    </div>
                   </div>
                 )}
 
                 {/* Background row */}
                 {supportsFill && (
-                  <div className="space-y-2.5">
-                    <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
-                      <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
-                        <input
-                          type="checkbox"
-                          checked={fillEnabled}
-                          onChange={(e) => setFillEnabled(e.target.checked)}
-                          className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
-                        />
-                        <span>Background</span>
-                      </label>
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          type="button"
-                          aria-label="Background fill color"
-                          onClick={() => {
-                            if (!fillEnabled) setFillEnabled(true);
-                            setOpenPicker((p) => (p === "bg" ? null : "bg"));
-                          }}
-                          className={`flex h-9 w-9 items-center justify-center rounded-md border p-1.5 transition-colors ${
-                            openPicker === "bg"
-                              ? "border-[#2962ff] bg-[#181c27]"
-                              : "border-[#363a45] bg-[#181c27] hover:border-[#4c5265]"
-                          } ${fillEnabled ? "opacity-100" : "opacity-50"}`}
-                        >
-                          <span
-                            className="relative h-full w-full overflow-hidden rounded-sm border border-white/15"
-                            style={CHECKER_BG}
-                          >
-                            <span
-                              className="absolute inset-0"
-                              style={{ backgroundColor: fillColor, opacity: fillOpacity }}
-                            />
-                          </span>
-                        </button>
-                        <span className="font-mono text-[11px] text-[#787b86]">
-                          {fillEnabled ? `${Math.round(fillOpacity * 100)}%` : "Off"}
-                        </span>
-                      </div>
+                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                    <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
+                      <input
+                        type="checkbox"
+                        checked={fillEnabled}
+                        onChange={(e) => setFillEnabled(e.target.checked)}
+                        className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
+                      />
+                      <span>Background</span>
+                    </label>
+                    <div className="flex items-center gap-2.5">
+                      <ColorPickerButton
+                        ariaLabel="Background fill color"
+                        value={fillColor}
+                        opacity={fillOpacity}
+                        onChange={(hex) => {
+                          if (!fillEnabled) setFillEnabled(true);
+                          setFillColor(hex);
+                        }}
+                        onOpacityChange={(op) => {
+                          if (!fillEnabled) setFillEnabled(true);
+                          setFillOpacity(op);
+                        }}
+                        triggerClassName={`flex h-9 w-9 items-center justify-center rounded-md border border-[#363a45] bg-[#181c27] p-1.5 transition-colors hover:border-[#4c5265] ${
+                          fillEnabled ? "opacity-100" : "opacity-50"
+                        }`}
+                      />
+                      <span className="font-mono text-[11px] text-[#787b86]">
+                        {fillEnabled ? `${Math.round(fillOpacity * 100)}%` : "Off"}
+                      </span>
                     </div>
-
-                    {openPicker === "bg" && (
-                      <div className="ml-[160px] space-y-2.5 rounded-lg border border-[#363a45] bg-[#131722] p-3">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {DRAWING_PRESET_COLORS.map((hex) => (
-                            <button
-                              key={hex}
-                              type="button"
-                              onClick={() => setFillColor(hex)}
-                              style={{ backgroundColor: hex }}
-                              className={`h-5 w-5 rounded border ${
-                                fillColor.toLowerCase() === hex.toLowerCase()
-                                  ? "border-white ring-2 ring-[#2962ff]"
-                                  : "border-[#2a2e39]"
-                              }`}
-                            />
-                          ))}
-                          <input
-                            aria-label="Drawing fill color"
-                            type="color"
-                            value={fillColor}
-                            onChange={(e) => setFillColor(e.target.value)}
-                            className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-[#868993]">Opacity</span>
-                          <input
-                            aria-label="Fill opacity"
-                            type="range"
-                            min={0}
-                            max={90}
-                            step={5}
-                            value={Math.round(fillOpacity * 100)}
-                            onChange={(e) => setFillOpacity(Number(e.target.value) / 100)}
-                            className="flex-1 accent-[#2962ff]"
-                          />
-                          <span className="w-8 text-right font-mono text-[11px] text-[#d1d4dc]">
-                            {Math.round(fillOpacity * 100)}%
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1295,12 +1136,11 @@ export function DrawingSettingsDialog({
                   Text
                 </label>
                 <div className="flex items-center gap-2">
-                  <input
-                    aria-label="Drawing text color"
-                    type="color"
+                  <ColorPickerButton
+                    ariaLabel="Drawing text color"
                     value={textColor}
-                    onChange={(e) => setTextColor(e.target.value)}
-                    className="h-9 w-9 cursor-pointer rounded-md border border-[#363a45] bg-[#181c27] p-1"
+                    onChange={setTextColor}
+                    triggerClassName="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#363a45] bg-[#181c27] p-1.5 transition-colors hover:border-[#4c5265]"
                   />
                   <select
                     id="drw-font-size"
@@ -1443,7 +1283,6 @@ export function DrawingQuickStyleBar({
   onOpenSettings,
   onDelete,
 }: DrawingQuickStyleBarProps) {
-  const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const currentWidth = drawing.lineWidth ?? 2;
   const currentStyle = drawing.lineStyle ?? "solid";
   const meta = getDrawingToolMeta(drawing.kind);
@@ -1513,41 +1352,18 @@ export function DrawingQuickStyleBar({
       ) : (
         <>
           {/* Color Swatch Popover */}
-          <div className="relative">
-            <button
-              type="button"
-              title="Line color"
-              aria-label="Drawing quick color"
-              onClick={() => setColorMenuOpen((v) => !v)}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-[#2a2e39]"
-            >
+          <ColorPickerButton
+            ariaLabel="Drawing quick color"
+            value={drawing.color}
+            onChange={(hex) => onUpdate({ color: hex, fillColor: hex })}
+            triggerClassName="flex h-6 w-6 items-center justify-center rounded hover:bg-[#2a2e39]"
+            renderTriggerContent={(hex) => (
               <span
                 className="h-3.5 w-3.5 rounded-sm border border-white/25"
-                style={{ backgroundColor: drawing.color }}
+                style={{ backgroundColor: hex }}
               />
-            </button>
-            {colorMenuOpen && (
-              <div className="absolute left-0 top-full z-40 mt-1.5 grid w-[144px] grid-cols-5 gap-1.5 rounded-md border border-[#2a2e39] bg-[#1e222d] p-2 shadow-2xl">
-                {DRAWING_PRESET_COLORS.map((hex) => (
-                  <button
-                    key={hex}
-                    type="button"
-                    aria-label={`Quick color ${hex}`}
-                    onClick={() => {
-                      onUpdate({ color: hex, fillColor: hex });
-                      setColorMenuOpen(false);
-                    }}
-                    style={{ backgroundColor: hex }}
-                    className={`h-5 w-5 rounded border ${
-                      drawing.color.toLowerCase() === hex.toLowerCase()
-                        ? "border-white ring-1 ring-[#2962ff]"
-                        : "border-[#2a2e39]"
-                    }`}
-                  />
-                ))}
-              </div>
             )}
-          </div>
+          />
 
           {/* Line Width Cycle */}
           <button

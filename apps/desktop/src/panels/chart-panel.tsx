@@ -22,6 +22,7 @@ import {
   type ISeriesApi,
   type ISeriesPrimitive,
   type LineData,
+  type Logical,
   type PrimitivePaneViewZOrder,
   type SeriesAttachedParameter,
   type SeriesType,
@@ -930,6 +931,103 @@ function generateOlderSimCandles(
  * vector drawings INSIDE Lightweight Charts' own pane render callback, guaranteeing
  * 0.000 CSS px coordinate drift during pan, zoom, and resize.
  */
+function inferBarStepSec(
+  candles: readonly CandlestickData<UTCTimestamp>[],
+  fallbackBarStepSec: number,
+): number {
+  const n = candles.length;
+  if (n >= 2) {
+    const dt = Number(candles[n - 1].time) - Number(candles[n - 2].time);
+    if (Number.isFinite(dt) && dt > 0) return dt;
+  }
+  return Math.max(1, fallbackBarStepSec);
+}
+
+/**
+ * Converts a timestamp (including future timestamps past the last bar, historical
+ * timestamps before the first bar, or timestamps between bars across timeframes)
+ * to a chart X pixel coordinate via Lightweight Charts logical indices.
+ */
+function timeSecToCoordinateExt(
+  chart: IChartApi,
+  candles: readonly CandlestickData<UTCTimestamp>[],
+  timeSec: number,
+  fallbackBarStepSec: number,
+): number | null {
+  const direct = chart.timeScale().timeToCoordinate(timeSec as UTCTimestamp);
+  if (direct !== null) return Number(direct);
+
+  const n = candles.length;
+  if (n === 0) return null;
+  const step = inferBarStepSec(candles, fallbackBarStepSec);
+  const firstTime = Number(candles[0].time);
+  const lastIdx = n - 1;
+  const lastTime = Number(candles[lastIdx].time);
+
+  let logical: number;
+  if (timeSec >= lastTime) {
+    logical = lastIdx + (timeSec - lastTime) / step;
+  } else if (timeSec <= firstTime) {
+    logical = (timeSec - firstTime) / step;
+  } else {
+    let lo = 0;
+    let hi = lastIdx;
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1;
+      if (Number(candles[mid].time) <= timeSec) lo = mid;
+      else hi = mid;
+    }
+    const t0 = Number(candles[lo].time);
+    const t1 = Number(candles[hi].time);
+    const span = Math.max(1, t1 - t0);
+    logical = lo + (timeSec - t0) / span;
+  }
+
+  const coord = chart.timeScale().logicalToCoordinate(logical as Logical);
+  return coord === null ? null : Number(coord);
+}
+
+/**
+ * Converts any chart X pixel coordinate — including future whitespace past the last bar
+ * or historical space before the first bar — into a Unix timestamp in seconds.
+ */
+function coordinateToTimeSecExt(
+  chart: IChartApi,
+  candles: readonly CandlestickData<UTCTimestamp>[],
+  x: number,
+  fallbackBarStepSec: number,
+  fallbackTimeSec: number,
+): number {
+  const rawTime = chart.timeScale().coordinateToTime(x);
+  if (typeof rawTime === "number" && Number.isFinite(rawTime)) {
+    return rawTime;
+  }
+
+  const n = candles.length;
+  const logical = chart.timeScale().coordinateToLogical(x);
+  if (n === 0 || logical === null || !Number.isFinite(logical)) {
+    return fallbackTimeSec;
+  }
+
+  const step = inferBarStepSec(candles, fallbackBarStepSec);
+  const firstTime = Number(candles[0].time);
+  const lastIdx = n - 1;
+  const lastTime = Number(candles[lastIdx].time);
+
+  if (logical > lastIdx) {
+    return Math.round(lastTime + (logical - lastIdx) * step);
+  }
+  if (logical < 0) {
+    return Math.round(firstTime + logical * step);
+  }
+
+  const idx = Math.min(lastIdx, Math.max(0, Math.floor(logical)));
+  const frac = logical - idx;
+  const t0 = Number(candles[idx].time);
+  const t1 = idx < lastIdx ? Number(candles[idx + 1].time) : t0 + step;
+  return Math.round(t0 + frac * (t1 - t0));
+}
+
 interface PrimitiveDrawContext {
   getOverlayData: () => OverlayRenderData;
   getDrawings: () => readonly DrawingObject[];
@@ -951,6 +1049,7 @@ interface PrimitiveDrawContext {
   getSessionVpConfig: () => VolumeProfileConfig;
   getBarType: () => ChartBarType;
   getPnfColumns: () => readonly PointAndFigureColumn[];
+  getBarStepSec: () => number;
 }
 
 class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
@@ -970,10 +1069,13 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
         if (!chart || !series) return;
 
         const bridge: CoordinateBridge = {
-          timeToX: (timeSec: number): number | null => {
-            const coord = chart.timeScale().timeToCoordinate(timeSec as UTCTimestamp);
-            return coord === null ? null : Number(coord);
-          },
+          timeToX: (timeSec: number): number | null =>
+            timeSecToCoordinateExt(
+              chart,
+              this.source.getCandles(),
+              timeSec,
+              this.source.getBarStepSec(),
+            ),
           priceToY: (price: number): number | null => {
             const coord = series.priceToCoordinate(price);
             return coord === null ? null : Number(coord);
@@ -2295,7 +2397,7 @@ export function ChartPanel({
     publishSeriesSnapshot();
     chart.timeScale().setVisibleLogicalRange({
       from: Math.max(0, activeCandles.length - 150),
-      to: activeCandles.length + 8,
+      to: activeCandles.length + 24,
     });
 
     const overlay = new WebGl2OrderflowOverlay();
@@ -2357,6 +2459,7 @@ export function ChartPanel({
       getSessionVpConfig: () => sessionVpConfigRef.current,
       getBarType: () => barType,
       getPnfColumns: () => activePnfColumns,
+      getBarStepSec: () => Math.max(60, timeframeToSeconds(timeframe)),
     });
     candleSeries.attachPrimitive(primitive);
 
@@ -2489,7 +2592,7 @@ export function ChartPanel({
           publishSeriesSnapshot();
           chart.timeScale().setVisibleLogicalRange({
             from: Math.max(0, activeCandles.length - 150),
-            to: activeCandles.length + 8,
+            to: activeCandles.length + 24,
           });
           onLivePriceSampleRef.current?.(symbol, lastBar.close);
           onSeriesUpdatedRef.current?.();
@@ -2816,7 +2919,7 @@ export function ChartPanel({
         modifiers.tool &&
         ANGLE_SNAP_TOOLS.has(modifiers.tool)
       ) {
-        const ax = chart.timeScale().timeToCoordinate(modifiers.originAnchor.timeSec as UTCTimestamp);
+        const ax = timeSecToCoordinateExt(chart, activeCandles, modifiers.originAnchor.timeSec, barSecStep);
         const ay = candleSeries.priceToCoordinate(Number(modifiers.originAnchor.priceTick) * tickFloat);
         if (ax !== null && ay !== null) {
           const dx = x - ax;
@@ -2835,11 +2938,13 @@ export function ChartPanel({
       if (price === null || !Number.isFinite(price)) return null;
       const scaled = price / tickFloat;
       if (!Number.isFinite(scaled)) return null;
-      const rawTime = chart.timeScale().coordinateToTime(x);
-      const timeSec =
-        typeof rawTime === "number"
-          ? rawTime
-          : activeBarTimeSec || Math.floor(Date.now() / 1000);
+      const timeSec = coordinateToTimeSecExt(
+        chart,
+        activeCandles,
+        x,
+        barSecStep,
+        activeBarTimeSec || Math.floor(Date.now() / 1000),
+      );
       let priceTick = BigInt(Math.round(scaled));
       const useMagnet =
         modifiers !== undefined
@@ -3178,10 +3283,10 @@ export function ChartPanel({
     };
 
     const toPixel = (anchor: AnchorPoint): { x: number | null; y: number | null } => {
-      const xCoord = chart.timeScale().timeToCoordinate(anchor.timeSec as UTCTimestamp);
+      const xCoord = timeSecToCoordinateExt(chart, activeCandles, anchor.timeSec, barSecStep);
       const yCoord = candleSeries.priceToCoordinate(Number(anchor.priceTick) * tickFloat);
       return {
-        x: xCoord === null ? null : Number(xCoord),
+        x: xCoord,
         y: yCoord === null ? null : Number(yCoord),
       };
     };

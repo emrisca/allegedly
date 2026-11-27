@@ -4,3 +4,4 @@ export * from "./chart-settings-dialog";
 export * from "./chrome-toolbar";
 export * from "./status-bar";
 export * from "./workspace-host";
+export * from "./color-picker";

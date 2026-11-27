@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@ui-sdk/react/dialog";
 import { Switch, SwitchThumb } from "@ui-sdk/react/switch";
+import { ColorPickerButton } from "./color-picker";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
 import {
   cloneChartSettings,
@@ -66,23 +67,11 @@ function ColorSwatch({
   label: string;
 }) {
   return (
-    <label
-      aria-label={label}
-      className="relative inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-[#343844] bg-[#181a20] p-1 hover:border-[#4c5263]"
-    >
-      <span
-        className="h-full w-full rounded-[3px]"
-        style={{ backgroundColor: value }}
-        aria-hidden="true"
-      />
-      <input
-        type="color"
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="sr-only"
-      />
-    </label>
+    <ColorPickerButton
+      value={value}
+      onChange={onChange}
+      ariaLabel={label}
+    />
   );
 }
 

@@ -55,6 +55,41 @@
     font-size: inherit;
   }
 
+  [data-slot="toolbar"] {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    gap: 0;
+  }
+
+  [data-slot="toolbar"] :is([data-slot="toolbar-button"], [data-slot="toolbar-link"], [data-slot="toggle"]),
+  :is([data-slot="toolbar-button"], [data-slot="toolbar-link"]) {
+    min-width: 0;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    gap: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  [data-slot="toolbar"] :is([data-slot="toolbar-button"], [data-slot="toolbar-link"], [data-slot="toggle"])[data-pressed] {
+    border-color: transparent;
+  }
+
+  [data-slot="toolbar-separator"] {
+    margin: 0;
+    align-self: center;
+    background: transparent;
+  }
+
   [data-slot="tabs"] {
     display: flex;
     flex-direction: column;

@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@ui-sdk/react/dialog";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
+import { ColorPickerButton } from "@allegedly/ui-chrome";
 
 export type IndicatorLineStyle = "solid" | "dashed" | "dotted";
 export type IndicatorPriceSource = "close" | "open" | "high" | "low" | "hl2" | "hlc3" | "ohlc4";
@@ -284,32 +285,20 @@ export function IndicatorSettingsDialog({
           </TabsPanel>
 
           <TabsPanel value="style" className="space-y-3.5 px-5 py-5 text-[13px]">
-            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
-              <span className="pt-1.5 text-[#d1d4dc]">Color</span>
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {INDICATOR_PRESET_COLORS.map((hex) => (
-                    <button
-                      key={hex}
-                      type="button"
-                      aria-label={`Select color ${hex}`}
-                      onClick={() => setDraft({ ...draft, color: hex })}
-                      style={{ backgroundColor: hex }}
-                      className={`h-5 w-5 rounded border ${
-                        draft.color.toLowerCase() === hex.toLowerCase()
-                          ? "border-white ring-2 ring-[#2962ff]"
-                          : "border-[#2a2e39]"
-                      }`}
-                    />
-                  ))}
-                  <input
-                    aria-label="Indicator custom color"
-                    type="color"
-                    value={draft.color}
-                    onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-                    className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
-                  />
-                </div>
+            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+              <span className="text-[#d1d4dc]">Color</span>
+              <div className="flex items-center gap-2.5">
+                <ColorPickerButton
+                  ariaLabel="Indicator color"
+                  value={draft.color}
+                  opacity={draft.opacity}
+                  onChange={(hex) => setDraft({ ...draft, color: hex })}
+                  onOpacityChange={(op) => setDraft({ ...draft, opacity: Math.max(0.1, op) })}
+                  triggerClassName="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#363a45] bg-[#181c27] p-1.5 transition-colors hover:border-[#4c5265]"
+                />
+                <span className="font-mono text-[11px] uppercase text-[#868993]">
+                  {draft.color}
+                </span>
               </div>
             </div>
 
