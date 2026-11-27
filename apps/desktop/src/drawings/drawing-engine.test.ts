@@ -220,4 +220,20 @@ describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
     const miss = hitTestDrawing(engine.list("BTC/USD"), 50, 20, toPixel, 400, 400);
     expect(miss).toBeNull();
   });
+
+  it("selects and deletes anchored_vp when clicking its histogram band (not swallowed by 1-anchor badge check)", () => {
+    const engine = new DrawingEngine();
+    const vp = engine.add("anchored_vp", "BTC/USD", [{ timeSec: 1_700_000_000, priceTick: 9500000n }]);
+    const hit = hitTestDrawing(
+      engine.list("BTC/USD"),
+      120,
+      300,
+      () => ({ x: 40, y: 100 }),
+      900,
+      600,
+    );
+    expect(hit?.drawing.id).toBe(vp.id);
+    expect(engine.remove(vp.id)).toBe(true);
+    expect(engine.list("BTC/USD")).toHaveLength(0);
+  });
 });

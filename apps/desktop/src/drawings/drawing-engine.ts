@@ -1012,27 +1012,50 @@ export function hitTestDrawing(
       continue;
     }
 
-    // 3. Single-anchor text/marker badges
-    if (pts.length === 1 && p0?.x !== null && p0.y !== null) {
-      if (px >= p0.x - 16 && px <= p0.x + 120 && py >= p0.y - 24 && py <= p0.y + 24) {
+    // 3a. Fixed Range & Anchored Volume Profile hit test (must run BEFORE single-anchor badge block!)
+    if (d.kind === "fixed_range_vp") {
+      const x0 = p0?.x ?? 0;
+      const x1 = p1?.x ?? canvasWidth;
+      const minX = Math.min(x0, x1) - BODY_TOL;
+      const rawMaxX = Math.max(x0, x1) + BODY_TOL;
+      const histBandMax =
+        d.vpConfig?.extendRight
+          ? Math.max(rawMaxX, Math.min(canvasWidth, Math.max(0, minX) + Math.max(180, canvasWidth * 0.35)))
+          : rawMaxX;
+      if (px >= minX && px <= histBandMax && py >= 0 && py <= canvasHeight) {
         return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+    if (d.kind === "anchored_vp") {
+      const anchorX = p0?.x !== null && p0?.x !== undefined ? p0.x : 0;
+      const clampedStart = Math.max(0, anchorX);
+      const histWidth = Math.max(180, Math.round((canvasWidth - clampedStart) * 0.35));
+      const inHistogram =
+        px >= clampedStart - BODY_TOL &&
+        px <= clampedStart + histWidth &&
+        py >= 0 &&
+        py <= canvasHeight;
+      const onAnchorLine = p0?.x !== null && p0?.x !== undefined && Math.abs(px - p0.x) <= BODY_TOL;
+      const onAnchorLevel = p0?.y !== null && p0?.y !== undefined && px >= clampedStart && Math.abs(py - p0.y) <= 14;
+      if (inHistogram || onAnchorLine || onAnchorLevel) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+    if (d.kind === "anchored_vwap") {
+      const startX = p0?.x ?? 0;
+      if (px >= startX - BODY_TOL && px <= canvasWidth && p0?.y !== null && p0?.y !== undefined) {
+        if (Math.abs(py - p0.y) <= 28) {
+          return { drawing: d, hitKind: "body", anchorIndex: -1 };
+        }
       }
       continue;
     }
 
-    // 3b. Fixed Range & Anchored Volume Profile hit test across vertical profile band
-    if (d.kind === "fixed_range_vp" && p0?.x !== null && p1?.x !== null) {
-      const minX = Math.min(p0.x, p1.x) - BODY_TOL;
-      const maxX = d.vpConfig?.extendRight
-        ? canvasWidth
-        : Math.max(p0.x, p1.x) + BODY_TOL;
-      if (px >= minX && px <= maxX && py >= 0 && py <= canvasHeight) {
-        return { drawing: d, hitKind: "body", anchorIndex: -1 };
-      }
-      continue;
-    }
-    if (d.kind === "anchored_vp" && p0?.x !== null) {
-      if (px >= p0.x - BODY_TOL && px <= canvasWidth && py >= 0 && py <= canvasHeight) {
+    // 3b. Single-anchor text/marker badges
+    if (pts.length === 1 && p0?.x !== null && p0.y !== null) {
+      if (px >= p0.x - 16 && px <= p0.x + 120 && py >= p0.y - 24 && py <= p0.y + 24) {
         return { drawing: d, hitKind: "body", anchorIndex: -1 };
       }
       continue;
@@ -1052,7 +1075,6 @@ export function hitTestDrawing(
         d.kind === "price_range" ||
         d.kind === "date_range" ||
         d.kind === "date_price_range" ||
-        d.kind === "fixed_range_vp" ||
         d.kind === "circle" ||
         d.kind === "ellipse")
     ) {

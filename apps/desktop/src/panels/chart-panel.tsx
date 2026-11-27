@@ -792,33 +792,60 @@ function hashSymbolSeed(symbol: string): number {
  * switching between 1m, 5m, 15m, 1h, 4h, D, W, M shows true open-to-close
  * timeframe aggregation of the exact same underlying market history.
  */
-function simRawSignal(seed: number, tSec: number): number {
-  const s1 = (seed % 997) * 0.017;
-  const s2 = ((seed >>> 10) % 991) * 0.023;
-  const s3 = ((seed >>> 20) % 983) * 0.031;
-  // Multi-horizon waves spanning months -> weeks -> days -> hours -> 15m -> 1m
-  const macro =
-    Math.sin(tSec / 5_184_000 + s1) * 0.14 +
-    Math.cos(tSec / 1_728_000 + s2) * 0.085;
-  const swing =
-    Math.sin(tSec / 345_600 + s2 * 1.7) * 0.045 +
-    Math.cos(tSec / 108_000 + s3) * 0.026;
-  const intraday =
-    Math.sin(tSec / 21_600 + s1 * 2.3) * 0.014 +
-    Math.cos(tSec / 5_400 + s3 * 1.4) * 0.0075;
-  const micro =
-    Math.sin(tSec / 1_350 + s2 * 3.1) * 0.0036 +
-    Math.cos(tSec / 360 + s1 * 4.7) * 0.0018 +
-    Math.sin(tSec / 95 + s3 * 5.3) * 0.0009;
-  return macro + swing + intraday + micro;
-}
-
 function simHashNoise(seed: number, idx: number): number {
   let x = (seed ^ Math.imul(idx | 0, 0x27d4eb2d)) >>> 0;
   x ^= x >>> 15;
   x = Math.imul(x, 0x85ebca6b) >>> 0;
   x ^= x >>> 13;
+  x = Math.imul(x, 0xc2b2ae35) >>> 0;
+  x ^= x >>> 16;
   return (x >>> 0) / 0xffffffff;
+}
+
+/**
+ * Smooth non-repeating 1D value-noise octave with hashed integer knots.
+ * Never repeats periodically regardless of zoom level or history span.
+ */
+function simValueNoise1D(seed: number, coord: number): number {
+  const i0 = Math.floor(coord);
+  const f = coord - i0;
+  // Quintic smoothstep for C2 continuity without periodic ringing
+  const u = f * f * f * (f * (f * 6 - 15) + 10);
+  const v0 = simHashNoise(seed, i0) * 2 - 1;
+  const v1 = simHashNoise(seed, i0 + 1) * 2 - 1;
+  return v0 + (v1 - v0) * u;
+}
+
+/**
+ * Non-repeating multi-scale 1D Fractal Brownian Motion (fBm) log-price path.
+ * Evaluates in O(1) at any Unix timestamp `tSec` across 10 independent dyadic
+ * time scales (from 2 minutes up to ~8 years), guaranteeing:
+ *  - Organic, non-repeating bull/bear trends, ranges, breakouts, and pullbacks
+ *  - Exact multi-timeframe consistency across 1m, 5m, 15m, 1h, 4h, D, W, M
+ *  - Seamless infinite left scroll-back
+ */
+function simRawSignal(seed: number, tSec: number): number {
+  // Dyadic scales (seconds) with realistic Hurst-like amplitude falloff (H ~ 0.58)
+  const octaves: readonly [number, number][] = [
+    [250_000_000, 0.55], // ~8 yr macro cycle
+    [62_000_000, 0.34],  // ~2 yr trend regime
+    [15_552_000, 0.21],  // ~6 mo swing
+    [3_888_000, 0.125],  // ~45 d leg
+    [972_000, 0.072],    // ~11 d swing
+    [243_000, 0.041],    // ~2.8 d move
+    [60_750, 0.023],     // ~17 h session
+    [15_180, 0.013],     // ~4.2 h intraday
+    [3_600, 0.0072],     // 1 h wave
+    [900, 0.0040],       // 15 m structure
+    [180, 0.0021],       // 3 m micro
+  ];
+  let acc = 0;
+  for (let i = 0; i < octaves.length; i++) {
+    const [periodSec, amp] = octaves[i];
+    const octSeed = (seed ^ Math.imul(i + 1, 0x9e3779b1)) >>> 0;
+    acc += simValueNoise1D(octSeed, tSec / periodSec) * amp;
+  }
+  return acc;
 }
 
 function buildSimCandleWindow(
@@ -837,7 +864,7 @@ function buildSimCandleWindow(
   const seed = hashSymbolSeed(symbol);
   const anchorSignal = simRawSignal(seed, nowSec);
   const priceAt = (tSec: number) =>
-    Math.max(base * 0.15, base * (1 + (simRawSignal(seed, tSec) - anchorSignal)));
+    Math.max(base * 0.08, base * Math.exp(simRawSignal(seed, tSec) - anchorSignal));
 
   const barSec = Math.max(60, timeframeToSeconds(timeframe));
   const candles: CandlestickData<UTCTimestamp>[] = [];
