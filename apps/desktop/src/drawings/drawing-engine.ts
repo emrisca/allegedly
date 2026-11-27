@@ -168,6 +168,10 @@ export interface DrawingObject {
   lineStyle?: DrawingLineStyle;
   fillColor?: string;
   fillOpacity?: number;
+  fillEnabled?: boolean;
+  showMiddleLine?: boolean;
+  middleLineColor?: string;
+  middleLineStyle?: DrawingLineStyle;
   extendLeft?: boolean;
   extendRight?: boolean;
   showPriceLabels?: boolean;

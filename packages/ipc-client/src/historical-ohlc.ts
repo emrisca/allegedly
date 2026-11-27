@@ -141,7 +141,7 @@ function finalizeSortedBars(bars: HistoricalOhlcBar[], limit: number): Historica
  * Parse Kraken `/0/public/OHLC` JSON response.
  * Row format: `[time, open, high, low, close, vwap, volume, count]`
  */
-export function parseKrakenOhlcResponse(payload: unknown, limit = 300): HistoricalOhlcBar[] {
+export function parseKrakenOhlcResponse(payload: unknown, limit = 1500): HistoricalOhlcBar[] {
   if (!payload || typeof payload !== "object") {
     throw new Error("Invalid Kraken OHLC payload");
   }
@@ -178,7 +178,7 @@ export function parseKrakenOhlcResponse(payload: unknown, limit = 300): Historic
  * Parse Coinbase Exchange `/products/{product}/candles` JSON response.
  * Row format: `[time, low, high, open, close, volume]` (returned newest-first).
  */
-export function parseCoinbaseCandlesResponse(payload: unknown, limit = 300): HistoricalOhlcBar[] {
+export function parseCoinbaseCandlesResponse(payload: unknown, limit = 1500): HistoricalOhlcBar[] {
   if (!Array.isArray(payload)) {
     throw new Error("Invalid Coinbase candles payload");
   }
@@ -201,6 +201,8 @@ export interface FetchHistoricalOhlcParams {
   symbol: string;
   timeframe: string;
   limit?: number;
+  /** Optional upper timestamp bound (Unix seconds) for paginating older historical candles. */
+  endTimeSec?: number;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 }
@@ -213,7 +215,15 @@ export interface FetchHistoricalOhlcParams {
 export async function fetchHistoricalOhlc(
   params: FetchHistoricalOhlcParams,
 ): Promise<HistoricalOhlcBar[]> {
-  const { source, symbol, timeframe, limit = 300, signal, fetchImpl = globalThis.fetch } = params;
+  const {
+    source,
+    symbol,
+    timeframe,
+    limit = 1500,
+    endTimeSec,
+    signal,
+    fetchImpl = globalThis.fetch,
+  } = params;
 
   if (source === "paper_sim") {
     return [];
@@ -226,6 +236,7 @@ export async function fetchHistoricalOhlc(
     const pair = mapSymbolToKrakenRestPair(symbol);
     if (!pair) return [];
     const interval = mapTimeframeToKrakenInterval(timeframe);
+    // Kraken returns up to 720 bars per interval; pass since=0 so the full 720-bar window is returned.
     const url = `https://api.kraken.com/0/public/OHLC?pair=${encodeURIComponent(pair)}&interval=${interval}`;
     const res = await fetchImpl(url, { signal });
     if (!res.ok) {
@@ -239,13 +250,58 @@ export async function fetchHistoricalOhlc(
     const product = mapSymbolToCoinbaseProduct(symbol);
     if (!product) return [];
     const granularity = mapTimeframeToCoinbaseGranularity(timeframe);
-    const url = `https://api.exchange.coinbase.com/products/${encodeURIComponent(product)}/candles?granularity=${granularity}`;
-    const res = await fetchImpl(url, { signal });
-    if (!res.ok) {
-      throw new Error(`Coinbase candles HTTP ${res.status}`);
+    const baseUrl = `https://api.exchange.coinbase.com/products/${encodeURIComponent(product)}/candles`;
+    const windowSec = granularity * 300;
+
+    // Single older window when scroll-back requests candles strictly before `endTimeSec`.
+    if (typeof endTimeSec === "number" && Number.isFinite(endTimeSec) && endTimeSec > 0) {
+      const endIso = new Date(endTimeSec * 1000).toISOString();
+      const startIso = new Date(Math.max(0, endTimeSec - windowSec) * 1000).toISOString();
+      const url = `${baseUrl}?granularity=${granularity}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
+      const res = await fetchImpl(url, { signal });
+      if (!res.ok) {
+        throw new Error(`Coinbase candles HTTP ${res.status}`);
+      }
+      const json: unknown = await res.json();
+      return parseCoinbaseCandlesResponse(json, limit);
     }
-    const json: unknown = await res.json();
-    return parseCoinbaseCandlesResponse(json, limit);
+
+    const firstUrl = `${baseUrl}?granularity=${granularity}`;
+    const firstRes = await fetchImpl(firstUrl, { signal });
+    if (!firstRes.ok) {
+      throw new Error(`Coinbase candles HTTP ${firstRes.status}`);
+    }
+    const firstJson: unknown = await firstRes.json();
+    const collected = parseCoinbaseCandlesResponse(firstJson, limit);
+
+    // Paginate backwards up to 5 chunks (up to 1,500 real Coinbase candles) when a full page returned.
+    const maxPages = Math.min(5, Math.max(1, Math.ceil(limit / 300)));
+    if (maxPages > 1 && collected.length >= 200) {
+      let oldestSec = collected[0].time;
+      for (let page = 1; page < maxPages; page++) {
+        if (signal?.aborted) break;
+        const pageEnd = oldestSec - granularity;
+        const pageStart = Math.max(0, pageEnd - windowSec);
+        if (pageEnd <= pageStart) break;
+        const pageUrl = `${baseUrl}?granularity=${granularity}&start=${encodeURIComponent(
+          new Date(pageStart * 1000).toISOString(),
+        )}&end=${encodeURIComponent(new Date(pageEnd * 1000).toISOString())}`;
+        try {
+          const pageRes = await fetchImpl(pageUrl, { signal });
+          if (!pageRes.ok) break;
+          const pageJson: unknown = await pageRes.json();
+          const pageBars = parseCoinbaseCandlesResponse(pageJson, 300);
+          if (pageBars.length === 0) break;
+          collected.unshift(...pageBars);
+          oldestSec = pageBars[0].time;
+          if (pageBars.length < 150) break;
+        } catch {
+          break;
+        }
+      }
+    }
+
+    return finalizeSortedBars(collected, limit);
   }
 
   return [];

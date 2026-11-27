@@ -1089,22 +1089,40 @@ export function drawVectorDrawing(
 
     case "box_zone":
       if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
-        const rx = Math.min(p0.x, p1.x);
+        const baseLeft = Math.min(p0.x, p1.x);
+        const baseRight = Math.max(p0.x, p1.x);
+        const rx = style?.extendLeft ? 0 : baseLeft;
+        const rx2 = style?.extendRight ? w : baseRight;
         const ry = Math.min(p0.y, p1.y);
-        const rw = Math.abs(p1.x - p0.x);
+        const rw = Math.max(1, rx2 - rx);
         const rh = Math.abs(p1.y - p0.y);
-        ctx.save();
-        ctx.fillStyle = style?.fillColor ?? color;
-        ctx.globalAlpha = style?.fillOpacity ?? 0.16;
-        ctx.fillRect(rx, ry, rw, rh);
-        ctx.restore();
+        if (style?.fillEnabled !== false) {
+          ctx.save();
+          ctx.fillStyle = style?.fillColor ?? color;
+          ctx.globalAlpha = style?.fillOpacity ?? 0.16;
+          ctx.fillRect(rx, ry, rw, rh);
+          ctx.restore();
+        }
         ctx.strokeRect(rx, ry, rw, rh);
+        if (style?.showMiddleLine) {
+          const midY = ry + rh / 2;
+          ctx.save();
+          ctx.strokeStyle = style.middleLineColor ?? color;
+          ctx.lineWidth = 1;
+          const mStyle = style.middleLineStyle ?? "dashed";
+          ctx.setLineDash(mStyle === "dashed" ? [5, 4] : mStyle === "dotted" ? [2, 3] : []);
+          ctx.beginPath();
+          ctx.moveTo(rx, midY);
+          ctx.lineTo(rx + rw, midY);
+          ctx.stroke();
+          ctx.restore();
+        }
         if (label) {
           ctx.save();
           ctx.setLineDash([]);
           ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
           ctx.fillStyle = textColor;
-          ctx.fillText(label, rx + 8, ry + fontSize + 4);
+          ctx.fillText(label, baseLeft + 8, ry + fontSize + 4);
           ctx.restore();
         }
       }

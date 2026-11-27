@@ -12,6 +12,32 @@
  * takes full precedence without needing !important.
  */
 @layer components {
+  :is(
+    [data-slot="dialog-title"],
+    [data-slot="alert-dialog-title"],
+    [data-slot="drawer-title"],
+    [data-slot="dialog-description"],
+    [data-slot="alert-dialog-description"],
+    [data-slot="drawer-description"]
+  ) {
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  :is([data-slot="command-group-label"], [data-slot="menu-group-label"]) {
+    margin: 0;
+    padding: 0;
+  }
+
+  [data-slot="command-item"] {
+    min-height: 0;
+    gap: 0;
+    padding: 0;
+    border-radius: 0;
+  }
+
   :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
     inset: auto;
     margin: 0;

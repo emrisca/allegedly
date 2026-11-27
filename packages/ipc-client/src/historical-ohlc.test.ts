@@ -124,4 +124,28 @@ describe("historical-ohlc", () => {
     expect(bars[0].open).toBe(105);
     expect(bars[0].low).toBe(100);
   });
+
+  it("paginates backwards for Coinbase to load >300 candles when a full page returns", async () => {
+    const makePage = (startSec: number, n: number) =>
+      Array.from({ length: n }, (_, idx) => {
+        const ts = startSec + (n - 1 - idx) * 3600;
+        return [ts, 99, 102, 100, 101, 10];
+      });
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => makePage(1795000000, 300) })
+      .mockResolvedValueOnce({ ok: true, json: async () => makePage(1795000000 - 300 * 3600, 300) })
+      .mockResolvedValueOnce({ ok: true, json: async () => [] });
+
+    const bars = await fetchHistoricalOhlc({
+      source: "coinbase_ws",
+      symbol: "BTC/USD",
+      timeframe: "1h",
+      limit: 1500,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(bars).toHaveLength(600);
+    expect(bars[0].time).toBeLessThan(bars[bars.length - 1].time);
+  });
 });

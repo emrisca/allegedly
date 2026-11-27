@@ -56,6 +56,7 @@ import {
   decodeTpoProfileBitmask,
   decodeVolumeProfile,
   fetchHistoricalOhlc,
+  timeframeToSeconds,
   FrameType,
   type FootprintCell,
   type MarketDataSourceId,
@@ -774,7 +775,11 @@ export function ChartOverlayToolbar({
   );
 }
 
-function seedInitialCandles(symbol: string): {
+function seedInitialCandles(
+  symbol: string,
+  timeframe = "D",
+  count = 1500,
+): {
   candles: CandlestickData<UTCTimestamp>[];
   volumes: HistogramData<UTCTimestamp>[];
   buyVolumes: number[];
@@ -782,9 +787,10 @@ function seedInitialCandles(symbol: string): {
 } {
   const meta = getSymbolMeta(symbol);
   const base = meta.basePrice;
-  const volScale = base * 0.0022;
-  const nowSec = Math.floor(Date.now() / 60_000) * 60;
-  const count = 180;
+  const barSec = Math.max(60, timeframeToSeconds(timeframe));
+  const tfScale = Math.min(4.2, Math.max(0.75, Math.sqrt(barSec / 900)));
+  const volScale = base * 0.0024 * tfScale;
+  const nowSec = Math.floor(Date.now() / (barSec * 1000)) * barSec;
   const candles: CandlestickData<UTCTimestamp>[] = [];
   const volumes: HistogramData<UTCTimestamp>[] = [];
   const buyVolumes: number[] = [];
@@ -794,36 +800,43 @@ function seedInitialCandles(symbol: string): {
   for (let i = 0; i < symbol.length; i++) {
     seed = (seed * 31 + symbol.charCodeAt(i)) >>> 0;
   }
+  for (let i = 0; i < timeframe.length; i++) {
+    seed = (seed * 37 + timeframe.charCodeAt(i)) >>> 0;
+  }
   const nextRand = () => {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 0xffffffff;
   };
 
-  let price = base * 0.94;
+  let price = base * 0.86;
   for (let i = count; i >= 1; i--) {
     const progress = (count - i) / count;
+    // Multi-regime macro + swing cycles so 1,500+ candles look realistic when zoomed out
+    const wave =
+      Math.sin(progress * Math.PI * 6.5) * volScale * 0.22 +
+      Math.cos(progress * Math.PI * 17) * volScale * 0.14;
     const regimeDrift =
-      progress < 0.32
-        ? volScale * 0.34
-        : progress < 0.65
-          ? volScale * 0.05
-          : progress < 0.82
-            ? volScale * 0.16
-            : -volScale * 0.28;
-    const noise = (nextRand() - 0.49) * volScale * 2.2;
+      progress < 0.25
+        ? volScale * 0.12
+        : progress < 0.52
+          ? -volScale * 0.08
+          : progress < 0.84
+            ? volScale * 0.18
+            : -volScale * 0.09;
+    const noise = (nextRand() - 0.495) * volScale * 2.15;
     const open = price;
-    const close = Math.max(meta.basePrice * 0.25, open + regimeDrift + noise);
-    const wickUp = (0.2 + nextRand() * 0.9) * volScale;
-    const wickDn = (0.2 + nextRand() * 0.9) * volScale;
+    const close = Math.max(meta.basePrice * 0.18, open + regimeDrift + wave + noise);
+    const wickUp = (0.18 + nextRand() * 0.92) * volScale;
+    const wickDn = (0.18 + nextRand() * 0.92) * volScale;
     const high = Math.max(open, close) + wickUp;
-    const low = Math.max(meta.basePrice * 0.2, Math.min(open, close) - wickDn);
+    const low = Math.max(meta.basePrice * 0.15, Math.min(open, close) - wickDn);
     price = close;
 
-    const vol = 18 + Math.round(nextRand() * 95);
+    const vol = Math.round((22 + nextRand() * 110) * (0.8 + tfScale * 0.35));
     const buyShare = close >= open ? 0.56 + nextRand() * 0.12 : 0.34 + nextRand() * 0.12;
     const buyVol = vol * buyShare;
     const sellVol = Math.max(0, vol - buyVol);
-    const t = (nowSec - i * 60) as UTCTimestamp;
+    const t = (nowSec - i * barSec) as UTCTimestamp;
     candles.push({ time: t, open, high, low, close });
     volumes.push({
       time: t,
@@ -837,13 +850,78 @@ function seedInitialCandles(symbol: string): {
   const finalClose = candles[candles.length - 1]?.close ?? base;
   const delta = base - finalClose;
   for (const c of candles) {
-    c.open += delta;
-    c.high += delta;
-    c.low += delta;
-    c.close += delta;
+    c.open = Math.max(meta.basePrice * 0.05, c.open + delta);
+    c.high = Math.max(c.open, c.high + delta);
+    c.low = Math.max(meta.basePrice * 0.04, c.low + delta);
+    c.close = Math.max(meta.basePrice * 0.05, c.close + delta);
   }
 
   return { candles, volumes, buyVolumes, sellVolumes };
+}
+
+function generateOlderSimCandles(
+  symbol: string,
+  timeframe: string,
+  oldestBar: CandlestickData<UTCTimestamp>,
+  count = 500,
+): {
+  candles: CandlestickData<UTCTimestamp>[];
+  volumes: HistogramData<UTCTimestamp>[];
+  buyVolumes: number[];
+  sellVolumes: number[];
+} {
+  const meta = getSymbolMeta(symbol);
+  const barSec = Math.max(60, timeframeToSeconds(timeframe));
+  const tfScale = Math.min(4.2, Math.max(0.75, Math.sqrt(barSec / 900)));
+  const volScale = meta.basePrice * 0.0024 * tfScale;
+  const oldestTime = Number(oldestBar.time);
+  let seed = (oldestTime ^ 0x517cc1b7) >>> 0;
+  for (let i = 0; i < symbol.length; i++) {
+    seed = (seed * 31 + symbol.charCodeAt(i)) >>> 0;
+  }
+  const nextRand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0xffffffff;
+  };
+
+  // Walk backwards from oldestBar.open so the splice is gap-free
+  const revCandles: CandlestickData<UTCTimestamp>[] = [];
+  const revVolumes: HistogramData<UTCTimestamp>[] = [];
+  const revBuy: number[] = [];
+  const revSell: number[] = [];
+  let nextOpen = oldestBar.open;
+
+  for (let step = 1; step <= count; step++) {
+    const close = nextOpen;
+    const wave = Math.sin((step / count) * Math.PI * 5) * volScale * 0.16;
+    const delta = (nextRand() - 0.5) * volScale * 2.1 + wave;
+    const open = Math.max(meta.basePrice * 0.12, close - delta);
+    const wickUp = (0.18 + nextRand() * 0.85) * volScale;
+    const wickDn = (0.18 + nextRand() * 0.85) * volScale;
+    const high = Math.max(open, close) + wickUp;
+    const low = Math.max(meta.basePrice * 0.1, Math.min(open, close) - wickDn);
+    nextOpen = open;
+
+    const vol = Math.round((22 + nextRand() * 105) * (0.8 + tfScale * 0.35));
+    const buyShare = close >= open ? 0.56 + nextRand() * 0.12 : 0.34 + nextRand() * 0.12;
+    const buyVol = vol * buyShare;
+    const sellVol = Math.max(0, vol - buyVol);
+    const t = (oldestTime - step * barSec) as UTCTimestamp;
+    revCandles.push({ time: t, open, high, low, close });
+    revVolumes.push({
+      time: t,
+      value: vol,
+      color: close >= open ? "rgba(130, 142, 165, 0.22)" : "rgba(95, 103, 122, 0.18)",
+    });
+    revBuy.push(buyVol);
+    revSell.push(sellVol);
+  }
+
+  revCandles.reverse();
+  revVolumes.reverse();
+  revBuy.reverse();
+  revSell.reverse();
+  return { candles: revCandles, volumes: revVolumes, buyVolumes: revBuy, sellVolumes: revSell };
 }
 
 /**
@@ -1895,21 +1973,24 @@ export function ChartPanel({
       chart.timeScale().fitContent();
       return;
     }
-    const barCounts: Record<string, number> = {
-      "1D": 35,
-      "5D": 65,
-      "1M": 90,
-      "3M": 120,
-      "6M": 145,
-      YTD: 155,
-      "1Y": 170,
+    const barSec = Math.max(60, timeframeToSeconds(timeframe));
+    const presetSec: Record<string, number> = {
+      "1D": 86_400,
+      "5D": 5 * 86_400,
+      "1M": 30 * 86_400,
+      "3M": 90 * 86_400,
+      "6M": 180 * 86_400,
+      YTD: 270 * 86_400,
+      "1Y": 365 * 86_400,
     };
-    const visible = Math.min(count, barCounts[rangePreset] ?? count);
+    const targetSec = presetSec[rangePreset];
+    const desired = targetSec ? Math.max(30, Math.round(targetSec / barSec)) : count;
+    const visible = Math.min(count, desired);
     chart.timeScale().setVisibleLogicalRange({
       from: Math.max(0, count - visible),
-      to: count + 4,
+      to: count + 8,
     });
-  }, [rangePreset]);
+  }, [rangePreset, timeframe]);
 
   useEffect(() => {
     const el = hostRef.current;
@@ -2074,7 +2155,7 @@ export function ChartPanel({
     volumeSeriesRef.current = volumeSeries;
 
     chartApiRef.current = chart;
-    const seeded = seedInitialCandles(symbol);
+    const seeded = seedInitialCandles(symbol, timeframe);
     let activeCandles: CandlestickData<UTCTimestamp>[] = [...seeded.candles];
     let activeVolumes: HistogramData<UTCTimestamp>[] = [...seeded.volumes];
     let activeBuyVolumes: number[] = [...seeded.buyVolumes];
@@ -2212,7 +2293,10 @@ export function ChartPanel({
     applyMainSeriesData(activeCandles, activeVolumes);
     volumeSeries.setData(activeVolumes);
     publishSeriesSnapshot();
-    chart.timeScale().fitContent();
+    chart.timeScale().setVisibleLogicalRange({
+      from: Math.max(0, activeCandles.length - 150),
+      to: activeCandles.length + 8,
+    });
 
     const overlay = new WebGl2OrderflowOverlay();
     setRendererLabel(overlay.isWebGl2() ? "WebGL2" : "Canvas2D");
@@ -2278,11 +2362,105 @@ export function ChartPanel({
 
     // Real historical OHLCV backfill when the user has explicitly opted into a live exchange feed.
     // Strictly skipped in `paper_sim` mode (SV-01 zero network calls at boot).
+    let loadingOlderHistory = false;
+    let olderHistoryExhausted = false;
+    const barSecStep = Math.max(60, timeframeToSeconds(timeframe));
+
+    const prependOlderBars = (
+      olderCandles: CandlestickData<UTCTimestamp>[],
+      olderVolumes: HistogramData<UTCTimestamp>[],
+      olderBuy: number[],
+      olderSell: number[],
+    ) => {
+      const firstExistingTime = Number(activeCandles[0]?.time ?? Infinity);
+      const keepIdx: number[] = [];
+      for (let i = 0; i < olderCandles.length; i++) {
+        if (Number(olderCandles[i].time) < firstExistingTime) keepIdx.push(i);
+      }
+      if (keepIdx.length === 0) return 0;
+      const prevRange = chart.timeScale().getVisibleLogicalRange();
+      activeCandles = [...keepIdx.map((i) => olderCandles[i]), ...activeCandles];
+      activeVolumes = [...keepIdx.map((i) => olderVolumes[i]), ...activeVolumes];
+      activeBuyVolumes = [...keepIdx.map((i) => olderBuy[i]), ...activeBuyVolumes];
+      activeSellVolumes = [...keepIdx.map((i) => olderSell[i]), ...activeSellVolumes];
+      applyMainSeriesData(activeCandles, activeVolumes);
+      volumeSeries.setData(activeVolumes);
+      publishSeriesSnapshot();
+      if (prevRange) {
+        chart.timeScale().setVisibleLogicalRange({
+          from: prevRange.from + keepIdx.length,
+          to: prevRange.to + keepIdx.length,
+        });
+      }
+      onSeriesUpdatedRef.current?.();
+      pendingPrimitiveDirty = true;
+      scheduleFlush();
+      return keepIdx.length;
+    };
+
+    const handleVisibleLogicalRangeChange = (range: { from: number; to: number } | null) => {
+      if (!range || loadingOlderHistory || olderHistoryExhausted) return;
+      if (range.from > 25) return;
+      if (activeCandles.length >= 5500 || activeCandles.length === 0) return;
+
+      if (dataSource === "paper_sim") {
+        loadingOlderHistory = true;
+        const older = generateOlderSimCandles(symbol, timeframe, activeCandles[0], 500);
+        prependOlderBars(older.candles, older.volumes, older.buyVolumes, older.sellVolumes);
+        loadingOlderHistory = false;
+        return;
+      }
+
+      if (dataSource === "coinbase_ws" && historicalLoaded) {
+        loadingOlderHistory = true;
+        const oldestTime = Number(activeCandles[0].time);
+        void fetchHistoricalOhlc({
+          source: "coinbase_ws",
+          symbol,
+          timeframe,
+          limit: 300,
+          endTimeSec: oldestTime - barSecStep,
+          signal: backfillAbort.signal,
+        })
+          .then((bars) => {
+            if (backfillAbort.signal.aborted) return;
+            if (!bars || bars.length === 0) {
+              olderHistoryExhausted = true;
+              return;
+            }
+            const oCandles = bars.map((c) => ({
+              time: c.time as UTCTimestamp,
+              open: c.open,
+              high: c.high,
+              low: c.low,
+              close: c.close,
+            }));
+            const oVolumes = bars.map((c) => ({
+              time: c.time as UTCTimestamp,
+              value: c.volume,
+              color: c.close >= c.open ? "rgba(130, 142, 165, 0.24)" : "rgba(95, 103, 122, 0.2)",
+            }));
+            const oBuy = bars.map((c) => c.volume * (c.close >= c.open ? 0.62 : 0.38));
+            const oSell = bars.map((c, idx) => Math.max(0, c.volume - oBuy[idx]));
+            const added = prependOlderBars(oCandles, oVolumes, oBuy, oSell);
+            if (added === 0) olderHistoryExhausted = true;
+          })
+          .catch(() => {
+            // Ignore transient scroll-back network errors
+          })
+          .finally(() => {
+            loadingOlderHistory = false;
+          });
+      }
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
+
     if (dataSource !== "paper_sim") {
       void fetchHistoricalOhlc({
         source: dataSource,
         symbol,
         timeframe,
+        limit: 1500,
         signal: backfillAbort.signal,
       })
         .then((bars) => {
@@ -2309,7 +2487,10 @@ export function ChartPanel({
           applyMainSeriesData(activeCandles, activeVolumes);
           volumeSeries.setData(activeVolumes);
           publishSeriesSnapshot();
-          chart.timeScale().fitContent();
+          chart.timeScale().setVisibleLogicalRange({
+            from: Math.max(0, activeCandles.length - 150),
+            to: activeCandles.length + 8,
+          });
           onLivePriceSampleRef.current?.(symbol, lastBar.close);
           onSeriesUpdatedRef.current?.();
           pendingPrimitiveDirty = true;
@@ -3181,6 +3362,7 @@ export function ChartPanel({
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
       overlay.dispose();
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
       chart.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

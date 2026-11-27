@@ -389,17 +389,29 @@ export function ChromeToolbar({
               <span>{symbol}</span>
             </DialogTrigger>
             <DialogBackdrop className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[1px]" />
-            <DialogContent className="fixed left-1/2 top-20 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-[#2a2e39] bg-[#1e222d] p-3 text-[#d1d4dc] shadow-2xl">
-              <DialogTitle className="text-sm font-semibold text-white">
-                Symbol Search
-              </DialogTitle>
-              <DialogDescription className="mb-2 text-xs text-[#787b86]">
-                Switch active instrument or run a quick chart action.
-              </DialogDescription>
-              <Command aria-label="Symbol search and commands" className="flex flex-col gap-2">
+            <DialogContent className="fixed left-1/2 top-20 z-50 flex w-full max-w-[460px] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#2a2e39] px-4 py-3">
+                <DialogTitle className="text-[16px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
+                  Symbol Search
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Switch active instrument or run a quick chart action.
+                </DialogDescription>
+                <button
+                  type="button"
+                  aria-label="Close symbol search"
+                  onClick={() => setCommandOpen(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[#868993] transition-colors hover:bg-[#2a2e39] hover:text-[#f0f3fa]"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              <Command aria-label="Symbol search and commands" className="flex flex-col gap-2.5 p-3.5">
                 <CommandInput
-                  placeholder="Type a symbol (e.g. BTC/USD, NQ1!, ES1!)..."
-                  className="w-full rounded border border-[#2a2e39] bg-[#131722] px-2.5 py-1.5 text-xs text-white placeholder-[#787b86] outline-none focus:border-[#2962ff]"
+                  placeholder="Type a symbol (BTC/USD, ETH/USD, NQ1!, ES1!)..."
+                  className="h-9 w-full rounded-md border border-[#363a45] bg-[#131722] px-3 text-[13px] text-[#f0f3fa] placeholder-[#787b86] outline-none focus:border-[#2962ff]"
                 />
                 <CommandList className="max-h-72 overflow-y-auto rounded border border-[#2a2e39] bg-[#131722] p-1">
                   <CommandEmpty className="p-3 text-center text-xs text-[#787b86]">

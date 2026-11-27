@@ -423,6 +423,117 @@ function VpStylePanel({
   );
 }
 
+function unixSecToDateTimeLocal(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return "";
+  const d = new Date(sec * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function dateTimeLocalToUnixSec(val: string, fallback: number): number {
+  if (!val) return fallback;
+  const ms = Date.parse(val);
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : fallback;
+}
+
+function StrokePreviewLine({
+  color,
+  width,
+  style,
+}: {
+  color: string;
+  width: number;
+  style: DrawingLineStyle;
+}) {
+  const dash = style === "dashed" ? "5 3" : style === "dotted" ? "2 3" : undefined;
+  return (
+    <svg aria-hidden="true" viewBox="0 0 36 10" className="h-2.5 w-9 shrink-0">
+      <line
+        x1="1"
+        y1="5"
+        x2="35"
+        y2="5"
+        stroke={color}
+        strokeWidth={Math.min(3, Math.max(1.2, width))}
+        strokeDasharray={dash}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+const CHECKER_BG = {
+  backgroundImage:
+    "linear-gradient(45deg, #2a2e39 25%, transparent 25%), linear-gradient(-45deg, #2a2e39 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2e39 75%), linear-gradient(-45deg, transparent 75%, #2a2e39 75%)",
+  backgroundSize: "8px 8px",
+  backgroundPosition: "0 0, 0 4px, 4px -4px, -4px 0",
+} as const;
+
+function TvModalCloseButton() {
+  return (
+    <DialogClose
+      aria-label="Close"
+      className="flex h-7 w-7 items-center justify-center rounded-md text-[#868993] transition-colors hover:bg-[#2a2e39] hover:text-[#f0f3fa]"
+    >
+      <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" strokeLinecap="round" />
+      </svg>
+    </DialogClose>
+  );
+}
+
+function TvTemplateMenu({
+  onReset,
+  extraActionLabel,
+  onExtraAction,
+}: {
+  onReset: () => void;
+  extraActionLabel?: string;
+  onExtraAction?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-8 items-center gap-1.5 rounded-md border border-[#363a45] bg-transparent px-3 text-[12px] font-medium text-[#d1d4dc] transition-colors hover:bg-[#2a2e39] hover:text-white"
+      >
+        <span>Template</span>
+        <svg aria-hidden="true" viewBox="0 0 12 12" className="h-3 w-3 text-[#787b86]" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M3 4.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 z-50 mb-1.5 w-44 rounded-lg border border-[#363a45] bg-[#1e222d] py-1 shadow-2xl">
+          <button
+            type="button"
+            onClick={() => {
+              onReset();
+              setOpen(false);
+            }}
+            className="flex w-full items-center px-3 py-1.5 text-left text-[12px] text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white"
+          >
+            Apply defaults
+          </button>
+          {extraActionLabel && onExtraAction && (
+            <button
+              type="button"
+              onClick={() => {
+                onExtraAction();
+                setOpen(false);
+              }}
+              className="flex w-full items-center px-3 py-1.5 text-left text-[12px] text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white"
+            >
+              {extraActionLabel}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface VolumeProfileSettingsDialogProps {
   open: boolean;
   title?: string;
@@ -455,31 +566,29 @@ export function VolumeProfileSettingsDialog({
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]" />
       <DialogContent
         aria-label={`${title} settings`}
-        className="fixed left-1/2 top-1/2 z-50 flex w-[470px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 flex w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#2a2e39] px-5 py-3.5">
-          <div>
-            <DialogTitle className="text-[15px] font-semibold text-white">{title}</DialogTitle>
-            <DialogDescription className="text-[11px] text-[#787b86]">
-              Configure rows, value area, VAH/VAL/POC, and histogram styling
-            </DialogDescription>
-          </div>
-          <DialogClose className="flex h-7 w-7 items-center justify-center rounded text-[#787b86] hover:bg-[#2a2e39] hover:text-white">
-            ×
-          </DialogClose>
+        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+          <DialogTitle className="text-[17px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure volume profile inputs and visual style
+          </DialogDescription>
+          <TvModalCloseButton />
         </div>
 
         <Tabs defaultValue="inputs" className="flex flex-col">
-          <TabsList className="flex gap-1 border-b border-[#2a2e39] px-5 pt-1">
+          <TabsList className="flex gap-5 border-b border-[#2a2e39] px-5">
             <TabsTab
               value="inputs"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Inputs
             </TabsTab>
             <TabsTab
               value="style"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Style
             </TabsTab>
@@ -493,31 +602,20 @@ export function VolumeProfileSettingsDialog({
           </TabsPanel>
         </Tabs>
 
-        <div className="flex items-center justify-between border-t border-[#2a2e39] px-5 py-3">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => setDraft(cloneVpConfig(DEFAULT_VOLUME_PROFILE_CONFIG))}
-              className="h-8 rounded border border-[#2a2e39] bg-transparent px-2.5 text-[12px] text-[#9aa1b2] hover:bg-[#2a2e39] hover:text-white"
-            >
-              Reset defaults
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                saveStoredVpDefaults(draft);
-                setSavedDefaultFlash(true);
-              }}
-              className="h-8 rounded border border-[#2a2e39] bg-transparent px-2.5 text-[12px] text-[#9aa1b2] hover:bg-[#2a2e39] hover:text-white"
-            >
-              {savedDefaultFlash ? "Default saved" : "Save as default"}
-            </Button>
-          </div>
+        <div className="flex items-center justify-between border-t border-[#2a2e39] px-5 py-3.5">
+          <TvTemplateMenu
+            onReset={() => setDraft(cloneVpConfig(DEFAULT_VOLUME_PROFILE_CONFIG))}
+            extraActionLabel={savedDefaultFlash ? "Saved as default" : "Save as default"}
+            onExtraAction={() => {
+              saveStoredVpDefaults(draft);
+              setSavedDefaultFlash(true);
+            }}
+          />
           <div className="flex items-center gap-2">
             <Button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="h-8 rounded border border-[#2a2e39] bg-transparent px-4 text-[12px] text-[#d1d4dc] hover:bg-[#2a2e39]"
+              className="h-8 rounded-md border border-[#363a45] bg-transparent px-4 text-[13px] font-medium text-[#d1d4dc] transition-colors hover:bg-[#2a2e39] hover:text-white"
             >
               Cancel
             </Button>
@@ -527,7 +625,7 @@ export function VolumeProfileSettingsDialog({
                 onSave(cloneVpConfig(draft));
                 onOpenChange(false);
               }}
-              className="h-8 rounded bg-[#2962ff] px-4 text-[12px] font-medium text-white hover:bg-[#1e53e5]"
+              className="h-8 rounded-md bg-[#f0f3fa] px-4 text-[13px] font-semibold text-[#131722] transition-colors hover:bg-white"
             >
               OK
             </Button>
@@ -560,22 +658,30 @@ export function DrawingSettingsDialog({
   const [lineStyle, setLineStyle] = useState<DrawingLineStyle>("solid");
   const [fillColor, setFillColor] = useState("#2962ff");
   const [fillOpacity, setFillOpacity] = useState(0.16);
+  const [fillEnabled, setFillEnabled] = useState(true);
+  const [showMiddleLine, setShowMiddleLine] = useState(false);
+  const [middleLineColor, setMiddleLineColor] = useState("#a855f7");
+  const [middleLineStyle, setMiddleLineStyle] = useState<DrawingLineStyle>("dashed");
   const [extendLeft, setExtendLeft] = useState(false);
   const [extendRight, setExtendRight] = useState(false);
-  const [locked, setLocked] = useState(false);
   const [label, setLabel] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
   const [fontSize, setFontSize] = useState(12);
   const [textColor, setTextColor] = useState("#d1d4dc");
+  const [locked, setLocked] = useState(false);
+  const [visibility, setVisibility] = useState({ ...DEFAULT_DRAWING_VISIBILITY });
   const [anchorPrices, setAnchorPrices] = useState<string[]>([]);
   const [anchorTimes, setAnchorTimes] = useState<number[]>([]);
-  const [visibility, setVisibility] = useState({ ...DEFAULT_DRAWING_VISIBILITY });
-  const [vpConfig, setVpConfig] = useState<VolumeProfileConfig>(() => cloneVpConfig());
-  const [savedDefaultFlash, setSavedDefaultFlash] = useState(false);
+  const [vpConfig, setVpConfig] = useState<VolumeProfileConfig>(() =>
+    cloneVpConfig(DEFAULT_VOLUME_PROFILE_CONFIG),
+  );
   const [avwapShowBands, setAvwapShowBands] = useState(true);
   const [avwapBandMult, setAvwapBandMult] = useState(1);
   const [rrRatio, setRrRatio] = useState(2);
+  const [savedDefaultFlash, setSavedDefaultFlash] = useState(false);
+  const [openPicker, setOpenPicker] = useState<"border" | "middle" | "bg" | null>(null);
 
-  const tickFloat = Number(tickSizeE9) / 1e9;
+  const tickFloat = Math.max(1e-9, Number(tickSizeE9) / 1e9);
 
   useEffect(() => {
     if (!open || !drawing) return;
@@ -584,22 +690,28 @@ export function DrawingSettingsDialog({
     setLineStyle(drawing.lineStyle ?? "solid");
     setFillColor(drawing.fillColor ?? drawing.color);
     setFillOpacity(drawing.fillOpacity ?? 0.16);
+    setFillEnabled(drawing.fillEnabled !== false);
+    setShowMiddleLine(Boolean(drawing.showMiddleLine));
+    setMiddleLineColor(drawing.middleLineColor ?? "#a855f7");
+    setMiddleLineStyle(drawing.middleLineStyle ?? "dashed");
     setExtendLeft(Boolean(drawing.extendLeft));
     setExtendRight(Boolean(drawing.extendRight));
-    setLocked(Boolean(drawing.locked));
     setLabel(drawing.label ?? "");
+    setEditingTitle(false);
     setFontSize(drawing.fontSize ?? 12);
-    setTextColor(drawing.textColor ?? drawing.color);
+    setTextColor(drawing.textColor ?? "#d1d4dc");
+    setLocked(Boolean(drawing.locked));
+    setVisibility({ ...DEFAULT_DRAWING_VISIBILITY, ...(drawing.visibility ?? {}) });
     setAnchorPrices(
       drawing.anchors.map((a) => (Number(a.priceTick) * tickFloat).toFixed(decimals)),
     );
     setAnchorTimes(drawing.anchors.map((a) => a.timeSec));
-    setVisibility({ ...DEFAULT_DRAWING_VISIBILITY, ...(drawing.visibility ?? {}) });
     setVpConfig(cloneVpConfig(drawing.vpConfig));
-    setSavedDefaultFlash(false);
     setAvwapShowBands(drawing.avwapShowBands !== false);
     setAvwapBandMult(drawing.avwapBandMult ?? 1);
     setRrRatio(drawing.rrRatio ?? 2);
+    setSavedDefaultFlash(false);
+    setOpenPicker(null);
   }, [open, drawing, tickFloat, decimals]);
 
   if (!drawing) return null;
@@ -607,49 +719,58 @@ export function DrawingSettingsDialog({
   const meta = getDrawingToolMeta(drawing.kind);
   const isVolumeProfile =
     drawing.kind === "fixed_range_vp" || drawing.kind === "anchored_vp";
-  const isAvwap = drawing.kind === "anchored_vwap";
+  const isAnchoredVwap = drawing.kind === "anchored_vwap";
   const isPositionTool =
-    drawing.kind === "long_position" || drawing.kind === "short_position";
-  const supportsExtend =
-    drawing.kind === "trendline" || drawing.kind === "ray" || drawing.kind === "extended_line";
+    drawing.kind === "long_position" ||
+    drawing.kind === "short_position" ||
+    drawing.kind === "position_forecast";
+  const isRectangle = drawing.kind === "box_zone" || drawing.kind === "rotated_rectangle";
+  const supportsMiddleLine =
+    drawing.kind === "box_zone" || drawing.kind === "fib_channel";
   const supportsFill =
     drawing.kind === "box_zone" ||
-    drawing.kind === "circle" ||
+    drawing.kind === "rotated_rectangle" ||
     drawing.kind === "ellipse" ||
     drawing.kind === "triangle" ||
+    drawing.kind === "fib_channel" ||
     drawing.kind === "fib_retracement" ||
     drawing.kind === "long_position" ||
     drawing.kind === "short_position";
+  const supportsExtend =
+    drawing.kind === "box_zone" ||
+    drawing.kind === "trendline" ||
+    drawing.kind === "ray" ||
+    drawing.kind === "info_line" ||
+    drawing.kind === "extended_line" ||
+    drawing.kind === "fib_channel" ||
+    drawing.kind === "fib_retracement" ||
+    drawing.kind === "fib_extension";
 
-  const handleReset = () => {
-    const defColor = meta.defaultColor ?? "#2962ff";
-    setColor(defColor);
-    setLineWidth(2);
-    setLineStyle("solid");
-    setFillColor(defColor);
-    setFillOpacity(0.16);
-    setExtendLeft(false);
-    setExtendRight(false);
-    setLocked(false);
-    setFontSize(12);
-    setTextColor(defColor);
-    setVisibility({ ...DEFAULT_DRAWING_VISIBILITY });
-    setVpConfig(cloneVpConfig(DEFAULT_VOLUME_PROFILE_CONFIG));
-    setAvwapShowBands(true);
-    setAvwapBandMult(1);
-    setRrRatio(2);
+  const extendMode =
+    extendLeft && extendRight
+      ? "both"
+      : extendRight
+        ? "right"
+        : extendLeft
+          ? "left"
+          : "none";
+
+  const handleExtendModeChange = (mode: string) => {
+    setExtendLeft(mode === "left" || mode === "both");
+    setExtendRight(mode === "right" || mode === "both");
   };
 
   const handleSave = () => {
     const nextAnchors: AnchorPoint[] = drawing.anchors.map((orig, idx) => {
       const parsedPrice = Number.parseFloat(anchorPrices[idx] ?? "");
       const priceTick =
-        Number.isFinite(parsedPrice) && tickFloat > 0
-          ? BigInt(Math.max(1, Math.round(parsedPrice / tickFloat)))
+        Number.isFinite(parsedPrice) && parsedPrice > 0
+          ? BigInt(Math.round(parsedPrice / tickFloat))
           : orig.priceTick;
+      const parsedTime = anchorTimes[idx];
       const timeSec =
-        typeof anchorTimes[idx] === "number" && Number.isFinite(anchorTimes[idx])
-          ? Math.round(anchorTimes[idx])
+        typeof parsedTime === "number" && Number.isFinite(parsedTime) && parsedTime > 0
+          ? Math.round(parsedTime)
           : orig.timeSec;
       return { timeSec, priceTick };
     });
@@ -660,42 +781,95 @@ export function DrawingSettingsDialog({
       lineStyle,
       fillColor,
       fillOpacity,
+      fillEnabled,
+      showMiddleLine,
+      middleLineColor,
+      middleLineStyle,
       extendLeft,
-      extendRight: isVolumeProfile ? vpConfig.extendRight : extendRight,
-      locked,
-      label: label.trim() ? label : undefined,
+      extendRight,
+      label: label.trim() || undefined,
       fontSize,
       textColor,
-      anchors: nextAnchors,
+      locked,
       visibility: { ...visibility },
+      anchors: nextAnchors,
       ...(isVolumeProfile ? { vpConfig: cloneVpConfig(vpConfig) } : {}),
-      ...(isAvwap ? { avwapShowBands, avwapBandMult } : {}),
+      ...(isAnchoredVwap ? { avwapShowBands, avwapBandMult } : {}),
       ...(isPositionTool ? { rrRatio } : {}),
     });
     onOpenChange(false);
+  };
+
+  const handleReset = () => {
+    setColor(meta.defaultColor);
+    setLineWidth(2);
+    setLineStyle("solid");
+    setFillColor(meta.defaultColor);
+    setFillOpacity(0.16);
+    setFillEnabled(true);
+    setShowMiddleLine(false);
+    setMiddleLineColor("#a855f7");
+    setMiddleLineStyle("dashed");
+    setExtendLeft(false);
+    setExtendRight(false);
+    setFontSize(12);
+    setTextColor("#d1d4dc");
+    setLocked(false);
+    setVisibility({ ...DEFAULT_DRAWING_VISIBILITY });
+    if (isVolumeProfile) setVpConfig(cloneVpConfig(DEFAULT_VOLUME_PROFILE_CONFIG));
+    if (isAnchoredVwap) {
+      setAvwapShowBands(true);
+      setAvwapBandMult(1);
+    }
+    if (isPositionTool) setRrRatio(2);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]" />
       <DialogContent
-        aria-label={`Drawing settings for ${meta.label}`}
-        className="fixed left-1/2 top-1/2 z-50 flex w-[480px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
+        aria-label={`${meta.label} settings`}
+        className="fixed left-1/2 top-1/2 z-50 flex w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#2a2e39] px-5 py-3.5">
-          <div>
-            <DialogTitle className="text-[15px] font-semibold text-white">
-              {meta.label}
-            </DialogTitle>
-            <DialogDescription className="text-[11px] text-[#787b86]">
-              {isVolumeProfile
-                ? "Configure rows, value area, VAH/VAL/POC, histogram box, and visibility"
-                : "Customize drawing style, text label, anchor coordinates, and visibility"}
+        {/* Clean TradingView Header */}
+        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+          <div className="flex min-w-0 items-center gap-2">
+            {editingTitle ? (
+              <input
+                type="text"
+                autoFocus
+                value={label}
+                placeholder={meta.label}
+                onChange={(e) => setLabel(e.target.value)}
+                onBlur={() => setEditingTitle(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") setEditingTitle(false);
+                }}
+                className="h-7 w-48 rounded border border-[#2962ff] bg-[#131722] px-2 text-[15px] font-semibold text-white outline-none"
+              />
+            ) : (
+              <>
+                <DialogTitle className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
+                  {label.trim() || meta.label}
+                </DialogTitle>
+                <button
+                  type="button"
+                  title="Rename drawing"
+                  aria-label="Rename drawing"
+                  onClick={() => setEditingTitle(true)}
+                  className="flex h-6 w-6 items-center justify-center rounded text-[#868993] transition-colors hover:bg-[#2a2e39] hover:text-white"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
+                    <path d="M11.3 2.5a1.5 1.5 0 0 1 2.2 2.2L5.6 12.6l-3 .8.8-3 7.9-7.9Z" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </>
+            )}
+            <DialogDescription className="sr-only">
+              Customize {meta.label} style, text, coordinates, and visibility
             </DialogDescription>
           </div>
-          <DialogClose className="flex h-7 w-7 items-center justify-center rounded text-[#787b86] hover:bg-[#2a2e39] hover:text-white">
-            ×
-          </DialogClose>
+          <TvModalCloseButton />
         </div>
 
         <Tabs
@@ -703,38 +877,38 @@ export function DrawingSettingsDialog({
           defaultValue={isVolumeProfile ? "inputs" : "style"}
           className="flex flex-col"
         >
-          <TabsList className="flex gap-1 border-b border-[#2a2e39] px-5 pt-1">
+          <TabsList className="flex gap-5 border-b border-[#2a2e39] px-5">
             {isVolumeProfile && (
               <TabsTab
                 value="inputs"
-                className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+                className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
               >
                 Inputs
               </TabsTab>
             )}
             <TabsTab
               value="style"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Style
             </TabsTab>
             {!isVolumeProfile && (
               <TabsTab
                 value="text"
-                className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+                className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
               >
                 Text
               </TabsTab>
             )}
             <TabsTab
               value="coordinates"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Coordinates
             </TabsTab>
             <TabsTab
               value="visibility"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Visibility
             </TabsTab>
@@ -749,6 +923,7 @@ export function DrawingSettingsDialog({
             </TabsPanel>
           )}
 
+          {/* STYLE TAB — Clean TradingView rows */}
           <TabsPanel value="style">
             {isVolumeProfile ? (
               <VpStylePanel
@@ -756,360 +931,495 @@ export function DrawingSettingsDialog({
                 onChange={(patch) => setVpConfig((prev) => ({ ...prev, ...patch }))}
               />
             ) : (
-              <div className="space-y-4 px-5 py-4">
-                <div className="grid grid-cols-[120px_1fr] items-start gap-3">
-                  <span className="pt-1 text-[12px] text-[#b2b5be]">Line Color</span>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        aria-label="Drawing stroke color"
-                        type="color"
-                        value={color}
-                        onChange={(e) => setColor(e.target.value)}
-                        className="h-7 w-9 cursor-pointer rounded border border-[#2a2e39] bg-[#131722]"
-                      />
-                      <span className="font-mono text-[11px] uppercase text-[#9aa1b2]">
-                        {color}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {DRAWING_PRESET_COLORS.map((hex) => (
-                        <button
-                          key={hex}
-                          type="button"
-                          aria-label={`Select drawing color ${hex}`}
-                          onClick={() => setColor(hex)}
-                          style={{ backgroundColor: hex }}
-                          className={`h-5 w-5 rounded border ${
-                            color.toLowerCase() === hex.toLowerCase()
-                              ? "border-white ring-2 ring-[#2962ff]"
-                              : "border-[#2a2e39]"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                  <span className="text-[12px] text-[#b2b5be]">Line Width</span>
-                  <div className="flex items-center gap-1.5">
-                    {([1, 2, 3, 4] as const).map((w) => (
-                      <button
-                        key={w}
-                        type="button"
-                        onClick={() => setLineWidth(w)}
-                        className={`flex h-7 w-10 items-center justify-center rounded border text-[11px] font-mono ${
-                          lineWidth === w
-                            ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                            : "border-[#2a2e39] bg-[#131722] text-[#9aa1b2] hover:text-white"
-                        }`}
-                      >
-                        {w}px
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                  <span className="text-[12px] text-[#b2b5be]">Line Style</span>
-                  <div className="flex items-center gap-1.5">
-                    {(["solid", "dashed", "dotted"] as const).map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setLineStyle(s)}
-                        className={`h-7 rounded border px-3 text-[11px] capitalize ${
-                          lineStyle === s
-                            ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                            : "border-[#2a2e39] bg-[#131722] text-[#9aa1b2] hover:text-white"
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {supportsFill && (
-                  <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                    <span className="text-[12px] text-[#b2b5be]">Fill</span>
-                    <div className="flex items-center gap-3">
-                      <input
-                        aria-label="Drawing fill color"
-                        type="color"
-                        value={fillColor}
-                        onChange={(e) => setFillColor(e.target.value)}
-                        className="h-7 w-9 cursor-pointer rounded border border-[#2a2e39] bg-[#131722]"
-                      />
-                      <input
-                        aria-label="Fill opacity"
-                        type="range"
-                        min={0}
-                        max={80}
-                        value={Math.round(fillOpacity * 100)}
-                        onChange={(e) => setFillOpacity(Number(e.target.value) / 100)}
-                        className="h-1.5 flex-1 accent-[#2962ff]"
-                      />
-                      <span className="w-9 text-right font-mono text-[11px] text-[#9aa1b2]">
-                        {Math.round(fillOpacity * 100)}%
-                      </span>
-                    </div>
+              <div className="space-y-3.5 px-5 py-5 text-[13px]">
+                {supportsExtend && (
+                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                    <label htmlFor="drw-extend" className="text-[#d1d4dc]">
+                      Extend
+                    </label>
+                    <select
+                      id="drw-extend"
+                      value={extendMode}
+                      onChange={(e) => handleExtendModeChange(e.target.value)}
+                      className="h-9 w-full rounded-md border border-[#363a45] bg-[#181c27] px-3 text-[13px] text-[#f0f3fa] outline-none transition-colors hover:border-[#4c5265] focus:border-[#2962ff]"
+                    >
+                      <option value="none">None</option>
+                      <option value="left">Extend left</option>
+                      <option value="right">Extend right</option>
+                      <option value="both">Extend both</option>
+                    </select>
                   </div>
                 )}
 
-                {isAvwap && (
-                  <div className="space-y-2.5 border-t border-[#2a2e39] pt-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#d1d4dc]">
-                      <input
-                        type="checkbox"
-                        checked={avwapShowBands}
-                        onChange={(e) => setAvwapShowBands(e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[#2962ff]"
-                      />
-                      Show ±StdDev Bands
-                    </label>
-                    <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                      <label htmlFor="avwap-mult" className="text-[12px] text-[#b2b5be]">
-                        StdDev Multiplier
-                      </label>
-                      <input
-                        id="avwap-mult"
-                        type="number"
-                        min={0.25}
-                        max={4}
-                        step={0.25}
-                        value={avwapBandMult}
-                        onChange={(e) => {
-                          const v = Number.parseFloat(e.target.value);
-                          if (Number.isFinite(v) && v > 0) setAvwapBandMult(v);
-                        }}
-                        className="h-7 w-24 rounded border border-[#2a2e39] bg-[#131722] px-2 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
-                      />
+                {/* Border / Line row */}
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                    <span className="text-[#d1d4dc]">{isRectangle ? "Border" : "Line"}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label={isRectangle ? "Border style" : "Line style"}
+                        onClick={() => setOpenPicker((p) => (p === "border" ? null : "border"))}
+                        className={`flex h-9 items-center gap-2.5 rounded-md border px-2.5 transition-colors ${
+                          openPicker === "border"
+                            ? "border-[#2962ff] bg-[#181c27]"
+                            : "border-[#363a45] bg-[#181c27] hover:border-[#4c5265]"
+                        }`}
+                      >
+                        <span
+                          className="h-5 w-5 rounded border border-white/15"
+                          style={{ backgroundColor: color }}
+                        />
+                        <StrokePreviewLine color={color} width={lineWidth} style={lineStyle} />
+                      </button>
                     </div>
+                  </div>
+
+                  {openPicker === "border" && (
+                    <div className="ml-[160px] space-y-2.5 rounded-lg border border-[#363a45] bg-[#131722] p-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {DRAWING_PRESET_COLORS.map((hex) => (
+                          <button
+                            key={hex}
+                            type="button"
+                            aria-label={`Select drawing color ${hex}`}
+                            onClick={() => setColor(hex)}
+                            style={{ backgroundColor: hex }}
+                            className={`h-5 w-5 rounded border ${
+                              color.toLowerCase() === hex.toLowerCase()
+                                ? "border-white ring-2 ring-[#2962ff]"
+                                : "border-[#2a2e39]"
+                            }`}
+                          />
+                        ))}
+                        <input
+                          aria-label="Drawing stroke color"
+                          type="color"
+                          value={color}
+                          onChange={(e) => setColor(e.target.value)}
+                          className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {([1, 2, 3, 4] as const).map((w) => (
+                          <button
+                            key={w}
+                            type="button"
+                            onClick={() => setLineWidth(w)}
+                            className={`flex h-7 flex-1 items-center justify-center rounded border font-mono text-[11px] ${
+                              lineWidth === w
+                                ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
+                                : "border-[#2a2e39] bg-[#181c27] text-[#868993] hover:text-white"
+                            }`}
+                          >
+                            {w}px
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {(["solid", "dashed", "dotted"] as const).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setLineStyle(s)}
+                            className={`h-7 flex-1 rounded border text-[11px] capitalize ${
+                              lineStyle === s
+                                ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
+                                : "border-[#2a2e39] bg-[#181c27] text-[#868993] hover:text-white"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Middle line row (Rectangle / Channel) */}
+                {supportsMiddleLine && (
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                      <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
+                        <input
+                          type="checkbox"
+                          checked={showMiddleLine}
+                          onChange={(e) => setShowMiddleLine(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
+                        />
+                        <span>Middle line</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Middle line style"
+                          onClick={() => {
+                            if (!showMiddleLine) setShowMiddleLine(true);
+                            setOpenPicker((p) => (p === "middle" ? null : "middle"));
+                          }}
+                          className={`flex h-9 items-center gap-2.5 rounded-md border px-2.5 transition-colors ${
+                            openPicker === "middle"
+                              ? "border-[#2962ff] bg-[#181c27]"
+                              : "border-[#363a45] bg-[#181c27] hover:border-[#4c5265]"
+                          } ${showMiddleLine ? "opacity-100" : "opacity-60"}`}
+                        >
+                          <span
+                            className="h-5 w-5 rounded border border-white/15"
+                            style={{ backgroundColor: middleLineColor }}
+                          />
+                          <StrokePreviewLine
+                            color={middleLineColor}
+                            width={1.5}
+                            style={middleLineStyle}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {openPicker === "middle" && (
+                      <div className="ml-[160px] space-y-2.5 rounded-lg border border-[#363a45] bg-[#131722] p-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {DRAWING_PRESET_COLORS.map((hex) => (
+                            <button
+                              key={hex}
+                              type="button"
+                              onClick={() => setMiddleLineColor(hex)}
+                              style={{ backgroundColor: hex }}
+                              className={`h-5 w-5 rounded border ${
+                                middleLineColor.toLowerCase() === hex.toLowerCase()
+                                  ? "border-white ring-2 ring-[#2962ff]"
+                                  : "border-[#2a2e39]"
+                              }`}
+                            />
+                          ))}
+                          <input
+                            aria-label="Middle line color"
+                            type="color"
+                            value={middleLineColor}
+                            onChange={(e) => setMiddleLineColor(e.target.value)}
+                            className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {(["solid", "dashed", "dotted"] as const).map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setMiddleLineStyle(s)}
+                              className={`h-7 flex-1 rounded border text-[11px] capitalize ${
+                                middleLineStyle === s
+                                  ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
+                                  : "border-[#2a2e39] bg-[#181c27] text-[#868993] hover:text-white"
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Background row */}
+                {supportsFill && (
+                  <div className="space-y-2.5">
+                    <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                      <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
+                        <input
+                          type="checkbox"
+                          checked={fillEnabled}
+                          onChange={(e) => setFillEnabled(e.target.checked)}
+                          className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
+                        />
+                        <span>Background</span>
+                      </label>
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          aria-label="Background fill color"
+                          onClick={() => {
+                            if (!fillEnabled) setFillEnabled(true);
+                            setOpenPicker((p) => (p === "bg" ? null : "bg"));
+                          }}
+                          className={`flex h-9 w-9 items-center justify-center rounded-md border p-1.5 transition-colors ${
+                            openPicker === "bg"
+                              ? "border-[#2962ff] bg-[#181c27]"
+                              : "border-[#363a45] bg-[#181c27] hover:border-[#4c5265]"
+                          } ${fillEnabled ? "opacity-100" : "opacity-50"}`}
+                        >
+                          <span
+                            className="relative h-full w-full overflow-hidden rounded-sm border border-white/15"
+                            style={CHECKER_BG}
+                          >
+                            <span
+                              className="absolute inset-0"
+                              style={{ backgroundColor: fillColor, opacity: fillOpacity }}
+                            />
+                          </span>
+                        </button>
+                        <span className="font-mono text-[11px] text-[#787b86]">
+                          {fillEnabled ? `${Math.round(fillOpacity * 100)}%` : "Off"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {openPicker === "bg" && (
+                      <div className="ml-[160px] space-y-2.5 rounded-lg border border-[#363a45] bg-[#131722] p-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {DRAWING_PRESET_COLORS.map((hex) => (
+                            <button
+                              key={hex}
+                              type="button"
+                              onClick={() => setFillColor(hex)}
+                              style={{ backgroundColor: hex }}
+                              className={`h-5 w-5 rounded border ${
+                                fillColor.toLowerCase() === hex.toLowerCase()
+                                  ? "border-white ring-2 ring-[#2962ff]"
+                                  : "border-[#2a2e39]"
+                              }`}
+                            />
+                          ))}
+                          <input
+                            aria-label="Drawing fill color"
+                            type="color"
+                            value={fillColor}
+                            onChange={(e) => setFillColor(e.target.value)}
+                            className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-[#868993]">Opacity</span>
+                          <input
+                            aria-label="Fill opacity"
+                            type="range"
+                            min={0}
+                            max={90}
+                            step={5}
+                            value={Math.round(fillOpacity * 100)}
+                            onChange={(e) => setFillOpacity(Number(e.target.value) / 100)}
+                            className="flex-1 accent-[#2962ff]"
+                          />
+                          <span className="w-8 text-right font-mono text-[11px] text-[#d1d4dc]">
+                            {Math.round(fillOpacity * 100)}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {isPositionTool && (
-                  <div className="grid grid-cols-[120px_1fr] items-center gap-3 border-t border-[#2a2e39] pt-3">
-                    <label htmlFor="pos-rr" className="text-[12px] text-[#b2b5be]">
-                      Risk : Reward
+                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                    <label htmlFor="drw-rr" className="text-[#d1d4dc]">
+                      Risk / Reward
                     </label>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[11px] text-[#787b86]">1 :</span>
-                      <input
-                        id="pos-rr"
-                        type="number"
-                        min={0.5}
-                        max={20}
-                        step={0.5}
-                        value={rrRatio}
-                        onChange={(e) => {
-                          const v = Number.parseFloat(e.target.value);
-                          if (Number.isFinite(v) && v >= 0.5) setRrRatio(v);
-                        }}
-                        className="h-7 w-24 rounded border border-[#2a2e39] bg-[#131722] px-2 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
-                      />
-                    </div>
+                    <input
+                      id="drw-rr"
+                      type="number"
+                      min={0.25}
+                      max={20}
+                      step={0.25}
+                      value={rrRatio}
+                      onChange={(e) => {
+                        const parsed = Number.parseFloat(e.target.value);
+                        if (Number.isFinite(parsed) && parsed > 0) setRrRatio(parsed);
+                      }}
+                      className="h-9 w-28 rounded-md border border-[#363a45] bg-[#181c27] px-3 font-mono text-[13px] text-white outline-none focus:border-[#2962ff]"
+                    />
                   </div>
                 )}
 
-                {supportsExtend && (
-                  <div className="flex items-center gap-5 border-t border-[#2a2e39] pt-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#d1d4dc]">
+                {isAnchoredVwap && (
+                  <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                    <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
                       <input
                         type="checkbox"
-                        checked={extendLeft}
-                        onChange={(e) => setExtendLeft(e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[#2962ff]"
+                        checked={avwapShowBands}
+                        onChange={(e) => setAvwapShowBands(e.target.checked)}
+                        className="h-4 w-4 accent-[#f0f3fa]"
                       />
-                      Extend left
+                      <span>±StdDev Bands</span>
                     </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#d1d4dc]">
-                      <input
-                        type="checkbox"
-                        checked={extendRight}
-                        onChange={(e) => setExtendRight(e.target.checked)}
-                        className="h-3.5 w-3.5 accent-[#2962ff]"
-                      />
-                      Extend right
-                    </label>
+                    <input
+                      aria-label="Anchored VWAP standard deviation multiplier"
+                      type="number"
+                      min={0.5}
+                      max={4}
+                      step={0.5}
+                      value={avwapBandMult}
+                      disabled={!avwapShowBands}
+                      onChange={(e) => {
+                        const parsed = Number.parseFloat(e.target.value);
+                        if (Number.isFinite(parsed) && parsed > 0) setAvwapBandMult(parsed);
+                      }}
+                      className="h-9 w-24 rounded-md border border-[#363a45] bg-[#181c27] px-3 font-mono text-[13px] text-white outline-none focus:border-[#2962ff] disabled:opacity-40"
+                    />
                   </div>
                 )}
 
-                <div className="border-t border-[#2a2e39] pt-3">
-                  <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#d1d4dc]">
+                <div className="pt-1">
+                  <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-[#9aa1b2] hover:text-[#d1d4dc]">
                     <input
                       type="checkbox"
                       checked={locked}
                       onChange={(e) => setLocked(e.target.checked)}
-                      className="h-3.5 w-3.5 accent-[#2962ff]"
+                      className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
                     />
-                    Lock drawing position
+                    <span>Lock position</span>
                   </label>
                 </div>
               </div>
             )}
           </TabsPanel>
 
+          {/* TEXT TAB */}
           {!isVolumeProfile && (
-            <TabsPanel value="text" className="space-y-4 px-5 py-4">
+            <TabsPanel value="text" className="space-y-4 px-5 py-5 text-[13px]">
               <div className="space-y-1.5">
-                <label htmlFor="drw-label" className="block text-[12px] text-[#b2b5be]">
+                <label htmlFor="drw-label" className="block text-[#d1d4dc]">
                   Label / Annotation Text
                 </label>
-                <input
+                <textarea
                   id="drw-label"
-                  type="text"
-                  placeholder="Optional label displayed on chart"
+                  rows={3}
+                  placeholder="Add text"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  className="h-8 w-full rounded border border-[#2a2e39] bg-[#131722] px-2.5 text-[12px] text-white placeholder-[#5d606b] outline-none focus:border-[#2962ff]"
+                  className="w-full resize-none rounded-md border border-[#363a45] bg-[#181c27] px-3 py-2 text-[13px] text-[#f0f3fa] placeholder-[#5d606b] outline-none focus:border-[#2962ff]"
                 />
               </div>
 
-              <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                <label htmlFor="drw-font-size" className="text-[12px] text-[#b2b5be]">
-                  Font Size
+              <div className="grid grid-cols-[148px_minmax(0,1fr)] items-center gap-3">
+                <label htmlFor="drw-font-size" className="text-[#d1d4dc]">
+                  Text
                 </label>
-                <select
-                  id="drw-font-size"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(Number(e.target.value))}
-                  className="h-8 w-28 rounded border border-[#2a2e39] bg-[#131722] px-2 text-[12px] text-white outline-none focus:border-[#2962ff]"
-                >
-                  {[10, 11, 12, 14, 16, 18, 20, 24].map((sz) => (
-                    <option key={sz} value={sz}>
-                      {sz} px
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                <span className="text-[12px] text-[#b2b5be]">Text Color</span>
                 <div className="flex items-center gap-2">
                   <input
                     aria-label="Drawing text color"
                     type="color"
                     value={textColor}
                     onChange={(e) => setTextColor(e.target.value)}
-                    className="h-7 w-9 cursor-pointer rounded border border-[#2a2e39] bg-[#131722]"
+                    className="h-9 w-9 cursor-pointer rounded-md border border-[#363a45] bg-[#181c27] p-1"
                   />
-                  <span className="font-mono text-[11px] uppercase text-[#9aa1b2]">
-                    {textColor}
-                  </span>
+                  <select
+                    id="drw-font-size"
+                    value={fontSize}
+                    onChange={(e) => setFontSize(Number(e.target.value))}
+                    className="h-9 w-24 rounded-md border border-[#363a45] bg-[#181c27] px-2.5 text-[13px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
+                  >
+                    {[10, 11, 12, 14, 16, 18, 20, 24].map((sz) => (
+                      <option key={sz} value={sz}>
+                        {sz}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </TabsPanel>
           )}
 
-          <TabsPanel value="coordinates" className="max-h-[260px] space-y-3 overflow-y-auto px-5 py-4">
-            <p className="text-[11px] text-[#787b86]">
-              Exact fixed-point anchor prices (snapped to instrument tick size) and timestamps.
-            </p>
+          {/* COORDINATES TAB — Clean, overflow-free TradingView grid */}
+          <TabsPanel value="coordinates" className="max-h-[280px] space-y-3 overflow-y-auto px-5 py-5 text-[13px]">
+            <div className="grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1.35fr)] items-center gap-2.5 text-[11px] font-medium uppercase tracking-wider text-[#787b86]">
+              <span />
+              <span>Price</span>
+              <span>Date / Time</span>
+            </div>
             {drawing.anchors.slice(0, 8).map((_, idx) => (
               <div
                 key={idx}
-                className="grid grid-cols-[64px_1fr_1fr] items-center gap-2 rounded border border-[#2a2e39]/70 bg-[#131722] px-3 py-2"
+                className="grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1.35fr)] items-center gap-2.5"
               >
-                <span className="text-[11px] font-medium text-[#9aa1b2]">Point #{idx + 1}</span>
-                <label className="flex flex-col gap-0.5 text-[10px] text-[#787b86]">
-                  Price
-                  <input
-                    type="number"
-                    step={tickFloat}
-                    value={anchorPrices[idx] ?? ""}
-                    onChange={(e) => {
-                      const next = [...anchorPrices];
-                      next[idx] = e.target.value;
-                      setAnchorPrices(next);
-                    }}
-                    className="h-7 rounded border border-[#2a2e39] bg-[#1e222d] px-2 font-mono text-[11px] text-white outline-none focus:border-[#2962ff]"
-                  />
-                </label>
-                <label className="flex flex-col gap-0.5 text-[10px] text-[#787b86]">
-                  Unix Time (s)
-                  <input
-                    type="number"
-                    value={anchorTimes[idx] ?? 0}
-                    onChange={(e) => {
-                      const next = [...anchorTimes];
-                      next[idx] = Number(e.target.value);
-                      setAnchorTimes(next);
-                    }}
-                    className="h-7 rounded border border-[#2a2e39] bg-[#1e222d] px-2 font-mono text-[11px] text-white outline-none focus:border-[#2962ff]"
-                  />
-                </label>
+                <span className="font-mono text-[12px] text-[#9aa1b2]">#{idx + 1}</span>
+                <input
+                  aria-label={`Point ${idx + 1} price`}
+                  type="number"
+                  step={tickFloat}
+                  value={anchorPrices[idx] ?? ""}
+                  onChange={(e) => {
+                    const next = [...anchorPrices];
+                    next[idx] = e.target.value;
+                    setAnchorPrices(next);
+                  }}
+                  className="h-9 w-full min-w-0 rounded-md border border-[#363a45] bg-[#181c27] px-2.5 font-mono text-[12px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
+                />
+                <input
+                  aria-label={`Point ${idx + 1} date and time`}
+                  type="datetime-local"
+                  value={unixSecToDateTimeLocal(anchorTimes[idx] ?? 0)}
+                  onChange={(e) => {
+                    const next = [...anchorTimes];
+                    next[idx] = dateTimeLocalToUnixSec(e.target.value, anchorTimes[idx] ?? 0);
+                    setAnchorTimes(next);
+                  }}
+                  className="h-9 w-full min-w-0 rounded-md border border-[#363a45] bg-[#181c27] px-2 font-mono text-[11px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
+                />
               </div>
             ))}
           </TabsPanel>
 
-          <TabsPanel value="visibility" className="space-y-2.5 px-5 py-4">
-            <p className="mb-2 text-[11px] text-[#787b86]">
-              Choose which timeframe groups display this drawing.
-            </p>
+          {/* VISIBILITY TAB — Simple TradingView checkbox rows */}
+          <TabsPanel value="visibility" className="space-y-1.5 px-5 py-4 text-[13px]">
             {(
               [
-                ["minutes", "Minutes (1m, 5m, 15m, 30m)"],
-                ["hours", "Hours (1h, 4h)"],
-                ["days", "Days (D)"],
-                ["weeks", "Weeks (W)"],
-                ["months", "Months (M)"],
+                ["minutes", "Minutes"],
+                ["hours", "Hours"],
+                ["days", "Days"],
+                ["weeks", "Weeks"],
+                ["months", "Months"],
               ] as const
             ).map(([key, desc]) => (
               <label
                 key={key}
-                className="flex cursor-pointer items-center justify-between rounded border border-[#2a2e39]/70 bg-[#131722] px-3 py-2 text-[12px] text-[#d1d4dc]"
+                className="flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1.5 text-[#d1d4dc] transition-colors hover:bg-[#2a2e39]/40"
               >
-                <span>{desc}</span>
                 <input
                   type="checkbox"
                   checked={visibility[key]}
                   onChange={(e) =>
                     setVisibility({ ...visibility, [key]: e.target.checked })
                   }
-                  className="h-3.5 w-3.5 accent-[#2962ff]"
+                  className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
                 />
+                <span>{desc}</span>
               </label>
             ))}
           </TabsPanel>
         </Tabs>
 
-        <div className="flex items-center justify-between border-t border-[#2a2e39] px-5 py-3">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={handleReset}
-              className="h-8 rounded border border-[#2a2e39] bg-transparent px-2.5 text-[12px] text-[#9aa1b2] hover:bg-[#2a2e39] hover:text-white"
-            >
-              Reset defaults
-            </Button>
-            {isVolumeProfile && (
-              <Button
-                type="button"
-                onClick={() => {
-                  saveStoredVpDefaults(vpConfig);
-                  setSavedDefaultFlash(true);
-                }}
-                className="h-8 rounded border border-[#2a2e39] bg-transparent px-2.5 text-[12px] text-[#9aa1b2] hover:bg-[#2a2e39] hover:text-white"
-              >
-                {savedDefaultFlash ? "Default saved" : "Save as default"}
-              </Button>
-            )}
-          </div>
+        {/* Clean TradingView Footer */}
+        <div className="flex items-center justify-between border-t border-[#2a2e39] px-5 py-3.5">
+          <TvTemplateMenu
+            onReset={handleReset}
+            extraActionLabel={
+              isVolumeProfile
+                ? savedDefaultFlash
+                  ? "Saved as default"
+                  : "Save as default"
+                : undefined
+            }
+            onExtraAction={
+              isVolumeProfile
+                ? () => {
+                    saveStoredVpDefaults(vpConfig);
+                    setSavedDefaultFlash(true);
+                  }
+                : undefined
+            }
+          />
           <div className="flex items-center gap-2">
             <Button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="h-8 rounded border border-[#2a2e39] bg-transparent px-4 text-[12px] text-[#d1d4dc] hover:bg-[#2a2e39]"
+              className="h-8 rounded-md border border-[#363a45] bg-transparent px-4 text-[13px] font-medium text-[#d1d4dc] transition-colors hover:bg-[#2a2e39] hover:text-white"
             >
               Cancel
             </Button>
             <Button
               type="button"
               onClick={handleSave}
-              className="h-8 rounded bg-[#2962ff] px-4 text-[12px] font-medium text-white hover:bg-[#1e53e5]"
+              className="h-8 rounded-md bg-[#f0f3fa] px-4 text-[13px] font-semibold text-[#131722] transition-colors hover:bg-white"
             >
               OK
             </Button>

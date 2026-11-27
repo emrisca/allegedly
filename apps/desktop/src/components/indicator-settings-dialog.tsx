@@ -162,61 +162,64 @@ export function IndicatorSettingsDialog({
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]" />
       <DialogContent
         aria-label={`Indicator settings for ${draft.label}`}
-        className="fixed left-1/2 top-1/2 z-50 flex w-[460px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 flex w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#2a2e39] px-5 py-3.5">
-          <div>
-            <DialogTitle className="text-[15px] font-semibold text-white">
-              {draft.label}
-            </DialogTitle>
-            <DialogDescription className="text-[11px] text-[#787b86]">
-              Customize calculation inputs, visual style, and timeframe visibility
-            </DialogDescription>
-          </div>
-          <DialogClose className="flex h-7 w-7 items-center justify-center rounded text-[#787b86] hover:bg-[#2a2e39] hover:text-white">
-            ×
+        <div className="flex items-center justify-between px-5 pb-2 pt-4">
+          <DialogTitle className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
+            {draft.label}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Customize indicator calculation inputs, style, and visibility
+          </DialogDescription>
+          <DialogClose
+            aria-label="Close"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[#868993] transition-colors hover:bg-[#2a2e39] hover:text-[#f0f3fa]"
+          >
+            <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" strokeLinecap="round" />
+            </svg>
           </DialogClose>
         </div>
 
         <Tabs defaultValue="inputs" className="flex flex-col">
-          <TabsList className="flex gap-1 border-b border-[#2a2e39] px-5 pt-1">
+          <TabsList className="flex gap-5 border-b border-[#2a2e39] px-5">
             <TabsTab
               value="inputs"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Inputs
             </TabsTab>
             <TabsTab
               value="style"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Style
             </TabsTab>
             <TabsTab
               value="visibility"
-              className="border-b-2 border-transparent px-3 py-2 text-[12px] font-medium text-[#787b86] hover:text-white data-[selected]:border-[#2962ff] data-[selected]:text-white"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
             >
               Visibility
             </TabsTab>
           </TabsList>
 
-          <TabsPanel value="inputs" className="space-y-4 px-5 py-4">
-            <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-              <label htmlFor="ind-label" className="text-[12px] text-[#b2b5be]">
-                Display Name
+          <TabsPanel value="inputs" className="space-y-3.5 px-5 py-5 text-[13px]">
+            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+              <label htmlFor="ind-label" className="text-[#d1d4dc]">
+                Name
               </label>
               <input
                 id="ind-label"
                 type="text"
                 value={draft.label}
                 onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-                className="h-8 rounded border border-[#2a2e39] bg-[#131722] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
+                className="h-9 w-full min-w-0 rounded-md border border-[#363a45] bg-[#181c27] px-3 text-[13px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
               />
             </div>
 
             {usesPeriod && (
-              <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                <label htmlFor="ind-period" className="text-[12px] text-[#b2b5be]">
+              <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+                <label htmlFor="ind-period" className="text-[#d1d4dc]">
                   Length
                 </label>
                 <input
@@ -231,14 +234,14 @@ export function IndicatorSettingsDialog({
                       period: Math.max(1, Math.min(500, Number(e.target.value) || 1)),
                     })
                   }
-                  className="h-8 w-28 rounded border border-[#2a2e39] bg-[#131722] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
+                  className="h-9 w-28 rounded-md border border-[#363a45] bg-[#181c27] px-3 font-mono text-[13px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
                 />
               </div>
             )}
 
             {usesSource && (
-              <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                <label htmlFor="ind-source" className="text-[12px] text-[#b2b5be]">
+              <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+                <label htmlFor="ind-source" className="text-[#d1d4dc]">
                   Source
                 </label>
                 <select
@@ -247,58 +250,44 @@ export function IndicatorSettingsDialog({
                   onChange={(e) =>
                     setDraft({ ...draft, source: e.target.value as IndicatorPriceSource })
                   }
-                  className="h-8 w-44 rounded border border-[#2a2e39] bg-[#131722] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
+                  className="h-9 w-full rounded-md border border-[#363a45] bg-[#181c27] px-3 text-[13px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
                 >
                   <option value="close">Close</option>
                   <option value="open">Open</option>
                   <option value="high">High</option>
                   <option value="low">Low</option>
-                  <option value="hl2">HL2 (High+Low)/2</option>
-                  <option value="hlc3">HLC3 (H+L+C)/3</option>
-                  <option value="ohlc4">OHLC4 (O+H+L+C)/4</option>
+                  <option value="hl2">HL2</option>
+                  <option value="hlc3">HLC3</option>
+                  <option value="ohlc4">OHLC4</option>
                 </select>
               </div>
             )}
 
-            {draft.luauScript !== undefined && draft.luauScript !== null && (
+            {draft.luauScript && (
               <div className="space-y-1.5">
-                <label htmlFor="ind-luau" className="block text-[12px] text-[#b2b5be]">
-                  Luau Script
+                <label htmlFor="ind-script" className="block text-[#d1d4dc]">
+                  Script
                 </label>
                 <textarea
-                  id="ind-luau"
+                  id="ind-script"
                   rows={5}
                   value={draft.luauScript}
                   onChange={(e) => setDraft({ ...draft, luauScript: e.target.value })}
-                  className="w-full rounded border border-[#2a2e39] bg-[#131722] p-2.5 font-mono text-[11px] text-[#d1d4dc] outline-none focus:border-[#2962ff]"
+                  className="w-full rounded-md border border-[#363a45] bg-[#131722] p-2.5 font-mono text-[11px] text-[#d1d4dc] outline-none focus:border-[#2962ff]"
                 />
               </div>
             )}
 
             {!usesPeriod && !usesSource && !draft.luauScript && (
-              <p className="text-[12px] text-[#787b86]">
-                Computed directly from bar buy/sell trade delta. Use Style or Visibility tabs to customize appearance.
-              </p>
+              <p className="text-[12px] text-[#787b86]">No configurable inputs for this study.</p>
             )}
           </TabsPanel>
 
-          <TabsPanel value="style" className="space-y-4 px-5 py-4">
-            <div className="grid grid-cols-[120px_1fr] items-start gap-3">
-              <span className="pt-1 text-[12px] text-[#b2b5be]">Color</span>
+          <TabsPanel value="style" className="space-y-3.5 px-5 py-5 text-[13px]">
+            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-start gap-3">
+              <span className="pt-1.5 text-[#d1d4dc]">Color</span>
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    aria-label="Indicator custom color"
-                    type="color"
-                    value={draft.color}
-                    onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-                    className="h-7 w-9 cursor-pointer rounded border border-[#2a2e39] bg-[#131722]"
-                  />
-                  <span className="font-mono text-[11px] uppercase text-[#9aa1b2]">
-                    {draft.color}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {INDICATOR_PRESET_COLORS.map((hex) => (
                     <button
                       key={hex}
@@ -313,22 +302,29 @@ export function IndicatorSettingsDialog({
                       }`}
                     />
                   ))}
+                  <input
+                    aria-label="Indicator custom color"
+                    type="color"
+                    value={draft.color}
+                    onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+                    className="h-5 w-6 cursor-pointer rounded border border-[#363a45] bg-transparent p-0"
+                  />
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-              <span className="text-[12px] text-[#b2b5be]">Line Width</span>
+            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+              <span className="text-[#d1d4dc]">Line width</span>
               <div className="flex items-center gap-1.5">
                 {([1, 2, 3, 4] as const).map((w) => (
                   <button
                     key={w}
                     type="button"
                     onClick={() => setDraft({ ...draft, lineWidth: w })}
-                    className={`flex h-7 w-10 items-center justify-center rounded border text-[11px] ${
+                    className={`flex h-8 flex-1 items-center justify-center rounded-md border font-mono text-[12px] ${
                       draft.lineWidth === w
                         ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                        : "border-[#2a2e39] bg-[#131722] text-[#9aa1b2] hover:text-white"
+                        : "border-[#363a45] bg-[#181c27] text-[#868993] hover:text-white"
                     }`}
                   >
                     {w}px
@@ -337,18 +333,18 @@ export function IndicatorSettingsDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-              <span className="text-[12px] text-[#b2b5be]">Line Style</span>
+            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+              <span className="text-[#d1d4dc]">Line style</span>
               <div className="flex items-center gap-1.5">
                 {(["solid", "dashed", "dotted"] as const).map((style) => (
                   <button
                     key={style}
                     type="button"
                     onClick={() => setDraft({ ...draft, lineStyle: style })}
-                    className={`h-7 rounded border px-3 text-[11px] capitalize ${
+                    className={`h-8 flex-1 rounded-md border text-[12px] capitalize ${
                       draft.lineStyle === style
                         ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                        : "border-[#2a2e39] bg-[#131722] text-[#9aa1b2] hover:text-white"
+                        : "border-[#363a45] bg-[#181c27] text-[#868993] hover:text-white"
                     }`}
                   >
                     {style}
@@ -357,64 +353,65 @@ export function IndicatorSettingsDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-              <label htmlFor="ind-opacity" className="text-[12px] text-[#b2b5be]">
-                Opacity ({Math.round(draft.opacity * 100)}%)
+            <div className="grid grid-cols-[132px_minmax(0,1fr)] items-center gap-3">
+              <label htmlFor="ind-opacity" className="text-[#d1d4dc]">
+                Opacity
               </label>
-              <input
-                id="ind-opacity"
-                type="range"
-                min={10}
-                max={100}
-                step={5}
-                value={Math.round(draft.opacity * 100)}
-                onChange={(e) =>
-                  setDraft({ ...draft, opacity: Math.max(0.1, Number(e.target.value) / 100) })
-                }
-                className="w-full accent-[#2962ff]"
-              />
+              <div className="flex items-center gap-2.5">
+                <input
+                  id="ind-opacity"
+                  type="range"
+                  min={10}
+                  max={100}
+                  step={5}
+                  value={Math.round(draft.opacity * 100)}
+                  onChange={(e) =>
+                    setDraft({ ...draft, opacity: Math.max(0.1, Number(e.target.value) / 100) })
+                  }
+                  className="flex-1 accent-[#2962ff]"
+                />
+                <span className="w-9 text-right font-mono text-[11px] text-[#9aa1b2]">
+                  {Math.round(draft.opacity * 100)}%
+                </span>
+              </div>
             </div>
 
             <div className="space-y-2 border-t border-[#2a2e39] pt-3">
-              <label className="flex cursor-pointer items-center gap-2.5 text-[12px] text-[#d1d4dc]">
+              <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
                 <input
                   type="checkbox"
                   checked={draft.showPriceLabel}
                   onChange={(e) => setDraft({ ...draft, showPriceLabel: e.target.checked })}
-                  className="h-3.5 w-3.5 rounded accent-[#2962ff]"
+                  className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
                 />
-                Show last value on price scale
+                <span>Labels on price scale</span>
               </label>
-              <label className="flex cursor-pointer items-center gap-2.5 text-[12px] text-[#d1d4dc]">
+              <label className="flex cursor-pointer items-center gap-2.5 text-[#d1d4dc]">
                 <input
                   type="checkbox"
                   checked={draft.showPriceLine}
                   onChange={(e) => setDraft({ ...draft, showPriceLine: e.target.checked })}
-                  className="h-3.5 w-3.5 rounded accent-[#2962ff]"
+                  className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
                 />
-                Show horizontal price line
+                <span>Price line</span>
               </label>
             </div>
           </TabsPanel>
 
-          <TabsPanel value="visibility" className="space-y-2.5 px-5 py-4">
-            <p className="mb-2 text-[11px] text-[#787b86]">
-              Choose which chart timeframe groups display this indicator.
-            </p>
+          <TabsPanel value="visibility" className="space-y-1.5 px-5 py-4 text-[13px]">
             {(
               [
-                ["minutes", "Minutes (1m, 5m, 15m, 30m)"],
-                ["hours", "Hours (1h, 4h)"],
-                ["days", "Days (D)"],
-                ["weeks", "Weeks (W)"],
-                ["months", "Months (M)"],
+                ["minutes", "Minutes"],
+                ["hours", "Hours"],
+                ["days", "Days"],
+                ["weeks", "Weeks"],
+                ["months", "Months"],
               ] as const
             ).map(([key, desc]) => (
               <label
                 key={key}
-                className="flex cursor-pointer items-center justify-between rounded border border-[#2a2e39]/70 bg-[#131722] px-3 py-2 text-[12px] text-[#d1d4dc]"
+                className="flex cursor-pointer items-center gap-3 rounded-md px-1.5 py-1.5 text-[#d1d4dc] transition-colors hover:bg-[#2a2e39]/40"
               >
-                <span>{desc}</span>
                 <input
                   type="checkbox"
                   checked={draft.visibility[key]}
@@ -424,33 +421,34 @@ export function IndicatorSettingsDialog({
                       visibility: { ...draft.visibility, [key]: e.target.checked },
                     })
                   }
-                  className="h-3.5 w-3.5 rounded accent-[#2962ff]"
+                  className="h-4 w-4 rounded border-[#363a45] bg-[#181c27] accent-[#f0f3fa]"
                 />
+                <span>{desc}</span>
               </label>
             ))}
           </TabsPanel>
         </Tabs>
 
-        <div className="flex items-center justify-between border-t border-[#2a2e39] px-5 py-3">
+        <div className="flex items-center justify-between border-t border-[#2a2e39] px-5 py-3.5">
           <Button
             type="button"
             onClick={handleReset}
-            className="h-8 rounded border border-[#2a2e39] bg-transparent px-3 text-[12px] text-[#9aa1b2] hover:bg-[#2a2e39] hover:text-white"
+            className="h-8 rounded-md border border-[#363a45] bg-transparent px-3 text-[12px] font-medium text-[#d1d4dc] transition-colors hover:bg-[#2a2e39] hover:text-white"
           >
-            Reset defaults
+            Defaults
           </Button>
           <div className="flex items-center gap-2">
             <Button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="h-8 rounded border border-[#2a2e39] bg-transparent px-4 text-[12px] text-[#d1d4dc] hover:bg-[#2a2e39]"
+              className="h-8 rounded-md border border-[#363a45] bg-transparent px-4 text-[13px] font-medium text-[#d1d4dc] transition-colors hover:bg-[#2a2e39] hover:text-white"
             >
               Cancel
             </Button>
             <Button
               type="button"
               onClick={handleSave}
-              className="h-8 rounded bg-[#2962ff] px-4 text-[12px] font-medium text-white hover:bg-[#1e53e5]"
+              className="h-8 rounded-md bg-[#f0f3fa] px-4 text-[13px] font-semibold text-[#131722] transition-colors hover:bg-white"
             >
               OK
             </Button>
