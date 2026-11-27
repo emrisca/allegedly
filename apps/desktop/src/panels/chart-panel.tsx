@@ -57,6 +57,8 @@ import {
   decodeTpoProfileBitmask,
   decodeVolumeProfile,
   fetchHistoricalOhlc,
+  alignTimeSecToTimeframe,
+  timeframeBucketCloseSec,
   timeframeToSeconds,
   FrameType,
   type FootprintCell,
@@ -776,10 +778,54 @@ export function ChartOverlayToolbar({
   );
 }
 
-function seedInitialCandles(
+function hashSymbolSeed(symbol: string): number {
+  let h = 0x9e3779b9;
+  for (let i = 0; i < symbol.length; i++) {
+    h = (Math.imul(h, 31) + symbol.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * Deterministic multi-scale continuous price path for Paper/Sim mode.
+ * Evaluating the exact same function at any timestamp `tSec` guarantees that
+ * switching between 1m, 5m, 15m, 1h, 4h, D, W, M shows true open-to-close
+ * timeframe aggregation of the exact same underlying market history.
+ */
+function simRawSignal(seed: number, tSec: number): number {
+  const s1 = (seed % 997) * 0.017;
+  const s2 = ((seed >>> 10) % 991) * 0.023;
+  const s3 = ((seed >>> 20) % 983) * 0.031;
+  // Multi-horizon waves spanning months -> weeks -> days -> hours -> 15m -> 1m
+  const macro =
+    Math.sin(tSec / 5_184_000 + s1) * 0.14 +
+    Math.cos(tSec / 1_728_000 + s2) * 0.085;
+  const swing =
+    Math.sin(tSec / 345_600 + s2 * 1.7) * 0.045 +
+    Math.cos(tSec / 108_000 + s3) * 0.026;
+  const intraday =
+    Math.sin(tSec / 21_600 + s1 * 2.3) * 0.014 +
+    Math.cos(tSec / 5_400 + s3 * 1.4) * 0.0075;
+  const micro =
+    Math.sin(tSec / 1_350 + s2 * 3.1) * 0.0036 +
+    Math.cos(tSec / 360 + s1 * 4.7) * 0.0018 +
+    Math.sin(tSec / 95 + s3 * 5.3) * 0.0009;
+  return macro + swing + intraday + micro;
+}
+
+function simHashNoise(seed: number, idx: number): number {
+  let x = (seed ^ Math.imul(idx | 0, 0x27d4eb2d)) >>> 0;
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x85ebca6b) >>> 0;
+  x ^= x >>> 13;
+  return (x >>> 0) / 0xffffffff;
+}
+
+function buildSimCandleWindow(
   symbol: string,
-  timeframe = "D",
-  count = 1500,
+  timeframe: string,
+  bucketOpens: number[],
+  nowSec: number,
 ): {
   candles: CandlestickData<UTCTimestamp>[];
   volumes: HistogramData<UTCTimestamp>[];
@@ -788,56 +834,50 @@ function seedInitialCandles(
 } {
   const meta = getSymbolMeta(symbol);
   const base = meta.basePrice;
+  const seed = hashSymbolSeed(symbol);
+  const anchorSignal = simRawSignal(seed, nowSec);
+  const priceAt = (tSec: number) =>
+    Math.max(base * 0.15, base * (1 + (simRawSignal(seed, tSec) - anchorSignal)));
+
   const barSec = Math.max(60, timeframeToSeconds(timeframe));
-  const tfScale = Math.min(4.2, Math.max(0.75, Math.sqrt(barSec / 900)));
-  const volScale = base * 0.0024 * tfScale;
-  const nowSec = Math.floor(Date.now() / (barSec * 1000)) * barSec;
   const candles: CandlestickData<UTCTimestamp>[] = [];
   const volumes: HistogramData<UTCTimestamp>[] = [];
   const buyVolumes: number[] = [];
   const sellVolumes: number[] = [];
 
-  let seed = 0x9e3779b9;
-  for (let i = 0; i < symbol.length; i++) {
-    seed = (seed * 31 + symbol.charCodeAt(i)) >>> 0;
-  }
-  for (let i = 0; i < timeframe.length; i++) {
-    seed = (seed * 37 + timeframe.charCodeAt(i)) >>> 0;
-  }
-  const nextRand = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 0xffffffff;
-  };
+  for (const openSec of bucketOpens) {
+    const rawCloseSec = timeframeBucketCloseSec(openSec, timeframe);
+    const effectiveEndSec = Math.min(rawCloseSec, nowSec);
+    const span = Math.max(1, effectiveEndSec - openSec);
+    // Sample sub-intervals inside [openSec, effectiveEndSec] so each candle's OHLC
+    // genuinely reflects the price path over its exact live duration.
+    const samples = Math.min(16, Math.max(4, Math.round(Math.log2(barSec / 60 + 2) * 3)));
+    const open = priceAt(openSec);
+    const close = priceAt(effectiveEndSec);
+    let high = Math.max(open, close);
+    let low = Math.min(open, close);
+    for (let k = 1; k < samples; k++) {
+      const p = priceAt(openSec + (span * k) / samples);
+      if (p > high) high = p;
+      if (p < low) low = p;
+    }
 
-  let price = base * 0.86;
-  for (let i = count; i >= 1; i--) {
-    const progress = (count - i) / count;
-    // Multi-regime macro + swing cycles so 1,500+ candles look realistic when zoomed out
-    const wave =
-      Math.sin(progress * Math.PI * 6.5) * volScale * 0.22 +
-      Math.cos(progress * Math.PI * 17) * volScale * 0.14;
-    const regimeDrift =
-      progress < 0.25
-        ? volScale * 0.12
-        : progress < 0.52
-          ? -volScale * 0.08
-          : progress < 0.84
-            ? volScale * 0.18
-            : -volScale * 0.09;
-    const noise = (nextRand() - 0.495) * volScale * 2.15;
-    const open = price;
-    const close = Math.max(meta.basePrice * 0.18, open + regimeDrift + wave + noise);
-    const wickUp = (0.18 + nextRand() * 0.92) * volScale;
-    const wickDn = (0.18 + nextRand() * 0.92) * volScale;
-    const high = Math.max(open, close) + wickUp;
-    const low = Math.max(meta.basePrice * 0.15, Math.min(open, close) - wickDn);
-    price = close;
+    // Add realistic proportional intra-bar wick energy scaled by sqrt(elapsedMinutes)
+    const elapsedMin = Math.max(0.25, span / 60);
+    const wickScale = base * 0.00055 * Math.sqrt(elapsedMin);
+    const n1 = simHashNoise(seed, Math.floor(openSec / 60));
+    const n2 = simHashNoise(seed ^ 0x517cc1b7, Math.floor(openSec / 60));
+    high += (0.12 + n1 * 0.65) * wickScale;
+    low = Math.max(base * 0.1, low - (0.12 + n2 * 0.65) * wickScale);
 
-    const vol = Math.round((22 + nextRand() * 110) * (0.8 + tfScale * 0.35));
-    const buyShare = close >= open ? 0.56 + nextRand() * 0.12 : 0.34 + nextRand() * 0.12;
+    // Volume scales linearly with candle duration (15m ~= 15x a 1m bar's volume)
+    const volNoise = 0.55 + simHashNoise(seed ^ 0x9e3779b9, Math.floor(openSec / 60)) * 1.15;
+    const vol = Math.max(1, Math.round(elapsedMin * 42 * volNoise));
+    const buyShare = close >= open ? 0.55 + n1 * 0.14 : 0.31 + n2 * 0.14;
     const buyVol = vol * buyShare;
     const sellVol = Math.max(0, vol - buyVol);
-    const t = (nowSec - i * barSec) as UTCTimestamp;
+
+    const t = openSec as UTCTimestamp;
     candles.push({ time: t, open, high, low, close });
     volumes.push({
       time: t,
@@ -848,16 +888,36 @@ function seedInitialCandles(
     sellVolumes.push(sellVol);
   }
 
-  const finalClose = candles[candles.length - 1]?.close ?? base;
-  const delta = base - finalClose;
-  for (const c of candles) {
-    c.open = Math.max(meta.basePrice * 0.05, c.open + delta);
-    c.high = Math.max(c.open, c.high + delta);
-    c.low = Math.max(meta.basePrice * 0.04, c.low + delta);
-    c.close = Math.max(meta.basePrice * 0.05, c.close + delta);
-  }
-
   return { candles, volumes, buyVolumes, sellVolumes };
+}
+
+function stepBucketOpenBack(openSec: number, tf: string): number {
+  if (tf === "M" || tf === "1M") {
+    const d = new Date(openSec * 1000);
+    return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1) / 1000);
+  }
+  return openSec - Math.max(60, timeframeToSeconds(tf));
+}
+
+function seedInitialCandles(
+  symbol: string,
+  timeframe = "D",
+  count = 1500,
+): {
+  candles: CandlestickData<UTCTimestamp>[];
+  volumes: HistogramData<UTCTimestamp>[];
+  buyVolumes: number[];
+  sellVolumes: number[];
+} {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const currentBucket = alignTimeSecToTimeframe(nowSec, timeframe);
+  const opens: number[] = new Array(count);
+  let cur = currentBucket;
+  for (let i = count - 1; i >= 0; i--) {
+    opens[i] = cur;
+    cur = stepBucketOpenBack(cur, timeframe);
+  }
+  return buildSimCandleWindow(symbol, timeframe, opens, nowSec);
 }
 
 function generateOlderSimCandles(
@@ -871,58 +931,14 @@ function generateOlderSimCandles(
   buyVolumes: number[];
   sellVolumes: number[];
 } {
-  const meta = getSymbolMeta(symbol);
-  const barSec = Math.max(60, timeframeToSeconds(timeframe));
-  const tfScale = Math.min(4.2, Math.max(0.75, Math.sqrt(barSec / 900)));
-  const volScale = meta.basePrice * 0.0024 * tfScale;
-  const oldestTime = Number(oldestBar.time);
-  let seed = (oldestTime ^ 0x517cc1b7) >>> 0;
-  for (let i = 0; i < symbol.length; i++) {
-    seed = (seed * 31 + symbol.charCodeAt(i)) >>> 0;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const opens: number[] = new Array(count);
+  let cur = stepBucketOpenBack(Number(oldestBar.time), timeframe);
+  for (let i = count - 1; i >= 0; i--) {
+    opens[i] = cur;
+    cur = stepBucketOpenBack(cur, timeframe);
   }
-  const nextRand = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 0xffffffff;
-  };
-
-  // Walk backwards from oldestBar.open so the splice is gap-free
-  const revCandles: CandlestickData<UTCTimestamp>[] = [];
-  const revVolumes: HistogramData<UTCTimestamp>[] = [];
-  const revBuy: number[] = [];
-  const revSell: number[] = [];
-  let nextOpen = oldestBar.open;
-
-  for (let step = 1; step <= count; step++) {
-    const close = nextOpen;
-    const wave = Math.sin((step / count) * Math.PI * 5) * volScale * 0.16;
-    const delta = (nextRand() - 0.5) * volScale * 2.1 + wave;
-    const open = Math.max(meta.basePrice * 0.12, close - delta);
-    const wickUp = (0.18 + nextRand() * 0.85) * volScale;
-    const wickDn = (0.18 + nextRand() * 0.85) * volScale;
-    const high = Math.max(open, close) + wickUp;
-    const low = Math.max(meta.basePrice * 0.1, Math.min(open, close) - wickDn);
-    nextOpen = open;
-
-    const vol = Math.round((22 + nextRand() * 105) * (0.8 + tfScale * 0.35));
-    const buyShare = close >= open ? 0.56 + nextRand() * 0.12 : 0.34 + nextRand() * 0.12;
-    const buyVol = vol * buyShare;
-    const sellVol = Math.max(0, vol - buyVol);
-    const t = (oldestTime - step * barSec) as UTCTimestamp;
-    revCandles.push({ time: t, open, high, low, close });
-    revVolumes.push({
-      time: t,
-      value: vol,
-      color: close >= open ? "rgba(130, 142, 165, 0.22)" : "rgba(95, 103, 122, 0.18)",
-    });
-    revBuy.push(buyVol);
-    revSell.push(sellVol);
-  }
-
-  revCandles.reverse();
-  revVolumes.reverse();
-  revBuy.reverse();
-  revSell.reverse();
-  return { candles: revCandles, volumes: revVolumes, buyVolumes: revBuy, sellVolumes: revSell };
+  return buildSimCandleWindow(symbol, timeframe, opens, nowSec);
 }
 
 /**
@@ -1997,10 +2013,11 @@ export function ChartPanel({
       setCountdownText("");
       return;
     }
-    const dur = getTimeframeDurationSec(timeframe);
     const updateClock = () => {
       const nowSec = Math.floor(Date.now() / 1000);
-      const rem = dur - (nowSec % dur);
+      const openSec = alignTimeSecToTimeframe(nowSec, timeframe);
+      const closeSec = timeframeBucketCloseSec(openSec, timeframe);
+      const rem = Math.max(1, closeSec - nowSec);
       setCountdownText(formatCountdownClock(rem));
     };
     updateClock();
@@ -2411,6 +2428,10 @@ export function ChartPanel({
     let tpoRows: TpoRow128[] = [];
 
     let pendingBar: CandlestickData<UTCTimestamp> | null = null;
+    let liveBucketSec = -1;
+    let liveBucketBar: CandlestickData<UTCTimestamp> | null = null;
+    let liveBucketBaseVol = 0;
+    const liveBucketSubVols = new Map<number, number>();
     let pendingVol: HistogramData<UTCTimestamp> | null = null;
     let pendingBuyVol = 0;
     let pendingSellVol = 0;
@@ -2585,6 +2606,10 @@ export function ChartPanel({
             Math.max(0, c.volume - activeBuyVolumes[idx]),
           );
           historicalLoaded = true;
+          liveBucketSec = -1;
+          liveBucketBar = null;
+          liveBucketBaseVol = 0;
+          liveBucketSubVols.clear();
           const lastBar = activeCandles[activeCandles.length - 1];
           activeBarTimeSec = Number(lastBar.time);
           applyMainSeriesData(activeCandles, activeVolumes);
@@ -2756,13 +2781,16 @@ export function ChartPanel({
           const { bars } = decodeLiveBarUpdateBatch(buf);
           const latest = bars[bars.length - 1];
           if (!latest) return;
-          const t = Number(latest.tsOpenNs / 1_000_000_000n) as UTCTimestamp;
+          const rawSubSec = Number(latest.tsOpenNs / 1_000_000_000n);
+          const bucketSec = alignTimeSecToTimeframe(rawSubSec, timeframe);
+          const t = bucketSec as UTCTimestamp;
           const rawOpen = Number(latest.openTick) * tickFloat;
           const rawHigh = Number(latest.highTick) * tickFloat;
           const rawLow = Number(latest.lowTick) * tickFloat;
           const rawClose = Number(latest.closeTick) * tickFloat;
-          const totalVol = Number(latest.volumeE9) / 1e9;
-          const lastSeed = activeCandles[activeCandles.length - 1]?.close ?? symMeta.basePrice;
+          const subVol = Number(latest.volumeE9) / 1e9;
+          const lastCandle = activeCandles[activeCandles.length - 1];
+          const lastSeed = lastCandle?.close ?? symMeta.basePrice;
           const ratio =
             !historicalLoaded &&
             dataSource === "paper_sim" &&
@@ -2770,17 +2798,60 @@ export function ChartPanel({
             Math.abs(rawClose - lastSeed) / Math.max(1, lastSeed) > 0.35
               ? lastSeed / rawClose
               : 1;
-          const open = rawOpen * ratio;
-          const high = rawHigh * ratio;
-          const low = rawLow * ratio;
-          const close = rawClose * ratio;
-          pendingBar = { time: t, open, high, low, close };
+          const inOpen = rawOpen * ratio;
+          const inHigh = rawHigh * ratio;
+          const inLow = rawLow * ratio;
+          const inClose = rawClose * ratio;
+
+          // Accumulate sub-bars inside the current timeframe bucket so a 15m candle
+          // stays live for the full 15 minutes from open to close (5m = 5m, 1h = 1h, etc.).
+          if (liveBucketSec !== bucketSec) {
+            liveBucketSec = bucketSec;
+            liveBucketSubVols.clear();
+            const existingSameBucket =
+              lastCandle && Number(lastCandle.time) === bucketSec ? lastCandle : null;
+            liveBucketBaseVol =
+              existingSameBucket && activeVolumes.length > 0
+                ? activeVolumes[activeVolumes.length - 1].value
+                : 0;
+            liveBucketBar = existingSameBucket
+              ? {
+                  time: t,
+                  open: existingSameBucket.open,
+                  high: Math.max(existingSameBucket.high, inHigh),
+                  low: Math.min(existingSameBucket.low, inLow),
+                  close: inClose,
+                }
+              : {
+                  time: t,
+                  open: inOpen,
+                  high: inHigh,
+                  low: inLow,
+                  close: inClose,
+                };
+          } else if (liveBucketBar) {
+            liveBucketBar = {
+              time: t,
+              open: liveBucketBar.open,
+              high: Math.max(liveBucketBar.high, inHigh),
+              low: Math.min(liveBucketBar.low, inLow),
+              close: inClose,
+            };
+          }
+
+          liveBucketSubVols.set(rawSubSec, subVol);
+          let liveAddedVol = 0;
+          for (const v of liveBucketSubVols.values()) liveAddedVol += v;
+          const totalVol = liveBucketBaseVol + liveAddedVol;
+
+          const barOut = liveBucketBar ?? { time: t, open: inOpen, high: inHigh, low: inLow, close: inClose };
+          pendingBar = barOut;
           pendingVol = {
             time: t,
             value: totalVol,
-            color: close >= open ? "rgba(130, 142, 165, 0.24)" : "rgba(95, 103, 122, 0.2)",
+            color: barOut.close >= barOut.open ? "rgba(130, 142, 165, 0.24)" : "rgba(95, 103, 122, 0.2)",
           };
-          pendingBuyVol = totalVol * (close >= open ? 0.62 : 0.38);
+          pendingBuyVol = totalVol * (barOut.close >= barOut.open ? 0.62 : 0.38);
           pendingSellVol = Math.max(0, totalVol - pendingBuyVol);
           scheduleFlush();
         } else if (hdr.frameType === FrameType.LIVE_FOOTPRINT_DELTA) {

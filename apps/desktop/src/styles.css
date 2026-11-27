@@ -55,6 +55,18 @@
     font-size: inherit;
   }
 
+  :where([data-slot]):focus-visible,
+  :is(a, summary):focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  [data-slot="tabs-tab"]:focus-visible,
+  [data-slot="tabs-tab"]:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
   [data-slot="toolbar"] {
     padding: 0;
     border: 0;

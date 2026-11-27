@@ -634,7 +634,7 @@ export function ColorPickerButton({
                 commitColor(hexDraft, true);
                 setCustomMode(false);
               }}
-              className="rounded-md bg-[#f0f3fa] px-2.5 py-1 text-[11px] font-semibold text-[#131722] transition-colors hover:bg-white"
+              className="rounded-md bg-[#2962ff] px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-[#1e53e5]"
             >
               Add
             </button>

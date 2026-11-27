@@ -245,7 +245,7 @@ export function LeftDrawingRail({
           onClick={onToggleMagnet}
           className={
             magnetEnabled
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#e6e8ee] text-[#0c0d11] shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/20 text-[#5b9cf6] hover:bg-[#2962ff]/30 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
               : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
@@ -395,7 +395,7 @@ export function LeftDrawingRail({
         onClick={onToggleFloatingBar}
         className={
           showFloatingBar
-            ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#e6e8ee] text-[#0c0d11] shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+            ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/20 text-[#5b9cf6] hover:bg-[#2962ff]/30 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
             : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
         }
       >

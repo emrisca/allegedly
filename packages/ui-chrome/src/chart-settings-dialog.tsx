@@ -1498,7 +1498,7 @@ export function ChartSettingsDialog({
                       <button
                         type="button"
                         onClick={handleSaveTemplateSubmit}
-                        className="h-7 rounded bg-[#f1f3f8] px-2 text-[11px] font-semibold text-[#111318] hover:bg-white"
+                        className="h-7 rounded bg-[#2962ff] px-2 text-[11px] font-semibold text-white hover:bg-[#1e53e5]"
                       >
                         Save
                       </button>

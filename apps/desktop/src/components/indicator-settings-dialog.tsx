@@ -186,19 +186,19 @@ export function IndicatorSettingsDialog({
           <TabsList className="flex gap-5 border-b border-[#2a2e39] px-5">
             <TabsTab
               value="inputs"
-              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#2962ff] data-[selected]:text-white"
             >
               Inputs
             </TabsTab>
             <TabsTab
               value="style"
-              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#2962ff] data-[selected]:text-white"
             >
               Style
             </TabsTab>
             <TabsTab
               value="visibility"
-              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#f0f3fa] data-[selected]:text-[#f0f3fa]"
+              className="border-b-2 border-transparent pb-2.5 pt-1 text-[13px] font-medium text-[#868993] transition-colors hover:text-[#f0f3fa] data-[selected]:border-[#2962ff] data-[selected]:text-white"
             >
               Visibility
             </TabsTab>
@@ -437,7 +437,7 @@ export function IndicatorSettingsDialog({
             <Button
               type="button"
               onClick={handleSave}
-              className="h-8 rounded-md bg-[#f0f3fa] px-4 text-[13px] font-semibold text-[#131722] transition-colors hover:bg-white"
+              className="h-8 rounded-md bg-[#2962ff] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#1e53e5]"
             >
               OK
             </Button>

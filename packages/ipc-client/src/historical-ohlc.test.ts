@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  aggregateOhlcBars,
+  alignTimeSecToTimeframe,
   fetchHistoricalOhlc,
   mapSymbolToCoinbaseProduct,
   mapSymbolToKrakenRestPair,
@@ -41,7 +43,7 @@ describe("historical-ohlc", () => {
 
     expect(mapTimeframeToCoinbaseGranularity("1m")).toBe(60);
     expect(mapTimeframeToCoinbaseGranularity("1h")).toBe(3600);
-    expect(mapTimeframeToCoinbaseGranularity("4h")).toBe(21600);
+    expect(mapTimeframeToCoinbaseGranularity("4h")).toBe(3600);
     expect(mapTimeframeToCoinbaseGranularity("D")).toBe(86400);
 
     expect(timeframeToSeconds("15m")).toBe(900);
@@ -147,5 +149,33 @@ describe("historical-ohlc", () => {
     expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(bars).toHaveLength(600);
     expect(bars[0].time).toBeLessThan(bars[bars.length - 1].time);
+  });
+
+  it("aligns timestamps and aggregates 1m bars into exact 15m and 4h candles", () => {
+    // 15 one-minute bars starting at 12:00:00 UTC -> single 15m candle
+    const base = Date.UTC(2026, 10, 27, 12, 0, 0) / 1000;
+    const oneMinBars = Array.from({ length: 15 }, (_, i) => ({
+      time: base + i * 60,
+      open: 100 + i,
+      high: 102 + i,
+      low: 99 + i,
+      close: 101 + i,
+      volume: 10,
+    }));
+    const fifteen = aggregateOhlcBars(oneMinBars, "15m");
+    expect(fifteen).toHaveLength(1);
+    expect(fifteen[0]).toEqual({
+      time: base,
+      open: 100,
+      high: 116,
+      low: 99,
+      close: 115,
+      volume: 150,
+    });
+
+    // Weekly alignment snaps to Monday 00:00 UTC
+    const fri = Date.UTC(2026, 10, 27, 15, 30, 0) / 1000; // Fri Nov 27, 2026
+    const mon = Date.UTC(2026, 10, 23, 0, 0, 0) / 1000;   // Mon Nov 23, 2026
+    expect(alignTimeSecToTimeframe(fri, "W")).toBe(mon);
   });
 });
