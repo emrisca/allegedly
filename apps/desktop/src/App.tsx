@@ -8,8 +8,12 @@ import {
   decodeStreamStatusFrame,
   FrameType,
   ProvenanceTier,
+  LIVE_MARKET_DATA_SYMBOLS,
   type BootConfig,
   type BuiltinStudyKind,
+  type MarketDataSourceId,
+  type MarketDataSourceRequest,
+  type MarketDataStatusDto,
   type PaperAccountSnapshot,
   type ReplayControlAction,
   type ReplayStatusSnapshot,
@@ -31,9 +35,16 @@ import {
   type ChartSettings,
   type ChartTabItem,
   type ChartSettingsTemplate,
+  type MarketDataFeedId,
   type QuickRangePreset,
   type WorkspaceLayoutMode,
 } from "@allegedly/ui-chrome";
+import {
+  DEFAULT_TIMEFRAME_VISIBILITY,
+  IndicatorSettingsDialog,
+  type IndicatorConfig,
+  type IndicatorPriceSource,
+} from "./components/indicator-settings-dialog";
 import {
   IndicatorsDialog,
   type IndicatorLayerState,
@@ -159,6 +170,30 @@ function loadStoredChartTemplates(): ChartSettingsTemplate[] {
   }
 }
 
+
+function extractPriceSource(snap: ChartSeriesSnapshot, source: IndicatorPriceSource): number[] {
+  const closes = snap.closes;
+  if (source === "close") return closes;
+  const opens = snap.opens ?? closes;
+  const highs = snap.highs ?? closes;
+  const lows = snap.lows ?? closes;
+  const n = closes.length;
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const o = opens[i] ?? closes[i];
+    const h = highs[i] ?? closes[i];
+    const l = lows[i] ?? closes[i];
+    const c = closes[i];
+    if (source === "open") out[i] = o;
+    else if (source === "high") out[i] = h;
+    else if (source === "low") out[i] = l;
+    else if (source === "hl2") out[i] = (h + l) / 2;
+    else if (source === "hlc3") out[i] = (h + l + c) / 3;
+    else out[i] = (o + h + l + c) / 4;
+  }
+  return out;
+}
+
 export interface AppProps {
   transport?: TransportAdapter;
 }
@@ -172,11 +207,14 @@ export function App({ transport: providedTransport }: AppProps) {
   );
 
   const [bootConfig, setBootConfig] = useState<BootConfig>(DEFAULT_BOOT_CONFIG);
-  const [symbol, setSymbol] = useState<string>("NQ1!");
+  const [symbol, setSymbol] = useState<string>("BTC/USD");
   const [timeframe, setTimeframe] = useState<string>("D");
   const [tabs, setTabs] = useState<Array<{ id: string; symbol: string; timeframe: string }>>([
-    { id: "tab-1", symbol: "NQ1!", timeframe: "D" },
+    { id: "tab-1", symbol: "BTC/USD", timeframe: "D" },
   ]);
+  const [dataSource, setDataSource] = useState<MarketDataFeedId>("paper_sim");
+  const [dataSourceConnected, setDataSourceConnected] = useState<boolean>(true);
+  const [dataSourceError, setDataSourceError] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState<string>("tab-1");
   const [alertsCount, setAlertsCount] = useState<number>(0);
   const [stateRev, setStateRev] = useState<number>(0);
@@ -186,6 +224,8 @@ export function App({ transport: providedTransport }: AppProps) {
   const [account, setAccount] = useState<PaperAccountSnapshot>(DEFAULT_PAPER_ACCOUNT);
   const [replayStatus, setReplayStatus] = useState<ReplayStatusSnapshot>(DEFAULT_REPLAY_STATUS);
   const [activeStudies, setActiveStudies] = useState<StudyRunResponse[]>([]);
+  const [studyConfigs, setStudyConfigs] = useState<Record<string, IndicatorConfig>>({});
+  const [editingStudyId, setEditingStudyId] = useState<string | null>(null);
   const [studyError, setStudyError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ResolvedSetting[]>([]);
   const [exportedToml, setExportedToml] = useState<string | null>(null);
@@ -308,12 +348,79 @@ export function App({ transport: providedTransport }: AppProps) {
     };
   }, [transport]);
 
+  useEffect(() => {
+    if (dataSource === "paper_sim") return;
+    let alive = true;
+    const pollStatus = () => {
+      void transport
+        .invokeJson<Record<string, never>, MarketDataStatusDto>("get_market_data_status", {})
+        .then((st) => {
+          if (!alive) return;
+          setDataSourceConnected(st.connected);
+          setDataSourceError(st.last_error);
+        })
+        .catch(() => {});
+    };
+    pollStatus();
+    const handle = setInterval(pollStatus, 1500);
+    return () => {
+      alive = false;
+      clearInterval(handle);
+    };
+  }, [transport, dataSource]);
+
+  const applyMarketDataSource = useCallback(
+    (nextSource: MarketDataFeedId, targetSymbol: string) => {
+      const liveSupported = (LIVE_MARKET_DATA_SYMBOLS as readonly string[]).includes(targetSymbol);
+      const resolvedSymbol =
+        nextSource !== "paper_sim" && !liveSupported ? LIVE_MARKET_DATA_SYMBOLS[0] : targetSymbol;
+
+      if (resolvedSymbol !== targetSymbol) {
+        setSymbol(resolvedSymbol);
+        setTabs((prev) =>
+          prev.map((t) => (t.id === activeTabId ? { ...t, symbol: resolvedSymbol } : t)),
+        );
+      }
+
+      setDataSource(nextSource);
+      setDataSourceError(null);
+      setDataSourceConnected(nextSource === "paper_sim");
+
+      void transport
+        .invokeJson<MarketDataSourceRequest, MarketDataStatusDto>("set_market_data_source", {
+          source: nextSource as MarketDataSourceId,
+          symbol: resolvedSymbol,
+        })
+        .then((st) => {
+          setDataSource(st.source);
+          setDataSourceConnected(st.connected);
+          setDataSourceError(st.last_error);
+        })
+        .catch((err: unknown) => {
+          setDataSourceConnected(false);
+          setDataSourceError(err instanceof Error ? err.message : String(err));
+        });
+    },
+    [transport, activeTabId],
+  );
+
+  const handleDataSourceChange = useCallback(
+    (nextSource: MarketDataFeedId) => {
+      applyMarketDataSource(nextSource, symbol);
+    },
+    [applyMarketDataSource, symbol],
+  );
+
   const handleSymbolChange = useCallback(
     (nextSymbol: string) => {
       setSymbol(nextSymbol);
       setTabs((prev) =>
         prev.map((t) => (t.id === activeTabId ? { ...t, symbol: nextSymbol } : t)),
       );
+      if (dataSource !== "paper_sim") {
+        const liveSupported = (LIVE_MARKET_DATA_SYMBOLS as readonly string[]).includes(nextSymbol);
+        applyMarketDataSource(liveSupported ? dataSource : "paper_sim", nextSymbol);
+      }
       void transport
         .invokeJson<unknown, WorkspacePatchResult>("apply_workspace_patch", {
           observed_rev: stateRev,
@@ -324,7 +431,7 @@ export function App({ transport: providedTransport }: AppProps) {
         })
         .catch(() => {});
     },
-    [transport, stateRev, activeTabId],
+    [transport, stateRev, activeTabId, dataSource, applyMarketDataSource],
   );
 
   const handleTimeframeChange = useCallback(
@@ -537,6 +644,27 @@ export function App({ transport: providedTransport }: AppProps) {
         .invokeJson<StudyRunRequest, StudyRunResponse>("run_study", req)
         .then((res) => {
           setActiveStudies((prev) => [...prev.filter((s) => s.id !== res.id), res]);
+          setStudyConfigs((prev) => {
+            if (prev[res.id]) return prev;
+            return {
+              ...prev,
+              [res.id]: {
+                id: res.id,
+                label: res.label,
+                builtin: kind,
+                period,
+                source: "close",
+                luauScript: null,
+                color: STUDY_COLORS[kind] ?? "#38bdf8",
+                lineWidth: 2,
+                lineStyle: "solid",
+                opacity: 1,
+                showPriceLabel: true,
+                showPriceLine: false,
+                visibility: { ...DEFAULT_TIMEFRAME_VISIBILITY },
+              },
+            };
+          });
         })
         .catch((err: unknown) => {
           setStudyError(err instanceof Error ? err.message : String(err));
@@ -564,6 +692,62 @@ export function App({ transport: providedTransport }: AppProps) {
             ? { ...res, label: customLabel }
             : res;
           setActiveStudies((prev) => [...prev.filter((s) => s.id !== labeled.id), labeled]);
+          setStudyConfigs((prev) => ({
+            ...prev,
+            [labeled.id]: prev[labeled.id]
+              ? { ...prev[labeled.id], label: labeled.label, luauScript: script }
+              : {
+                  id: labeled.id,
+                  label: labeled.label,
+                  builtin: null,
+                  period: 14,
+                  source: "close",
+                  luauScript: script,
+                  color: STUDY_COLORS.luau,
+                  lineWidth: 2,
+                  lineStyle: "solid",
+                  opacity: 1,
+                  showPriceLabel: true,
+                  showPriceLine: false,
+                  visibility: { ...DEFAULT_TIMEFRAME_VISIBILITY },
+                },
+          }));
+        })
+        .catch((err: unknown) => {
+          setStudyError(err instanceof Error ? err.message : String(err));
+        });
+    },
+    [transport],
+  );
+
+  const handleSaveStudyConfig = useCallback(
+    (nextCfg: IndicatorConfig) => {
+      setStudyConfigs((prev) => ({ ...prev, [nextCfg.id]: nextCfg }));
+      const snap = seriesSnapshotRef.current;
+      const sourceSeries = extractPriceSource(snap, nextCfg.source);
+      const req: StudyRunRequest = nextCfg.luauScript
+        ? {
+            id: nextCfg.id,
+            luau_script: nextCfg.luauScript,
+            closes: sourceSeries,
+            volumes: snap.volumes,
+            buy_volumes: snap.buyVolumes,
+            sell_volumes: snap.sellVolumes,
+          }
+        : {
+            id: nextCfg.id,
+            builtin: nextCfg.builtin ?? "sma",
+            period: nextCfg.period,
+            closes: sourceSeries,
+            volumes: snap.volumes,
+            buy_volumes: snap.buyVolumes,
+            sell_volumes: snap.sellVolumes,
+          };
+      void transport
+        .invokeJson<StudyRunRequest, StudyRunResponse>("run_study", req)
+        .then((res) => {
+          const updated: StudyRunResponse = { ...res, label: nextCfg.label };
+          setActiveStudies((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
         })
         .catch((err: unknown) => {
           setStudyError(err instanceof Error ? err.message : String(err));
@@ -647,16 +831,26 @@ export function App({ transport: providedTransport }: AppProps) {
 
   const studyOverlays = useMemo<StudyOverlaySeries[]>(
     () =>
-      activeStudies.map((s) => ({
-        id: s.id,
-        label: s.label,
-        overlay: s.overlay,
-        color:
-          STUDY_COLORS[s.id.split("-")[0]] ??
-          (s.id.startsWith("luau") ? STUDY_COLORS.luau : "#38bdf8"),
-        values: s.values,
-      })),
-    [activeStudies],
+      activeStudies.map((s) => {
+        const cfg = studyConfigs[s.id];
+        return {
+          id: s.id,
+          label: cfg?.label ?? s.label,
+          overlay: s.overlay,
+          color:
+            cfg?.color ??
+            STUDY_COLORS[s.id.split("-")[0]] ??
+            (s.id.startsWith("luau") ? STUDY_COLORS.luau : "#38bdf8"),
+          values: s.values,
+          lineWidth: cfg?.lineWidth ?? 2,
+          lineStyle: cfg?.lineStyle ?? "solid",
+          opacity: cfg?.opacity ?? 1,
+          showPriceLabel: cfg?.showPriceLabel ?? true,
+          showPriceLine: cfg?.showPriceLine ?? false,
+          visibility: cfg?.visibility,
+        };
+      }),
+    [activeStudies, studyConfigs],
   );
 
   const resolvedChartTabs = useMemo<ChartTabItem[]>(
@@ -687,7 +881,7 @@ export function App({ transport: providedTransport }: AppProps) {
   const tickSizeE9 = symbolMeta.tickSizeE9;
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0c0d11] text-[#e6e8ee]">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#131722] text-[#d1d4dc]">
       <ChromeToolbar
         symbol={symbol}
         timeframe={timeframe}
@@ -747,6 +941,10 @@ export function App({ transport: providedTransport }: AppProps) {
         onUndo={() => chartHistoryActionsRef.current?.undo()}
         onRedo={() => chartHistoryActionsRef.current?.redo()}
         onExportWorkspace={handleExportWorkspaceToml}
+        dataSource={dataSource}
+        dataSourceConnected={dataSourceConnected}
+        dataSourceError={dataSourceError}
+        onDataSourceChange={handleDataSourceChange}
       />
 
       <main className="flex min-h-0 flex-1 overflow-hidden">
@@ -804,6 +1002,7 @@ export function App({ transport: providedTransport }: AppProps) {
                 historyActionsRef={chartHistoryActionsRef}
                 onHistoryMetaChange={setHistoryMeta}
                 onRemoveStudy={handleRemoveStudy}
+                onOpenStudySettings={setEditingStudyId}
                 onLivePriceSample={handleLivePriceSample}
                 chartSettings={chartSettings}
                 replayOpen={replayOpen}
@@ -833,7 +1032,7 @@ export function App({ transport: providedTransport }: AppProps) {
             </div>
 
             {rightTab !== null && (
-              <div className="flex w-[276px] shrink-0 flex-col border-l border-[#232733] bg-[#101217]">
+              <div className="flex w-[276px] shrink-0 flex-col border-l border-[#2a2e39] bg-[#131722]">
                 {rightTab === "watchlist" && (
                   <WatchlistPanel
                     activeSymbol={symbol}
@@ -924,6 +1123,7 @@ export function App({ transport: providedTransport }: AppProps) {
                   historyActionsRef={chartHistoryActionsRef}
                   onHistoryMetaChange={setHistoryMeta}
                   onRemoveStudy={handleRemoveStudy}
+                  onOpenStudySettings={setEditingStudyId}
                   onLivePriceSample={handleLivePriceSample}
                   chartSettings={chartSettings}
                   replayOpen={replayOpen}
@@ -1015,6 +1215,40 @@ export function App({ transport: providedTransport }: AppProps) {
         onRunLuauStudy={handleRunLuauStudy}
         onClearStudies={handleClearStudies}
         onToggleLayer={handleToggleOverlayLayer}
+      />
+
+      <IndicatorSettingsDialog
+        open={editingStudyId !== null}
+        config={
+          editingStudyId
+            ? (studyConfigs[editingStudyId] ??
+              (() => {
+                const st = activeStudies.find((s) => s.id === editingStudyId);
+                if (!st) return null;
+                const kindPrefix = st.id.split("-")[0] as BuiltinStudyKind;
+                const parsedPeriod = Number.parseInt(st.id.split("-")[1] ?? "14", 10);
+                return {
+                  id: st.id,
+                  label: st.label,
+                  builtin: st.id.startsWith("luau") ? null : kindPrefix,
+                  period: Number.isFinite(parsedPeriod) ? parsedPeriod : 14,
+                  source: "close" as const,
+                  luauScript: null,
+                  color: STUDY_COLORS[kindPrefix] ?? STUDY_COLORS.luau,
+                  lineWidth: 2 as const,
+                  lineStyle: "solid" as const,
+                  opacity: 1,
+                  showPriceLabel: true,
+                  showPriceLine: false,
+                  visibility: { ...DEFAULT_TIMEFRAME_VISIBILITY },
+                };
+              })())
+            : null
+        }
+        onOpenChange={(open) => {
+          if (!open) setEditingStudyId(null);
+        }}
+        onSave={handleSaveStudyConfig}
       />
 
       <StatusBar

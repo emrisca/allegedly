@@ -119,6 +119,30 @@ export interface ResolvedSetting {
   locked: boolean;
 }
 
+
+export type MarketDataSourceId = "paper_sim" | "kraken_ws_v2" | "coinbase_ws";
+
+export const LIVE_MARKET_DATA_SYMBOLS = ["BTC/USD", "ETH/USD", "SOL/USD"] as const;
+
+export interface MarketDataSourceRequest {
+  source: MarketDataSourceId;
+  symbol: string;
+}
+
+export interface MarketDataStatusDto {
+  source: MarketDataSourceId;
+  symbol: string;
+  connected: boolean;
+  book_state: string;
+  provenance_tier: string;
+  trades_received: number;
+  crc_ok: number;
+  crc_mismatches: number;
+  reconnects: number;
+  last_error: string | null;
+  supported_symbols: string[];
+}
+
 export interface TransportAdapter {
   readonly kind: "tauri" | "loopback-ws" | "offline-sim";
   invokeJson<TReq, TRes>(cmd: string, payload: TReq): Promise<TRes>;

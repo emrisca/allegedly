@@ -6,15 +6,28 @@
 
 :root {
   color-scheme: dark;
-  --allegedly-bg: #0c0d11;
-  --allegedly-chrome: #101217;
-  --allegedly-canvas: #1b1e27;
-  --allegedly-elevated: #161922;
-  --allegedly-hover: #222633;
-  --allegedly-active: #292e3b;
-  --allegedly-border: #232733;
-  --allegedly-text: #e6e8ee;
-  --allegedly-muted: #868c9b;
+  --tv-bg: #131722;
+  --tv-chrome: #131722;
+  --tv-elevated: #1e222d;
+  --tv-hover: #2a2e39;
+  --tv-active: #2a2e39;
+  --tv-border: #2a2e39;
+  --tv-text: #d1d4dc;
+  --tv-text-strong: #ffffff;
+  --tv-muted: #787b86;
+  --tv-accent: #2962ff;
+  --tv-up: #089981;
+  --tv-down: #f23645;
+  /* Legacy aliases mapped to the single unified TradingView palette */
+  --allegedly-bg: var(--tv-bg);
+  --allegedly-chrome: var(--tv-chrome);
+  --allegedly-canvas: var(--tv-bg);
+  --allegedly-elevated: var(--tv-elevated);
+  --allegedly-hover: var(--tv-hover);
+  --allegedly-active: var(--tv-active);
+  --allegedly-border: var(--tv-border);
+  --allegedly-text: var(--tv-text);
+  --allegedly-muted: var(--tv-muted);
 }
 
 html,
@@ -25,9 +38,9 @@ body,
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: var(--allegedly-bg);
-  color: var(--allegedly-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  background-color: var(--tv-bg);
+  color: var(--tv-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", "Inter", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -35,10 +48,9 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
-/* Ultra-thin institutional dark scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2b3040 transparent;
+  scrollbar-color: #2a2e39 transparent;
 }
 *::-webkit-scrollbar {
   width: 5px;
@@ -48,19 +60,19 @@ body,
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2b3040;
+  background: #2a2e39;
   border-radius: 9999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #3b4257;
+  background: #363a45;
 }
 
 .dockview-theme-abyss {
-  --dv-paneview-header-border-color: #232733;
-  --dv-tabs-and-actions-container-background-color: #101217;
-  --dv-activegroup-visiblepanel-tab-background-color: #1b1e27;
-  --dv-inactivegroup-visiblepanel-tab-background-color: #101217;
-  --dv-separator-border: #232733;
+  --dv-paneview-header-border-color: #2a2e39;
+  --dv-tabs-and-actions-container-background-color: #131722;
+  --dv-activegroup-visiblepanel-tab-background-color: #1e222d;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #131722;
+  --dv-separator-border: #2a2e39;
 }
 
 @media (prefers-reduced-motion: reduce) {

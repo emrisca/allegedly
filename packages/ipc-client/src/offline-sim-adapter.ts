@@ -19,8 +19,12 @@ import {
   type TpoRow128,
   type VolumeProfileBin,
 } from "./decoder.js";
-import type {
-  BootConfig,
+import {
+  LIVE_MARKET_DATA_SYMBOLS,
+  type BootConfig,
+  type MarketDataSourceId,
+  type MarketDataSourceRequest,
+  type MarketDataStatusDto,
   PaperAccountSnapshot,
   PaperOrderRequest,
   PaperOrderTicket,
@@ -52,6 +56,25 @@ const SYMBOL_TICK_E9: Record<string, bigint> = {
  * Deterministic zero-network local simulator transport (SV-01 / T07 / T08).
  * Emits authentic ALG2 v1 binary frames without opening any network socket.
  */
+
+function parseDecimalToE9(val: string | number): bigint {
+  const s = typeof val === "number" ? val.toFixed(9) : String(val).trim();
+  const neg = s.startsWith("-");
+  const clean = neg ? s.slice(1) : s.startsWith("+") ? s.slice(1) : s;
+  const [intPart = "0", fracPart = ""] = clean.split(".");
+  const paddedFrac = (fracPart + "000000000").slice(0, 9);
+  const intDigits = intPart.replace(/[^0-9]/g, "") || "0";
+  const fracDigits = paddedFrac.replace(/[^0-9]/g, "").padEnd(9, "0");
+  const absVal = BigInt(intDigits) * 1_000_000_000n + BigInt(fracDigits);
+  return neg ? -absVal : absVal;
+}
+
+const COINBASE_PRODUCT_MAP: Record<string, string> = {
+  "BTC/USD": "BTC-USD",
+  "ETH/USD": "ETH-USD",
+  "SOL/USD": "SOL-USD",
+};
+
 export class OfflineSimTransportAdapter implements TransportAdapter {
   public readonly kind = "offline-sim" as const;
 
@@ -106,6 +129,15 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
   };
   private readonly instanceOverrides = new Map<string, string>();
   private intervalHandle: ReturnType<typeof setInterval> | null = null;
+  private marketSource: MarketDataSourceId = "paper_sim";
+  private marketSymbol = "BTC/USD";
+  private liveWs: WebSocket | null = null;
+  private liveConnected = false;
+  private liveTradesReceived = 0;
+  private liveReconnects = 0;
+  private liveLastError: string | null = null;
+  private liveBids = new Map<string, bigint>();
+  private liveAsks = new Map<string, bigint>();
 
   private nextRand(): bigint {
     // Deterministic xorshift64* (pure BigInt — zero float math)
@@ -276,6 +308,7 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
   private ensureTimer(): void {
     if (this.intervalHandle !== null) return;
     this.intervalHandle = setInterval(() => {
+      if (this.marketSource !== "paper_sim") return;
       for (const [streamId, subs] of this.listeners.entries()) {
         if (subs.size === 0) continue;
         const frames = this.stepFrames(streamId);
@@ -286,6 +319,348 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
     }, 120);
   }
 
+  private emitToAllStreams(framesForStream: (streamId: number) => ArrayBuffer[]): void {
+    for (const [streamId, subs] of this.listeners.entries()) {
+      if (subs.size === 0) continue;
+      const frames = framesForStream(streamId);
+      for (const frame of frames) {
+        for (const cb of subs) cb(frame);
+      }
+    }
+  }
+
+  private closeLiveSocket(): void {
+    if (this.liveWs) {
+      try {
+        this.liveWs.onopen = null;
+        this.liveWs.onmessage = null;
+        this.liveWs.onerror = null;
+        this.liveWs.onclose = null;
+        this.liveWs.close();
+      } catch {
+        // Ignore close errors
+      }
+      this.liveWs = null;
+    }
+    this.liveConnected = false;
+    this.liveBids.clear();
+    this.liveAsks.clear();
+  }
+
+  private snapshotMarketDataStatus(): MarketDataStatusDto {
+    const isPaper = this.marketSource === "paper_sim";
+    return {
+      source: this.marketSource,
+      symbol: this.marketSymbol,
+      connected: isPaper ? true : this.liveConnected,
+      book_state: isPaper || this.liveConnected ? "Live" : "Disconnected",
+      provenance_tier: isPaper ? "PaperSim" : "ExactTickAggr",
+      trades_received: this.liveTradesReceived,
+      crc_ok: 0,
+      crc_mismatches: 0,
+      reconnects: this.liveReconnects,
+      last_error: this.liveLastError,
+      supported_symbols: [...LIVE_MARKET_DATA_SYMBOLS],
+    };
+  }
+
+  private setMarketDataSource(req: MarketDataSourceRequest): MarketDataStatusDto {
+    const nextSource = req.source;
+    const nextSymbol = req.symbol || "BTC/USD";
+
+    if (nextSource === "paper_sim") {
+      this.closeLiveSocket();
+      this.marketSource = "paper_sim";
+      this.marketSymbol = nextSymbol;
+      this.liveLastError = null;
+      this.resetSymbol(nextSymbol);
+      this.ensureTimer();
+      return this.snapshotMarketDataStatus();
+    }
+
+    if (!(LIVE_MARKET_DATA_SYMBOLS as readonly string[]).includes(nextSymbol)) {
+      throw new Error(
+        `Unsupported live symbol '${nextSymbol}'. Supported live symbols: ${LIVE_MARKET_DATA_SYMBOLS.join(", ")}`,
+      );
+    }
+
+    this.closeLiveSocket();
+    this.marketSource = nextSource;
+    this.marketSymbol = nextSymbol;
+    this.liveTradesReceived = 0;
+    this.liveLastError = null;
+    this.resetSymbol(nextSymbol);
+
+    if (typeof WebSocket === "undefined") {
+      this.liveLastError = "WebSocket unavailable in this runtime";
+      return this.snapshotMarketDataStatus();
+    }
+
+    const url =
+      nextSource === "kraken_ws_v2"
+        ? "wss://ws.kraken.com/v2"
+        : "wss://advanced-trade-ws.coinbase.com";
+
+    try {
+      const ws = new WebSocket(url);
+      this.liveWs = ws;
+
+      ws.onopen = () => {
+        if (this.liveWs !== ws) return;
+        this.liveConnected = true;
+        this.liveLastError = null;
+        if (nextSource === "kraken_ws_v2") {
+          ws.send(
+            JSON.stringify({
+              method: "subscribe",
+              params: { channel: "trade", symbol: [nextSymbol], snapshot: true },
+            }),
+          );
+          ws.send(
+            JSON.stringify({
+              method: "subscribe",
+              params: { channel: "book", symbol: [nextSymbol], depth: 25, snapshot: true },
+            }),
+          );
+        } else {
+          const productId = COINBASE_PRODUCT_MAP[nextSymbol] ?? "BTC-USD";
+          ws.send(
+            JSON.stringify({
+              type: "subscribe",
+              product_ids: [productId],
+              channel: "market_trades",
+            }),
+          );
+          ws.send(
+            JSON.stringify({
+              type: "subscribe",
+              product_ids: [productId],
+              channel: "heartbeats",
+            }),
+          );
+        }
+        const nowNs = BigInt(Date.now()) * 1_000_000n;
+        this.emitToAllStreams((streamId) => [
+          encodeStreamStatusFrame(streamId, nowNs, {
+            seq: ++this.seq,
+            droppedTotal: 0,
+            reasonCode: 0,
+            bookState: BookState.Live,
+            provenanceTier: ProvenanceTier.ExactTickAggr,
+          }),
+        ]);
+      };
+
+      ws.onmessage = (event) => {
+        if (this.liveWs !== ws) return;
+        try {
+          const msg = JSON.parse(String(event.data)) as Record<string, unknown>;
+          if (nextSource === "kraken_ws_v2") {
+            this.handleKrakenMessage(msg);
+          } else {
+            this.handleCoinbaseMessage(msg);
+          }
+        } catch {
+          // Ignore non-JSON frames
+        }
+      };
+
+      ws.onerror = () => {
+        if (this.liveWs !== ws) return;
+        this.liveConnected = false;
+        this.liveLastError = `Connection error on ${nextSource}`;
+      };
+
+      ws.onclose = () => {
+        if (this.liveWs !== ws) return;
+        this.liveConnected = false;
+        const nowNs = BigInt(Date.now()) * 1_000_000n;
+        this.emitToAllStreams((streamId) => [
+          encodeStreamStatusFrame(streamId, nowNs, {
+            seq: ++this.seq,
+            droppedTotal: 0,
+            reasonCode: 0x0503,
+            bookState: BookState.Disconnected,
+            provenanceTier: ProvenanceTier.ExactTickAggr,
+          }),
+        ]);
+      };
+    } catch (err) {
+      this.liveConnected = false;
+      this.liveLastError = err instanceof Error ? err.message : String(err);
+    }
+
+    return this.snapshotMarketDataStatus();
+  }
+
+  private pushLiveTradesAndBar(trades: LiveTradeRecord[], latestPriceE9: bigint, barSec: number): void {
+    if (trades.length === 0) return;
+    this.currentPriceE9 = latestPriceE9;
+    this.liveTradesReceived += trades.length;
+    if (barSec > this.currentBarStartSec || this.barVolE9 === 0n) {
+      this.currentBarStartSec = barSec;
+      this.barOpenE9 = latestPriceE9;
+      this.barHighE9 = latestPriceE9;
+      this.barLowE9 = latestPriceE9;
+      this.barVolE9 = 0n;
+      this.barBuyVolE9 = 0n;
+      this.barSellVolE9 = 0n;
+    }
+    for (const tr of trades) {
+      if (tr.priceE9 > this.barHighE9) this.barHighE9 = tr.priceE9;
+      if (tr.priceE9 < this.barLowE9) this.barLowE9 = tr.priceE9;
+      this.barVolE9 += tr.qtyE9;
+      const side = tr.flags & 0x03;
+      if (side === 1) this.barBuyVolE9 += tr.qtyE9;
+      else this.barSellVolE9 += tr.qtyE9;
+    }
+
+    const nowNs = BigInt(Date.now()) * 1_000_000n;
+    const bar: LiveBarUpdate = {
+      tsOpenNs: BigInt(this.currentBarStartSec) * 1_000_000_000n,
+      openTick: this.barOpenE9 / this.tickSizeE9,
+      highTick: this.barHighE9 / this.tickSizeE9,
+      lowTick: this.barLowE9 / this.tickSizeE9,
+      closeTick: this.currentPriceE9 / this.tickSizeE9,
+      volumeE9: this.barVolE9,
+      buyVolE9: this.barBuyVolE9,
+      sellVolE9: this.barSellVolE9,
+      flags: 0n,
+    };
+
+    this.emitToAllStreams((streamId) => [
+      encodeLiveTradeBatch(streamId, nowNs, trades),
+      encodeLiveBarUpdateBatch(streamId, nowNs, [bar]),
+    ]);
+  }
+
+  private handleKrakenMessage(msg: Record<string, unknown>): void {
+    const channel = msg.channel;
+    const data = msg.data;
+    if (!Array.isArray(data) || data.length === 0) return;
+
+    if (channel === "trade") {
+      const trades: LiveTradeRecord[] = [];
+      let latestPrice = this.currentPriceE9;
+      let latestBarSec = Math.floor(Date.now() / 60_000) * 60;
+      for (const item of data as Array<Record<string, unknown>>) {
+        if (item.price === undefined || item.qty === undefined) continue;
+        const priceE9 = parseDecimalToE9(item.price as string | number);
+        const qtyE9 = parseDecimalToE9(item.qty as string | number);
+        const side = item.side === "sell" ? 2 : 1;
+        const tsMs = typeof item.timestamp === "string" ? Date.parse(item.timestamp) : Date.now();
+        const validMs = Number.isFinite(tsMs) ? tsMs : Date.now();
+        latestBarSec = Math.floor(validMs / 60_000) * 60;
+        latestPrice = priceE9;
+        this.seq += 1n;
+        trades.push({
+          seq: this.seq,
+          tsNs: BigInt(Math.round(validMs)) * 1_000_000n,
+          priceE9,
+          qtyE9,
+          flags: packTradeFlags(side, ProvenanceTier.ExactTickAggr, 0, false),
+        });
+      }
+      this.pushLiveTradesAndBar(trades, latestPrice, latestBarSec);
+      return;
+    }
+
+    if (channel === "book") {
+      const entry = data[0] as Record<string, unknown>;
+      const isSnapshot = msg.type === "snapshot";
+      if (isSnapshot) {
+        this.liveBids.clear();
+        this.liveAsks.clear();
+      }
+      const applySide = (arr: unknown, book: Map<string, bigint>) => {
+        if (!Array.isArray(arr)) return;
+        for (const lvl of arr as Array<Record<string, unknown>>) {
+          if (lvl.price === undefined || lvl.qty === undefined) continue;
+          const pE9 = parseDecimalToE9(lvl.price as string | number);
+          const qE9 = parseDecimalToE9(lvl.qty as string | number);
+          const k = pE9.toString();
+          if (qE9 === 0n) book.delete(k);
+          else book.set(k, qE9);
+        }
+      };
+      applySide(entry.bids, this.liveBids);
+      applySide(entry.asks, this.liveAsks);
+
+      const bidEntries = [...this.liveBids.entries()]
+        .map(([k, q]) => [BigInt(k), q] as const)
+        .sort((a, b) => (b[0] > a[0] ? 1 : b[0] < a[0] ? -1 : 0))
+        .slice(0, 20);
+      const askEntries = [...this.liveAsks.entries()]
+        .map(([k, q]) => [BigInt(k), q] as const)
+        .sort((a, b) => (a[0] > b[0] ? 1 : a[0] < b[0] ? -1 : 0))
+        .slice(0, 20);
+
+      const levels: LiveL2BookLevel[] = [];
+      for (const [priceE9, qtyE9] of bidEntries) {
+        levels.push({ priceE9, qtyE9, sideActionFlags: 0, orderCount: 1 });
+      }
+      for (const [priceE9, qtyE9] of askEntries) {
+        levels.push({ priceE9, qtyE9, sideActionFlags: 1, orderCount: 1 });
+      }
+      this.bookSeq += 1n;
+      const nowNs = BigInt(Date.now()) * 1_000_000n;
+      this.emitToAllStreams((streamId) => [
+        encodeLiveL2BookBatch(
+          streamId,
+          nowNs,
+          {
+            bookSeq: this.bookSeq,
+            levelCount: levels.length,
+            bookState: BookState.Live,
+            isSnapshot: true,
+            provenanceTier: ProvenanceTier.ExactTickAggr,
+            provenanceModifiers: 0,
+          },
+          levels,
+        ),
+      ]);
+    }
+  }
+
+  private handleCoinbaseMessage(msg: Record<string, unknown>): void {
+    if (msg.channel !== "market_trades" || !Array.isArray(msg.events)) return;
+    const rawTrades: Array<Record<string, unknown>> = [];
+    for (const ev of msg.events as Array<Record<string, unknown>>) {
+      if (Array.isArray(ev.trades)) {
+        for (const t of ev.trades as Array<Record<string, unknown>>) {
+          rawTrades.push(t);
+        }
+      }
+    }
+    if (rawTrades.length === 0) return;
+    // Coinbase snapshots arrive newest-first; sort ascending by timestamp
+    rawTrades.sort((a, b) => Date.parse(String(a.time ?? "")) - Date.parse(String(b.time ?? "")));
+    const trades: LiveTradeRecord[] = [];
+    let latestPrice = this.currentPriceE9;
+    let latestBarSec = Math.floor(Date.now() / 60_000) * 60;
+    for (const item of rawTrades) {
+      if (item.price === undefined || item.size === undefined) continue;
+      const priceE9 = parseDecimalToE9(item.price as string | number);
+      const qtyE9 = parseDecimalToE9(item.size as string | number);
+      // Coinbase `side` is maker side; invert to taker aggressor side
+      const makerSide = String(item.side ?? "").toUpperCase();
+      const takerSide = makerSide === "BUY" ? 2 : 1;
+      const tsMs = typeof item.time === "string" ? Date.parse(item.time) : Date.now();
+      const validMs = Number.isFinite(tsMs) ? tsMs : Date.now();
+      latestBarSec = Math.floor(validMs / 60_000) * 60;
+      latestPrice = priceE9;
+      this.seq += 1n;
+      trades.push({
+        seq: this.seq,
+        tsNs: BigInt(Math.round(validMs)) * 1_000_000n,
+        priceE9,
+        qtyE9,
+        flags: packTradeFlags(takerSide, ProvenanceTier.ExactTickAggr, 0, false),
+      });
+    }
+    this.pushLiveTradesAndBar(trades, latestPrice, latestBarSec);
+  }
+
   async invokeJson<TReq, TRes>(cmd: string, payload: TReq): Promise<TRes> {
     switch (cmd) {
       case "report_ui_ready":
@@ -293,6 +668,7 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
       case "get_boot_config":
         return { ...this.bootConfig } as TRes;
 
+      case "get_workspace_state":
       case "get_workspace_snapshot":
         return {
           ...this.workspace,
@@ -422,6 +798,14 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
         }
         return (lines.join("\n") + "\n") as TRes;
       }
+
+      case "set_market_data_source": {
+        const req = payload as unknown as MarketDataSourceRequest;
+        return this.setMarketDataSource(req) as TRes;
+      }
+
+      case "get_market_data_status":
+        return this.snapshotMarketDataStatus() as TRes;
 
       default:
         throw new Error(`Unknown offline-sim command: ${cmd}`);
@@ -674,7 +1058,7 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
     set.add(onFrame);
     // Emit initial seed frames immediately on next microtask for snappy first paint
     queueMicrotask(() => {
-      if (set?.has(onFrame)) {
+      if (set?.has(onFrame) && this.marketSource === "paper_sim") {
         for (const frame of this.stepFrames(streamId)) {
           onFrame(frame);
         }
@@ -694,6 +1078,7 @@ export class OfflineSimTransportAdapter implements TransportAdapter {
   }
 
   dispose(): void {
+    this.closeLiveSocket();
     if (this.intervalHandle !== null) {
       clearInterval(this.intervalHandle);
       this.intervalHandle = null;

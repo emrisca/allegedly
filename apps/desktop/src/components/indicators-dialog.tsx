@@ -389,7 +389,7 @@ export function IndicatorsDialog({
   };
 
   const sidebarTabCls =
-    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-[#b8becd] transition-colors hover:bg-[#1e222d] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400 data-selected:bg-[#2b2f3a] data-selected:font-medium data-selected:text-[#f4f6fa]";
+    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-[#b8becd] transition-colors hover:bg-[#1e222d] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff] data-selected:bg-[#2b2f3a] data-selected:font-medium data-selected:text-[#f4f6fa]";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -409,7 +409,7 @@ export function IndicatorsDialog({
           </div>
           <DialogClose
             aria-label="Close indicators dialog"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9aa1b2] hover:bg-[#23262f] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9aa1b2] hover:bg-[#23262f] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           >
             <svg
               aria-hidden="true"
@@ -426,7 +426,7 @@ export function IndicatorsDialog({
 
         {/* Full-width Search Bar */}
         <div className="shrink-0 border-b border-[#23262f] px-5 py-3">
-          <div className="flex items-center gap-2.5 rounded-lg border border-[#2c3140] bg-[#101217] px-3 py-1.5 focus-within:border-[#4b556b]">
+          <div className="flex items-center gap-2.5 rounded-lg border border-[#2c3140] bg-[#131722] px-3 py-1.5 focus-within:border-[#4b556b]">
             <svg
               aria-hidden="true"
               viewBox="0 0 16 16"
@@ -458,7 +458,7 @@ export function IndicatorsDialog({
                 type="button"
                 aria-label="Clear indicator search"
                 onClick={() => setQuery("")}
-                className="rounded px-1 text-xs text-[#7d8496] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                className="rounded px-1 text-xs text-[#7d8496] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
               >
                 ×
               </button>
@@ -588,8 +588,8 @@ export function IndicatorsDialog({
                                 onClick={() => toggleFavorite(entry.id)}
                                 className={
                                   isFav
-                                    ? "shrink-0 rounded p-0.5 text-[#f1f3f8] hover:text-amber-300 focus-visible:outline-2 focus-visible:outline-sky-400"
-                                    : "shrink-0 rounded p-0.5 text-[#5c6374] opacity-75 hover:text-[#e6e8ee] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                                    ? "shrink-0 rounded p-0.5 text-[#f1f3f8] hover:text-amber-300 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                                    : "shrink-0 rounded p-0.5 text-[#5c6374] opacity-75 hover:text-[#e6e8ee] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                                 }
                               >
                                 <StarIcon filled={isFav} />
@@ -598,7 +598,7 @@ export function IndicatorsDialog({
                               <button
                                 type="button"
                                 onClick={() => handleActivateEntry(entry)}
-                                className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-2 focus-visible:outline-sky-400"
+                                className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                               >
                                 <span
                                   aria-hidden="true"
@@ -626,7 +626,7 @@ export function IndicatorsDialog({
                                 <button
                                   type="button"
                                   onClick={() => handleActivateEntry(entry)}
-                                  className="rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[10px] font-medium text-sky-300 ring-1 ring-sky-500/40 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
+                                  className="rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[10px] font-medium text-sky-300 ring-1 ring-sky-500/40 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-500/40 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                                 >
                                   Active
                                 </button>
@@ -693,7 +693,7 @@ export function IndicatorsDialog({
                                 ? onRemoveStudy(s.id)
                                 : onRunLuauStudy(s.script, s.id, s.name)
                             }
-                            className="truncate text-left text-[#d4d8e2] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                            className="truncate text-left text-[#d4d8e2] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                           >
                             {s.name}
                           </button>
@@ -769,7 +769,7 @@ export function IndicatorsDialog({
                   onChange={(e) => setDraftName(e.target.value)}
                   aria-label="Luau script name"
                   placeholder="Script name"
-                  className="h-8 w-full rounded-md border border-[#2c3140] bg-[#101217] px-3 text-xs text-[#e6e8ee] outline-none focus:border-sky-500"
+                  className="h-8 w-full rounded-md border border-[#2c3140] bg-[#131722] px-3 text-xs text-[#e6e8ee] outline-none focus:border-sky-500"
                 />
 
                 <textarea
@@ -777,7 +777,7 @@ export function IndicatorsDialog({
                   onChange={(e) => setDraftCode(e.target.value)}
                   aria-label="Luau study code"
                   rows={4}
-                  className="w-full rounded-md border border-[#2c3140] bg-[#101217] p-2.5 font-mono text-[11px] text-[#e6e8ee] outline-none focus:border-sky-500"
+                  className="w-full rounded-md border border-[#2c3140] bg-[#131722] p-2.5 font-mono text-[11px] text-[#e6e8ee] outline-none focus:border-sky-500"
                 />
 
                 <div className="flex items-center justify-end gap-2">
@@ -858,7 +858,7 @@ export function IndicatorsDialog({
               <button
                 type="button"
                 onClick={onClearStudies}
-                className="text-[11px] text-rose-300 hover:text-rose-200 focus-visible:outline-2 focus-visible:outline-sky-400"
+                className="text-[11px] text-rose-300 hover:text-rose-200 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
               >
                 Clear studies ({activeStudies.length})
               </button>
@@ -866,7 +866,7 @@ export function IndicatorsDialog({
           </div>
           <Button
             onClick={() => onOpenChange(false)}
-            className="h-7 rounded-md bg-[#2b2f3a] px-3.5 text-xs font-medium text-[#f1f3f8] hover:bg-[#383d4b] focus-visible:outline-2 focus-visible:outline-sky-400"
+            className="h-7 rounded-md bg-[#2b2f3a] px-3.5 text-xs font-medium text-[#f1f3f8] hover:bg-[#383d4b] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           >
             Done
           </Button>

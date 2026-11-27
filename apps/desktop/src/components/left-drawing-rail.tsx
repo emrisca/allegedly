@@ -110,7 +110,7 @@ export function LeftDrawingRail({
     <aside
       ref={railRef}
       aria-label="Chart drawing tools"
-      className="relative z-30 flex w-11 shrink-0 flex-col items-center justify-between border-r border-[#232733] bg-[#101217] py-1.5 select-none"
+      className="relative z-30 flex w-11 shrink-0 flex-col items-center justify-between border-r border-[#2a2e39] bg-[#131722] py-1.5 select-none"
     >
       <div className="flex w-full flex-col items-center gap-0.5">
         {/* Top Crosshair / Cursor */}
@@ -125,8 +125,8 @@ export function LeftDrawingRail({
           }}
           className={
             activeTool === "cursor"
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <DrawingToolIcon kind="cursor" />
@@ -160,8 +160,8 @@ export function LeftDrawingRail({
                 }}
                 className={
                   isGroupActive || isDrawerOpen
-                    ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-                    : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+                    ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                    : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                 }
               >
                 <DrawingToolIcon kind={currentToolKind} />
@@ -180,8 +180,8 @@ export function LeftDrawingRail({
                 }}
                 className={
                   isDrawerOpen
-                    ? "absolute right-0 top-1/2 flex h-5 w-2.5 -translate-y-1/2 items-center justify-center rounded-r bg-[#2e3444] text-[8px] text-white opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
-                    : "absolute right-0 top-1/2 flex h-5 w-2.5 -translate-y-1/2 items-center justify-center rounded-r text-[8px] text-[#7a8294] opacity-40 hover:bg-[#222736] hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                    ? "absolute right-0 top-1/2 flex h-5 w-2.5 -translate-y-1/2 items-center justify-center rounded-r bg-[#2e3444] text-[8px] text-white opacity-100 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                    : "absolute right-0 top-1/2 flex h-5 w-2.5 -translate-y-1/2 items-center justify-center rounded-r text-[8px] text-[#7a8294] opacity-40 hover:bg-[#222736] hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                 }
               >
                 {isDrawerOpen ? "‹" : "›"}
@@ -191,30 +191,6 @@ export function LeftDrawingRail({
         })}
 
         <div className="my-1 h-px w-6 bg-[#232733]" aria-hidden="true" />
-
-        {/* Crosshair / Sync Pointer */}
-        <button
-          type="button"
-          title="Return to Crosshair Pointer"
-          aria-label="Reset pointer to crosshair"
-          onClick={() => {
-            onSelectTool("cursor");
-            setOpenSlot(null);
-          }}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 20 20"
-            className="h-[17px] w-[17px]"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.35"
-          >
-            <path d="M3.5 4.5v11M16.5 4.5v11" strokeLinecap="round" />
-            <path d="M10 5.5 11.4 8.6 14.5 10 11.4 11.4 10 14.5 8.6 11.4 5.5 10 8.6 8.6Z" strokeLinejoin="round" />
-          </svg>
-        </button>
 
         {/* Ruler / Measure */}
         <button
@@ -228,8 +204,8 @@ export function LeftDrawingRail({
           }}
           className={
             activeTool === "ruler"
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <DrawingToolIcon kind="ruler" className="h-[17px] w-[17px]" />
@@ -251,8 +227,8 @@ export function LeftDrawingRail({
           }}
           className={
             activeTool === "zoom_in"
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <DrawingToolIcon kind="zoom_in" className="h-[17px] w-[17px]" />
@@ -269,8 +245,8 @@ export function LeftDrawingRail({
           onClick={onToggleMagnet}
           className={
             magnetEnabled
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#e6e8ee] text-[#0c0d11] shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#e6e8ee] text-[#0c0d11] shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <svg
@@ -295,8 +271,8 @@ export function LeftDrawingRail({
           onClick={onToggleStayInDrawingMode}
           className={
             stayInDrawingMode
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <svg
@@ -324,8 +300,8 @@ export function LeftDrawingRail({
           onClick={onToggleDrawingsLocked}
           className={
             drawingsLocked
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-amber-300 focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-amber-300 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <svg
@@ -357,8 +333,8 @@ export function LeftDrawingRail({
           onClick={onToggleDrawingsHidden}
           className={
             drawingsHidden
-              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#292e3b] text-sky-300 focus-visible:outline-2 focus-visible:outline-sky-400"
-              : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+              ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#2962ff]/15 text-sky-300 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
           }
         >
           <svg
@@ -386,7 +362,7 @@ export function LeftDrawingRail({
           aria-label={`Remove drawings (${drawingCount})`}
           disabled={drawingCount === 0 || drawingsLocked}
           onClick={onClearDrawings}
-          className="relative flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-rose-300 disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-sky-400"
+          className="relative flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-rose-300 disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
         >
           <svg
             aria-hidden="true"
@@ -403,7 +379,7 @@ export function LeftDrawingRail({
             />
           </svg>
           {drawingCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 rounded-full bg-[#292e3b] px-1 font-mono text-[9px] text-[#e6e8ee]">
+            <span className="absolute -right-0.5 -top-0.5 rounded-full bg-[#2962ff]/15 px-1 font-mono text-[9px] text-[#e6e8ee]">
               {drawingCount}
             </span>
           )}
@@ -419,8 +395,8 @@ export function LeftDrawingRail({
         onClick={onToggleFloatingBar}
         className={
           showFloatingBar
-            ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#e6e8ee] text-[#0c0d11] shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-sky-400"
-            : "flex h-8 w-8 items-center justify-center rounded-md text-[#8c93a4] hover:bg-[#1c202b] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+            ? "flex h-8 w-8 items-center justify-center rounded-md bg-[#e6e8ee] text-[#0c0d11] shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+            : "flex h-8 w-8 items-center justify-center rounded-md text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
         }
       >
         <svg
@@ -465,8 +441,8 @@ export function LeftDrawingRail({
                       }}
                       className={
                         selected
-                          ? "flex h-10 items-center justify-center rounded-md bg-[#292e3b] text-lg text-white ring-1 ring-sky-400/50 focus-visible:outline-2 focus-visible:outline-sky-400"
-                          : "flex h-10 items-center justify-center rounded-md bg-[#1a1d26] text-lg text-[#d6dae6] hover:bg-[#252a38] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                          ? "flex h-10 items-center justify-center rounded-md bg-[#2962ff]/15 text-lg text-white ring-1 ring-sky-400/50 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                          : "flex h-10 items-center justify-center rounded-md bg-[#1a1d26] text-lg text-[#d6dae6] hover:bg-[#252a38] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                       }
                     >
                       {glyph}
@@ -504,7 +480,7 @@ export function LeftDrawingRail({
                           <button
                             type="button"
                             onClick={() => handleSelectFromDrawer(toolKind, openSlotDef.id)}
-                            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-1.5 text-left text-[12.5px] text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-sky-400"
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-1.5 text-left text-[12.5px] text-[#e6e8ee] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                           >
                             <span className="flex min-w-0 items-center gap-2.5">
                               <span className="shrink-0 text-[#c9ceda]">
@@ -533,8 +509,8 @@ export function LeftDrawingRail({
                               }}
                               className={
                                 isFav
-                                  ? "flex h-6 w-6 shrink-0 items-center justify-center rounded text-white hover:bg-[#2e3446] focus-visible:outline-2 focus-visible:outline-sky-400"
-                                  : "flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#666d80] opacity-0 hover:bg-[#2a3040] hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                                  ? "flex h-6 w-6 shrink-0 items-center justify-center rounded text-white hover:bg-[#2e3446] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                                  : "flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#666d80] opacity-0 hover:bg-[#2a3040] hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                               }
                             >
                               <svg

@@ -5,6 +5,7 @@ import {
   FIB_LEVELS,
   computeRulerMetrics,
   type AnchorPoint,
+  type DrawingObject,
   type PlacedDrawingKind,
 } from "./drawing-engine";
 
@@ -204,6 +205,8 @@ export function drawVectorDrawing(
   volumes: readonly HistogramData<UTCTimestamp>[],
   label?: string,
   showHandles = true,
+  style?: Partial<DrawingObject>,
+  selected = false,
 ): void {
   const pts: PixelPoint[] = anchors.map((a) => ({
     x: bridge.timeToX(a.timeSec),
@@ -213,8 +216,15 @@ export function drawVectorDrawing(
 
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 1.5;
+  ctx.fillStyle = style?.fillColor ?? color;
+  ctx.lineWidth = style?.lineWidth ?? 1.5;
+  if (style?.lineStyle === "dashed") {
+    ctx.setLineDash([6, 4]);
+  } else if (style?.lineStyle === "dotted") {
+    ctx.setLineDash([2, 3]);
+  }
+  const fontSize = style?.fontSize ?? 12;
+  const textColor = style?.textColor ?? color;
 
   const p0 = pts[0];
   const p1 = pts[1];
@@ -228,6 +238,14 @@ export function drawVectorDrawing(
         ctx.moveTo(0, p0.y);
         ctx.lineTo(w, p0.y);
         ctx.stroke();
+        if (label) {
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.fillStyle = textColor;
+          ctx.fillText(label, 12, p0.y - 6);
+          ctx.restore();
+        }
       }
       break;
 
@@ -263,10 +281,26 @@ export function drawVectorDrawing(
 
     case "trendline":
       if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+        const dx = p1.x - p0.x;
+        const dy = p1.y - p0.y;
+        const len = Math.hypot(dx, dy);
+        const scale = len > 0.5 ? (w + h) / len : 1;
+        const sx = style?.extendLeft ? p0.x - dx * scale : p0.x;
+        const sy = style?.extendLeft ? p0.y - dy * scale : p0.y;
+        const ex = style?.extendRight ? p0.x + dx * scale : p1.x;
+        const ey = style?.extendRight ? p0.y + dy * scale : p1.y;
         ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, ey);
         ctx.stroke();
+        if (label) {
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.fillStyle = textColor;
+          ctx.fillText(label, (p0.x + p1.x) / 2 + 6, (p0.y + p1.y) / 2 - 6);
+          ctx.restore();
+        }
       }
       break;
 
@@ -800,10 +834,19 @@ export function drawVectorDrawing(
         const rw = Math.abs(p1.x - p0.x);
         const rh = Math.abs(p1.y - p0.y);
         ctx.save();
-        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = style?.fillColor ?? color;
+        ctx.globalAlpha = style?.fillOpacity ?? 0.16;
         ctx.fillRect(rx, ry, rw, rh);
         ctx.restore();
         ctx.strokeRect(rx, ry, rw, rh);
+        if (label) {
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.fillStyle = textColor;
+          ctx.fillText(label, rx + 8, ry + fontSize + 4);
+          ctx.restore();
+        }
       }
       break;
 
@@ -928,8 +971,8 @@ export function drawVectorDrawing(
 
     case "text":
       if (p0?.x !== null && p0?.y !== null) {
-        ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
-        ctx.fillStyle = color;
+        ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+        ctx.fillStyle = textColor;
         ctx.fillText(label || "Text", p0.x, p0.y);
       }
       break;
@@ -1030,14 +1073,16 @@ export function drawVectorDrawing(
   }
 
   if (showHandles) {
+    ctx.setLineDash([]);
+    const radius = selected ? 4.5 : 2.5;
     for (const p of pts) {
       if (p.x !== null && p.y !== null) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = "#101217";
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#131722";
         ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = color;
+        ctx.lineWidth = selected ? 2 : 1.5;
+        ctx.strokeStyle = selected ? "#2962ff" : color;
         ctx.stroke();
       }
     }

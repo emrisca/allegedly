@@ -1,7 +1,10 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use allegedly_app::{AllegedlyRuntime, BootConfig, PaperAccountSnapshotDto, PaperOrderSubmission};
+use allegedly_app::{
+    AllegedlyRuntime, BootConfig, MarketDataStatusDto, PaperAccountSnapshotDto,
+    PaperOrderSubmission,
+};
 use allegedly_core::ResolvedSetting;
 use allegedly_ipc::{WorkspacePatch, WorkspacePatchResult, WorkspaceState};
 use allegedly_replay::{ReplayControlAction, ReplayStatusSnapshot};
@@ -35,6 +38,12 @@ struct WorkspaceExportPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UiReadyPayload {
     first_paint_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MarketDataSourcePayload {
+    source: String,
+    symbol: String,
 }
 
 struct DesktopState {
@@ -162,13 +171,30 @@ fn export_workspace_toml(
     rt.export_workspace_toml(&payload.name, &payload.symbol, &payload.timeframe)
 }
 
+/// Switch active market data source (`paper_sim`, `kraken_ws_v2`, `coinbase_ws`) & symbol.
+/// Live WebSocket feeds connect ONLY after explicit invocation here (SV-01 offline boot invariant).
+#[tauri::command]
+fn set_market_data_source(
+    state: State<'_, DesktopState>,
+    payload: MarketDataSourcePayload,
+) -> Result<MarketDataStatusDto, String> {
+    let mut rt = state.runtime.lock().expect("runtime lock");
+    rt.set_market_data_source(&payload.source, &payload.symbol)
+}
+
+#[tauri::command]
+fn get_market_data_status(state: State<'_, DesktopState>) -> MarketDataStatusDto {
+    let rt = state.runtime.lock().expect("runtime lock");
+    rt.get_market_data_status()
+}
+
 /// Raw binary `application/octet-stream` IPC frame batch (`tauri::ipc::Response`; ADR-0002 / RTSD-02).
 /// Packs length-prefixed `[u32_le][ALG2 frame]...` bytes with zero JSON array serialization.
 #[tauri::command]
 fn poll_binary_frames(state: State<'_, DesktopState>, stream_id: u32) -> tauri::ipc::Response {
     let _ = stream_id;
     let mut rt = state.runtime.lock().expect("runtime lock");
-    let frames = rt.step_sim_frames(8, now_ns());
+    let frames = rt.poll_live_or_sim_frames(now_ns());
     let packed = AllegedlyRuntime::pack_frames_raw(&frames);
     tauri::ipc::Response::new(packed)
 }
@@ -203,6 +229,7 @@ fn main() {
                 let rt = desktop_state.runtime.lock().expect("runtime lock");
                 assert!(!rt.config.updates_check_on_startup);
                 assert!(!rt.config.live_armed);
+                assert!(rt.config.offline_mode);
             }
             app.manage(desktop_state);
             Ok(())
@@ -221,6 +248,8 @@ fn main() {
             update_setting_override,
             reset_setting_override,
             export_workspace_toml,
+            set_market_data_source,
+            get_market_data_status,
             poll_binary_frames,
             report_ui_ready,
         ])
@@ -241,7 +270,12 @@ mod tests {
             let mut rt = state.runtime.lock().unwrap();
             assert!(!rt.config.updates_check_on_startup);
             assert!(!rt.config.live_armed);
-            let frames = rt.step_sim_frames(8, 16_000_000);
+            assert!(rt.config.offline_mode);
+            let status = rt.get_market_data_status();
+            assert_eq!(status.source, "paper_sim");
+            assert_eq!(status.symbol, "BTC/USD");
+            assert!(rt.set_market_data_source("kraken_ws_v2", "ES1!").is_err());
+            let frames = rt.poll_live_or_sim_frames(16_000_000);
             let packed = AllegedlyRuntime::pack_frames_raw(&frames);
             assert!(!packed.is_empty());
         }

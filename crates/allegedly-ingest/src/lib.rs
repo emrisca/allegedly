@@ -1,11 +1,17 @@
 pub mod classifier;
 pub mod dispatcher;
+pub mod live_feed;
 pub mod parsers;
 pub mod ws_client;
 
 pub use classifier::SideClassifier;
 pub use dispatcher::{
     CoreEventDispatcher, DEFAULT_RING_CAP, ProviderIngress, ProviderRing, SyntheticSimProvider,
+};
+pub use live_feed::{
+    COINBASE_ADV_TRADE_WS_URL, DEFAULT_LIVE_EVENT_CAP, FeedSource, KRAKEN_WS_V2_URL,
+    LIVE_CRYPTO_CANONICAL_SYMBOLS, LiveFeedConfig, LiveFeedHandle, LiveFeedStatusSnapshot,
+    LiveL2Snapshot, LiveMarketEvent, LiveOhlcBar,
 };
 pub use parsers::{ParseError, kraken_book_crc32, parse_coinbase_trade, parse_kraken_trade};
 pub use ws_client::{

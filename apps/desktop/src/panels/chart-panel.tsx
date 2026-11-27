@@ -48,6 +48,7 @@ import {
   DRAWING_TOOL_META,
   DrawingEngine,
   getDrawingToolMeta,
+  hitTestDrawing,
   snapTickToMagnet,
   type AnchorPoint,
   type DrawingObject,
@@ -57,6 +58,16 @@ import {
 } from "../drawings/drawing-engine";
 import { drawRulerOverlay, drawVectorDrawing } from "../drawings/render-drawings";
 import { DrawingToolIcon } from "../components/drawing-tool-icons";
+import {
+  DrawingQuickStyleBar,
+  DrawingSettingsDialog,
+} from "../components/drawing-settings-dialog";
+import {
+  hexWithOpacity,
+  isTimeframeVisible,
+  type IndicatorLineStyle,
+  type TimeframeVisibility,
+} from "../components/indicator-settings-dialog";
 import { getSymbolMeta } from "../data/symbols";
 import {
   ChartContextMenu,
@@ -76,10 +87,19 @@ export interface StudyOverlaySeries {
   color: string;
   overlay?: boolean;
   values: Array<number | null>;
+  lineWidth?: 1 | 2 | 3 | 4;
+  lineStyle?: IndicatorLineStyle;
+  opacity?: number;
+  showPriceLabel?: boolean;
+  showPriceLine?: boolean;
+  visibility?: TimeframeVisibility;
 }
 
 export interface ChartSeriesSnapshot {
   times: UTCTimestamp[];
+  opens?: number[];
+  highs?: number[];
+  lows?: number[];
   closes: number[];
   volumes: number[];
   buyVolumes: number[];
@@ -132,6 +152,7 @@ export interface ChartPanelProps {
   historyActionsRef?: { current: ChartHistoryActions | null };
   onHistoryMetaChange?: (meta: { canUndo: boolean; canRedo: boolean; count: number }) => void;
   onRemoveStudy?: (id: string) => void;
+  onOpenStudySettings?: (id: string) => void;
   onLivePriceSample?: (symbol: string, last: number) => void;
   /** Live Chart Settings + Templates + Context Menu actions */
   chartSettings?: ChartSettings;
@@ -347,6 +368,7 @@ export interface ActiveIndicatorsLegendProps {
   onRemoveVolume: () => void;
   onToggleStudyHidden: (id: string) => void;
   onRemoveStudy?: (id: string) => void;
+  onOpenStudySettings?: (id: string) => void;
   onToggleOrderflowHidden: (key: keyof OverlayVisibility) => void;
   onRemoveOrderflow: (key: keyof OverlayVisibility) => void;
 }
@@ -369,6 +391,7 @@ export function ActiveIndicatorsLegend({
   onRemoveVolume,
   onToggleStudyHidden,
   onRemoveStudy,
+  onOpenStudySettings,
   onToggleOrderflowHidden,
   onRemoveOrderflow,
 }: ActiveIndicatorsLegendProps) {
@@ -432,6 +455,7 @@ export function ActiveIndicatorsLegend({
             return (
               <div
                 key={st.id}
+                onDoubleClick={() => onOpenStudySettings?.(st.id)}
                 className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
               >
                 <span className={hidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>
@@ -463,6 +487,20 @@ export function ActiveIndicatorsLegend({
                   >
                     <LegendEyeIcon hidden={hidden} />
                   </button>
+                  {onOpenStudySettings && (
+                    <button
+                      type="button"
+                      title={`Settings for ${st.label}`}
+                      aria-label={`Settings for ${st.label}`}
+                      onClick={() => onOpenStudySettings(st.id)}
+                      className="rounded p-0.5 text-[#868c9b] opacity-0 transition-opacity hover:text-white group-hover/ind:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-sky-400"
+                    >
+                      <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.4">
+                        <circle cx="8" cy="8" r="2.2" />
+                        <path d="M8 2.2v1.3M8 12.5v1.3M2.2 8h1.3M12.5 8h1.3M3.9 3.9l.9.9M11.2 11.2l.9.9M12.1 3.9l-.9.9M4.8 11.2l-.9.9" />
+                      </svg>
+                    </button>
+                  )}
                   {onRemoveStudy && (
                     <button
                       type="button"
@@ -760,6 +798,8 @@ interface PrimitiveDrawContext {
   getDrawings: () => readonly DrawingObject[];
   getDrawingsHidden: () => boolean;
   getDrawingsLocked: () => boolean;
+  getSelectedDrawingId: () => string | null;
+  getTimeframe: () => string;
   getDraftPreview: () => {
     tool: DrawingToolKind;
     anchors: readonly AnchorPoint[];
@@ -817,8 +857,12 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
           const hidden = this.source.getDrawingsHidden();
           const locked = this.source.getDrawingsLocked();
           context.save();
+          const selectedId = this.source.getSelectedDrawingId();
+          const currentTf = this.source.getTimeframe();
           if (!hidden) {
             for (const d of this.source.getDrawings()) {
+              if (!isTimeframeVisible(currentTf, d.visibility)) continue;
+              const isSelected = d.id === selectedId;
               drawVectorDrawing(
                 context,
                 w,
@@ -831,7 +875,9 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
                 candles,
                 volumes,
                 d.label,
-                !locked,
+                !locked && isSelected,
+                d,
+                isSelected,
               );
             }
             const draft = this.source.getDraftPreview();
@@ -957,6 +1003,7 @@ export function ChartPanel({
   historyActionsRef,
   onHistoryMetaChange,
   onRemoveStudy,
+  onOpenStudySettings,
   onLivePriceSample,
   chartSettings,
   replayOpen = false,
@@ -1116,6 +1163,12 @@ export function ChartPanel({
   onLivePriceSampleRef.current = onLivePriceSample;
 
   const drawingEngineRef = useRef<DrawingEngine>(new DrawingEngine());
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
+  const [drawingSettingsOpen, setDrawingSettingsOpen] = useState(false);
+  const [, setDrawingVersion] = useState(0);
+  const selectedDrawingIdRef = useRef<string | null>(null);
+  selectedDrawingIdRef.current = selectedDrawingId;
+  const requestOverlayRedrawRef = useRef<(() => void) | null>(null);
   const chartApiRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
@@ -1714,6 +1767,9 @@ export function ChartPanel({
       if (seriesSnapshotRef) {
         seriesSnapshotRef.current = {
           times,
+          opens: activeCandles.map((c) => c.open),
+          highs: activeCandles.map((c) => c.high),
+          lows: activeCandles.map((c) => c.low),
           closes: activeCandles.map((c) => c.close),
           volumes: activeVolumes.map((v) => v.value),
           buyVolumes: [...activeBuyVolumes],
@@ -1766,6 +1822,8 @@ export function ChartPanel({
       getDrawings: (): readonly DrawingObject[] => drawingEngineRef.current.list(symbol),
       getDrawingsHidden: () => drawingsHiddenRef.current,
       getDrawingsLocked: () => drawingsLockedRef.current,
+      getSelectedDrawingId: () => selectedDrawingIdRef.current,
+      getTimeframe: () => timeframe,
       getDraftPreview: () => ({
         tool: activeToolRef.current,
         anchors: draftAnchors,
@@ -1996,7 +2054,9 @@ export function ChartPanel({
     };
 
     const finishDrawing = (toolKind: PlacedDrawingKind, anchors: AnchorPoint[], label?: string) => {
-      drawingEngineRef.current.add(toolKind, symbol, anchors, undefined, label);
+      const created = drawingEngineRef.current.add(toolKind, symbol, anchors, undefined, label);
+      setSelectedDrawingId(created.id);
+      setDrawingVersion((v) => v + 1);
       draftAnchors = [];
       hoverAnchor = null;
       isFreehandDrawing = false;
@@ -2288,6 +2348,150 @@ export function ChartPanel({
       }
     };
 
+    requestOverlayRedrawRef.current = () => {
+      primitive.requestUpdate();
+    };
+
+    const toPixel = (anchor: AnchorPoint): { x: number | null; y: number | null } => {
+      const xCoord = chart.timeScale().timeToCoordinate(anchor.timeSec as UTCTimestamp);
+      const yCoord = candleSeries.priceToCoordinate(Number(anchor.priceTick) * tickFloat);
+      return {
+        x: xCoord === null ? null : Number(xCoord),
+        y: yCoord === null ? null : Number(yCoord),
+      };
+    };
+
+    let dragState: {
+      drawingId: string;
+      hitKind: "anchor" | "body";
+      anchorIndex: number;
+      startAnchor: AnchorPoint;
+      origAnchors: AnchorPoint[];
+      moved: boolean;
+    } | null = null;
+
+    const getVisibleDrawingsForHit = (): DrawingObject[] => {
+      if (drawingsHiddenRef.current) return [];
+      return drawingEngineRef.current
+        .list(symbol)
+        .filter((d) => isTimeframeVisible(timeframe, d.visibility));
+    };
+
+    const onHostPointerDownCapture = (ev: PointerEvent) => {
+      if (ev.button !== 0) return;
+      if (activeToolRef.current !== "cursor" || shiftPressedRef.current) return;
+      const rect = el.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      const hit = hitTestDrawing(getVisibleDrawingsForHit(), px, py, toPixel, rect.width, rect.height);
+      if (!hit) {
+        if (selectedDrawingIdRef.current !== null) {
+          setSelectedDrawingId(null);
+          primitive.requestUpdate();
+        }
+        return; // Do NOT block LWC pan/zoom when clicking empty chart space
+      }
+      setSelectedDrawingId(hit.drawing.id);
+      setDrawingVersion((v) => v + 1);
+      primitive.requestUpdate();
+
+      if (drawingsLockedRef.current || hit.drawing.locked) return;
+      const startAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+      if (!startAnchor) return;
+
+      ev.stopPropagation();
+      ev.preventDefault();
+      dragState = {
+        drawingId: hit.drawing.id,
+        hitKind: hit.hitKind,
+        anchorIndex: hit.anchorIndex,
+        startAnchor,
+        origAnchors: hit.drawing.anchors.map((a) => ({ ...a })),
+        moved: false,
+      };
+    };
+
+    const onHostPointerMoveWindow = (ev: PointerEvent) => {
+      if (!dragState) return;
+      const cur = toAnchorFromPointer(ev.clientX, ev.clientY);
+      if (!cur) return;
+      ev.preventDefault();
+      let nextAnchors: AnchorPoint[];
+      if (dragState.hitKind === "anchor" && dragState.anchorIndex >= 0) {
+        nextAnchors = dragState.origAnchors.map((a, idx) =>
+          idx === dragState!.anchorIndex ? cur : { ...a },
+        );
+      } else {
+        const dt = cur.timeSec - dragState.startAnchor.timeSec;
+        const dp = cur.priceTick - dragState.startAnchor.priceTick;
+        nextAnchors = dragState.origAnchors.map((a) => ({
+          timeSec: a.timeSec + dt,
+          priceTick: a.priceTick + dp > 1n ? a.priceTick + dp : 1n,
+        }));
+      }
+      dragState.moved = true;
+      drawingEngineRef.current.setAnchorsSilent(dragState.drawingId, nextAnchors);
+      primitive.requestUpdate();
+    };
+
+    const onHostPointerUpWindow = () => {
+      if (!dragState) return;
+      const done = dragState;
+      dragState = null;
+      if (done.moved) {
+        const current = drawingEngineRef.current.getById(done.drawingId);
+        if (current) {
+          drawingEngineRef.current.commitMove(done.drawingId, done.origAnchors, current.anchors);
+          syncHistoryMeta();
+          setDrawingVersion((v) => v + 1);
+        }
+      }
+    };
+
+    const onHostDoubleClickCapture = (ev: MouseEvent) => {
+      if (activeToolRef.current !== "cursor") return;
+      const rect = el.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      const hit = hitTestDrawing(getVisibleDrawingsForHit(), px, py, toPixel, rect.width, rect.height);
+      if (hit) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        setSelectedDrawingId(hit.drawing.id);
+        setDrawingSettingsOpen(true);
+      }
+    };
+
+    const onDeleteSelectedKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Delete" && ev.key !== "Backspace") return;
+      const target = ev.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const selId = selectedDrawingIdRef.current;
+      if (!selId) return;
+      ev.preventDefault();
+      if (drawingEngineRef.current.remove(selId)) {
+        setSelectedDrawingId(null);
+        setDrawingSettingsOpen(false);
+        syncHistoryMeta();
+        setDrawingVersion((v) => v + 1);
+        primitive.requestUpdate();
+      }
+    };
+
+    el.addEventListener("pointerdown", onHostPointerDownCapture, { capture: true });
+    el.addEventListener("dblclick", onHostDoubleClickCapture, { capture: true });
+    window.addEventListener("pointermove", onHostPointerMoveWindow);
+    window.addEventListener("pointerup", onHostPointerUpWindow);
+    window.addEventListener("keydown", onDeleteSelectedKey);
+
     pointerSurface.addEventListener("pointerdown", onPointerDown);
     pointerSurface.addEventListener("pointermove", onPointerMove);
     pointerSurface.addEventListener("pointerup", onPointerUp);
@@ -2311,6 +2515,12 @@ export function ChartPanel({
     return () => {
       unsub();
       ro.disconnect();
+      requestOverlayRedrawRef.current = null;
+      el.removeEventListener("pointerdown", onHostPointerDownCapture, { capture: true });
+      el.removeEventListener("dblclick", onHostDoubleClickCapture, { capture: true });
+      window.removeEventListener("pointermove", onHostPointerMoveWindow);
+      window.removeEventListener("pointerup", onHostPointerUpWindow);
+      window.removeEventListener("keydown", onDeleteSelectedKey);
       pointerSurface.removeEventListener("pointerdown", onPointerDown);
       pointerSurface.removeEventListener("pointermove", onPointerMove);
       pointerSurface.removeEventListener("pointerup", onPointerUp);
@@ -2363,9 +2573,22 @@ export function ChartPanel({
         }
         map.set(st.id, series);
       }
+      const lwcLineStyle =
+        st.lineStyle === "dashed"
+          ? LineStyle.Dashed
+          : st.lineStyle === "dotted"
+            ? LineStyle.Dotted
+            : LineStyle.Solid;
       series.applyOptions({
-        visible: !hiddenStudyIds.has(st.id),
-        lastValueVisible: isOverlay && effectiveSettings.scales.indicatorsLabel === "value",
+        color: hexWithOpacity(st.color, st.opacity ?? 1),
+        lineWidth: st.lineWidth ?? 2,
+        lineStyle: lwcLineStyle,
+        priceLineVisible: st.showPriceLine ?? false,
+        visible: !hiddenStudyIds.has(st.id) && isTimeframeVisible(timeframe, st.visibility),
+        lastValueVisible:
+          (st.showPriceLabel ?? true) &&
+          isOverlay &&
+          effectiveSettings.scales.indicatorsLabel === "value",
       });
       const n = Math.min(times.length, st.values.length);
       const pts: LineData<UTCTimestamp>[] = [];
@@ -2767,6 +2990,7 @@ export function ChartPanel({
               }}
               onToggleStudyHidden={toggleStudyVisibility}
               onRemoveStudy={onRemoveStudy}
+              onOpenStudySettings={onOpenStudySettings}
               onToggleOrderflowHidden={toggleOrderflowLayerHidden}
               onRemoveOrderflow={handleToggleVisibility}
             />
@@ -2778,7 +3002,7 @@ export function ChartPanel({
           <div
             ref={floatingBarRef}
             role="toolbar"
-            aria-label="Quick drawing and orderflow favorites"
+            aria-label="Favorite drawing tools"
             style={
               floatingBarPos
                 ? { left: `${floatingBarPos.x}px`, top: `${floatingBarPos.y}px` }
@@ -2786,8 +3010,8 @@ export function ChartPanel({
             }
             className={
               floatingBarPos
-                ? "absolute z-25 flex items-center gap-0.5 rounded-xl border border-[#2a2f3d] bg-[#12141a]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
-                : "absolute left-1/2 top-2 z-25 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-[#2a2f3d] bg-[#12141a]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
+                ? "absolute z-25 flex items-center gap-0.5 rounded-xl border border-[#2a2e39] bg-[#1e222d]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
+                : "absolute left-1/2 top-2 z-25 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-[#2a2e39] bg-[#1e222d]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
             }
           >
             <button
@@ -2828,8 +3052,8 @@ export function ChartPanel({
                   onClick={() => setActiveTool(active ? "cursor" : toolKind)}
                   className={
                     active
-                      ? "flex h-7 w-7 items-center justify-center rounded-md bg-[#292e3b] text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-                      : "flex h-7 w-7 items-center justify-center rounded-md text-[#b8becd] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+                      ? "flex h-7 w-7 items-center justify-center rounded-md bg-[#2962ff]/18 text-[#2962ff] focus-visible:outline-2 focus-visible:outline-sky-400"
+                      : "flex h-7 w-7 items-center justify-center rounded-md text-[#b8becd] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
                   }
                 >
                   <DrawingToolIcon kind={toolKind} className="h-[17px] w-[17px]" />
@@ -2837,46 +3061,7 @@ export function ChartPanel({
               );
             })}
 
-            <span className="mx-1 h-4 w-px bg-[#2a2f3d]" aria-hidden="true" />
-            <button
-              type="button"
-              aria-label="Toggle Footprint overlay"
-              aria-pressed={visibility.footprint}
-              onClick={() => handleToggleVisibility("footprint")}
-              className={
-                visibility.footprint
-                  ? "rounded bg-emerald-500/20 px-1.5 py-1 font-mono text-[10px] font-semibold text-emerald-300 ring-1 ring-emerald-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
-                  : "rounded px-1.5 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              }
-            >
-              FP
-            </button>
-            <button
-              type="button"
-              aria-label="Toggle Volume Profile overlay"
-              aria-pressed={visibility.vrvp}
-              onClick={() => handleToggleVisibility("vrvp")}
-              className={
-                visibility.vrvp
-                  ? "rounded bg-sky-500/20 px-1.5 py-1 font-mono text-[10px] font-semibold text-sky-300 ring-1 ring-sky-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
-                  : "rounded px-1.5 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              }
-            >
-              VP
-            </button>
-            <button
-              type="button"
-              aria-label="Toggle TPO Market Profile overlay"
-              aria-pressed={visibility.tpo}
-              onClick={() => handleToggleVisibility("tpo")}
-              className={
-                visibility.tpo
-                  ? "rounded bg-amber-500/20 px-1.5 py-1 font-mono text-[10px] font-semibold text-amber-300 ring-1 ring-amber-500/40 focus-visible:outline-2 focus-visible:outline-sky-400"
-                  : "rounded px-1.5 py-1 font-mono text-[10px] text-[#9aa1b2] hover:bg-[#212533] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
-              }
-            >
-              TPO
-            </button>
+
           </div>
         )}
 
@@ -2941,6 +3126,33 @@ export function ChartPanel({
             </button>
           </form>
         )}
+
+        {!drawingsHidden &&
+          selectedDrawingId &&
+          (() => {
+            const sel = drawingEngineRef.current.getById(selectedDrawingId);
+            if (!sel || sel.symbol !== symbol) return null;
+            return (
+              <DrawingQuickStyleBar
+                drawing={sel}
+                onUpdate={(patch) => {
+                  drawingEngineRef.current.update(sel.id, patch);
+                  syncHistoryMeta();
+                  setDrawingVersion((v) => v + 1);
+                  requestOverlayRedrawRef.current?.();
+                }}
+                onOpenSettings={() => setDrawingSettingsOpen(true)}
+                onDelete={() => {
+                  drawingEngineRef.current.remove(sel.id);
+                  setSelectedDrawingId(null);
+                  setDrawingSettingsOpen(false);
+                  syncHistoryMeta();
+                  setDrawingVersion((v) => v + 1);
+                  requestOverlayRedrawRef.current?.();
+                }}
+              />
+            );
+          })()}
 
         <div ref={hostRef} className="h-full w-full" />
 
@@ -3257,6 +3469,20 @@ export function ChartPanel({
             }}
           />
         )}
+
+        <DrawingSettingsDialog
+          open={drawingSettingsOpen}
+          drawing={selectedDrawingId ? drawingEngineRef.current.getById(selectedDrawingId) : null}
+          tickSizeE9={tickSizeE9}
+          decimals={symMeta.decimals}
+          onOpenChange={setDrawingSettingsOpen}
+          onSave={(id, patch) => {
+            drawingEngineRef.current.update(id, patch);
+            syncHistoryMeta();
+            setDrawingVersion((v) => v + 1);
+            requestOverlayRedrawRef.current?.();
+          }}
+        />
       </div>
     </div>
   );

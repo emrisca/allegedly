@@ -194,7 +194,7 @@ export function DomLadderPanel({
   }, [transport, symbol]);
 
   return (
-    <div ref={hostRef} className="h-full w-full overflow-hidden bg-[#101217]">
+    <div ref={hostRef} className="h-full w-full overflow-hidden bg-[#131722]">
       <canvas
         ref={canvasRef}
         aria-label={`DOM Ladder and Time and Sales for ${symbol}`}

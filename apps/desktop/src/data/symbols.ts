@@ -11,9 +11,52 @@ export interface SymbolMeta {
   seedChange: number;
   seedChangePct: number;
   delayedLabel?: string;
+  supportsLive?: boolean;
 }
 
 export const WATCHLIST_SYMBOLS: readonly SymbolMeta[] = [
+  {
+    symbol: "BTC/USD",
+    shortLabel: "₿",
+    name: "Bitcoin / US Dollar",
+    exchange: "SPOT",
+    badgeColor: "#f59e0b",
+    badgeText: "#0c0d11",
+    basePrice: 95_000.0,
+    tickSizeE9: 500_000_000n, // $0.50
+    decimals: 2,
+    seedChange: 1_240.5,
+    seedChangePct: 1.32,
+    supportsLive: true,
+  },
+  {
+    symbol: "ETH/USD",
+    shortLabel: "Ξ",
+    name: "Ethereum / US Dollar",
+    exchange: "SPOT",
+    badgeColor: "#6366f1",
+    badgeText: "#ffffff",
+    basePrice: 3_400.0,
+    tickSizeE9: 100_000_000n, // $0.10
+    decimals: 2,
+    seedChange: 48.2,
+    seedChangePct: 1.44,
+    supportsLive: true,
+  },
+  {
+    symbol: "SOL/USD",
+    shortLabel: "S",
+    name: "Solana / US Dollar",
+    exchange: "SPOT",
+    badgeColor: "#14b8a6",
+    badgeText: "#0c0d11",
+    basePrice: 185.0,
+    tickSizeE9: 10_000_000n, // $0.01
+    decimals: 2,
+    seedChange: 4.15,
+    seedChangePct: 2.29,
+    supportsLive: true,
+  },
   {
     symbol: "NQ1!",
     shortLabel: "100",
@@ -82,48 +125,6 @@ export const WATCHLIST_SYMBOLS: readonly SymbolMeta[] = [
     decimals: 2,
     seedChange: 1.68,
     seedChangePct: 2.05,
-    delayedLabel: "Paper Sim",
-  },
-  {
-    symbol: "BTC/USD",
-    shortLabel: "₿",
-    name: "Bitcoin / US Dollar",
-    exchange: "SPOT · SIM",
-    badgeColor: "#f59e0b",
-    badgeText: "#0c0d11",
-    basePrice: 95_000.0,
-    tickSizeE9: 500_000_000n, // $0.50
-    decimals: 2,
-    seedChange: 1_240.5,
-    seedChangePct: 1.32,
-    delayedLabel: "Paper Sim",
-  },
-  {
-    symbol: "ETH/USD",
-    shortLabel: "Ξ",
-    name: "Ethereum / US Dollar",
-    exchange: "SPOT · SIM",
-    badgeColor: "#6366f1",
-    badgeText: "#ffffff",
-    basePrice: 3_400.0,
-    tickSizeE9: 100_000_000n, // $0.10
-    decimals: 2,
-    seedChange: 48.2,
-    seedChangePct: 1.44,
-    delayedLabel: "Paper Sim",
-  },
-  {
-    symbol: "SOL/USD",
-    shortLabel: "S",
-    name: "Solana / US Dollar",
-    exchange: "SPOT · SIM",
-    badgeColor: "#14b8a6",
-    badgeText: "#0c0d11",
-    basePrice: 185.0,
-    tickSizeE9: 10_000_000n, // $0.01
-    decimals: 2,
-    seedChange: 4.15,
-    seedChangePct: 2.29,
     delayedLabel: "Paper Sim",
   },
   {

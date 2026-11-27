@@ -1,8 +1,11 @@
-import type {
-  FootprintCell,
-  TpoRow128,
-  VolumeProfileBin,
-  VolumeProfileSummary,
+import {
+  BIT_BUY_IMBAL,
+  BIT_POC,
+  BIT_SELL_IMBAL,
+  type FootprintCell,
+  type TpoRow128,
+  type VolumeProfileBin,
+  type VolumeProfileSummary,
 } from "@allegedly/ipc-client";
 
 export interface OverlayVisibility {
@@ -52,9 +55,7 @@ void main() {
 
 const MAX_QUADS = 16_384;
 const FLOATS_PER_QUAD = 8; // x, y, w, h, r, g, b, a
-const BIT_SELL_IMBAL = 1 << 0;
-const BIT_BUY_IMBAL = 1 << 1;
-const BIT_POC = 1 << 2;
+// Imbalance & POC bitmasks imported from @allegedly/ipc-client (canonical ALG2 contract)
 
 /**
  * Instanced WebGL2 orderflow quad renderer (Footprint + VRVP + u128 TPO)

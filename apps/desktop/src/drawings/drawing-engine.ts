@@ -123,6 +123,24 @@ export interface AnchorPoint {
   priceTick: bigint;
 }
 
+export type DrawingLineStyle = "solid" | "dashed" | "dotted";
+
+export interface DrawingVisibility {
+  minutes: boolean;
+  hours: boolean;
+  days: boolean;
+  weeks: boolean;
+  months: boolean;
+}
+
+export const DEFAULT_DRAWING_VISIBILITY: DrawingVisibility = {
+  minutes: true,
+  hours: true,
+  days: true,
+  weeks: true,
+  months: true,
+};
+
 export interface DrawingObject {
   id: string;
   kind: PlacedDrawingKind;
@@ -130,6 +148,23 @@ export interface DrawingObject {
   anchors: AnchorPoint[];
   color: string;
   label?: string;
+  lineWidth?: 1 | 2 | 3 | 4;
+  lineStyle?: DrawingLineStyle;
+  fillColor?: string;
+  fillOpacity?: number;
+  extendLeft?: boolean;
+  extendRight?: boolean;
+  showPriceLabels?: boolean;
+  fontSize?: number;
+  textColor?: string;
+  locked?: boolean;
+  visibility?: DrawingVisibility;
+}
+
+export interface DrawingHitResult {
+  drawing: DrawingObject;
+  hitKind: "anchor" | "body";
+  anchorIndex: number;
 }
 
 export interface MagnetTarget {
@@ -485,7 +520,16 @@ type HistoryAction =
   | { type: "add"; drawing: DrawingObject }
   | { type: "delete"; drawing: DrawingObject; index: number }
   | { type: "move"; id: string; before: AnchorPoint[]; after: AnchorPoint[] }
+  | { type: "update"; id: string; before: DrawingObject; after: DrawingObject }
   | { type: "clear"; symbol?: string; previous: DrawingObject[] };
+
+function cloneDrawing(d: DrawingObject): DrawingObject {
+  return {
+    ...d,
+    anchors: d.anchors.map((a) => ({ ...a })),
+    visibility: d.visibility ? { ...d.visibility } : undefined,
+  };
+}
 
 /**
  * Deterministic clean-room Drawing Engine with full Undo/Redo command stack
@@ -531,6 +575,10 @@ export class DrawingEngine {
     return drawing;
   }
 
+  public getById(id: string): DrawingObject | null {
+    return this.drawings.find((d) => d.id === id) ?? null;
+  }
+
   public move(id: string, nextAnchors: AnchorPoint[]): boolean {
     const target = this.drawings.find((d) => d.id === id);
     if (!target) return false;
@@ -540,6 +588,42 @@ export class DrawingEngine {
     this.undoStack.push({ type: "move", id, before, after });
     this.redoStack.length = 0;
     return true;
+  }
+
+  public setAnchorsSilent(id: string, nextAnchors: AnchorPoint[]): boolean {
+    const target = this.drawings.find((d) => d.id === id);
+    if (!target) return false;
+    target.anchors = nextAnchors.map((a) => ({ ...a }));
+    return true;
+  }
+
+  public commitMove(id: string, beforeAnchors: AnchorPoint[], afterAnchors: AnchorPoint[]): void {
+    this.undoStack.push({
+      type: "move",
+      id,
+      before: beforeAnchors.map((a) => ({ ...a })),
+      after: afterAnchors.map((a) => ({ ...a })),
+    });
+    this.redoStack.length = 0;
+  }
+
+  public update(
+    id: string,
+    patch: Partial<Omit<DrawingObject, "id" | "kind" | "symbol">>,
+  ): DrawingObject | null {
+    const idx = this.drawings.findIndex((d) => d.id === id);
+    if (idx === -1) return null;
+    const before = cloneDrawing(this.drawings[idx]);
+    const next: DrawingObject = cloneDrawing({
+      ...this.drawings[idx],
+      ...patch,
+      anchors: patch.anchors ? patch.anchors.map((a) => ({ ...a })) : this.drawings[idx].anchors,
+      visibility: patch.visibility ? { ...patch.visibility } : this.drawings[idx].visibility,
+    });
+    this.drawings[idx] = next;
+    this.undoStack.push({ type: "update", id, before, after: cloneDrawing(next) });
+    this.redoStack.length = 0;
+    return next;
   }
 
   public remove(id: string): boolean {
@@ -577,6 +661,11 @@ export class DrawingEngine {
         if (d) d.anchors = action.before.map((a) => ({ ...a }));
         break;
       }
+      case "update": {
+        const idx = this.drawings.findIndex((x) => x.id === action.id);
+        if (idx !== -1) this.drawings[idx] = cloneDrawing(action.before);
+        break;
+      }
       case "clear":
         this.drawings = action.previous.map((d) => ({
           ...d,
@@ -601,6 +690,11 @@ export class DrawingEngine {
       case "move": {
         const d = this.drawings.find((x) => x.id === action.id);
         if (d) d.anchors = action.after.map((a) => ({ ...a }));
+        break;
+      }
+      case "update": {
+        const idx = this.drawings.findIndex((x) => x.id === action.id);
+        if (idx !== -1) this.drawings[idx] = cloneDrawing(action.after);
         break;
       }
       case "clear":
@@ -632,6 +726,23 @@ export class DrawingEngine {
       if (d.label !== undefined) {
         lines.push(`label = "${escapeToml(d.label)}"`);
       }
+      if (d.lineWidth !== undefined) {
+        lines.push(`line_width = ${d.lineWidth}`);
+      }
+      if (d.lineStyle !== undefined) {
+        lines.push(`line_style = "${d.lineStyle}"`);
+      }
+      if (d.fillColor !== undefined) {
+        lines.push(`fill_color = "${escapeToml(d.fillColor)}"`);
+      }
+      if (d.fillOpacity !== undefined) {
+        lines.push(`fill_opacity = ${d.fillOpacity.toFixed(2)}`);
+      }
+      if (d.extendLeft) lines.push("extend_left = true");
+      if (d.extendRight) lines.push("extend_right = true");
+      if (d.locked) lines.push("locked = true");
+      if (d.fontSize !== undefined) lines.push(`font_size = ${d.fontSize}`);
+      if (d.textColor !== undefined) lines.push(`text_color = "${escapeToml(d.textColor)}"`);
       const anchorStrs = d.anchors.map(
         (a) => `{ time_sec = ${a.timeSec}, price_tick = "${a.priceTick.toString()}" }`,
       );
@@ -672,7 +783,36 @@ export class DrawingEngine {
           priceTick: BigInt(m[2]),
         });
       }
-      parsed.push({ id, kind, symbol, color, label, anchors });
+      const lwStr = matchTomlNum(block, "line_width");
+      const lineWidth =
+        lwStr && [1, 2, 3, 4].includes(lwStr) ? (lwStr as 1 | 2 | 3 | 4) : undefined;
+      const lsStr = matchTomlStr(block, "line_style");
+      const lineStyle =
+        lsStr === "solid" || lsStr === "dashed" || lsStr === "dotted" ? lsStr : undefined;
+      const fillColor = matchTomlStr(block, "fill_color") ?? undefined;
+      const fillOpacity = matchTomlFloat(block, "fill_opacity") ?? undefined;
+      const extendLeft = matchTomlBool(block, "extend_left") ?? undefined;
+      const extendRight = matchTomlBool(block, "extend_right") ?? undefined;
+      const locked = matchTomlBool(block, "locked") ?? undefined;
+      const fontSize = matchTomlNum(block, "font_size") ?? undefined;
+      const textColor = matchTomlStr(block, "text_color") ?? undefined;
+      parsed.push({
+        id,
+        kind,
+        symbol,
+        color,
+        label,
+        anchors,
+        ...(lineWidth !== undefined ? { lineWidth } : {}),
+        ...(lineStyle !== undefined ? { lineStyle } : {}),
+        ...(fillColor !== undefined ? { fillColor } : {}),
+        ...(fillOpacity !== undefined ? { fillOpacity } : {}),
+        ...(extendLeft ? { extendLeft } : {}),
+        ...(extendRight ? { extendRight } : {}),
+        ...(locked ? { locked } : {}),
+        ...(fontSize !== undefined ? { fontSize } : {}),
+        ...(textColor !== undefined ? { textColor } : {}),
+      });
     }
     this.drawings = parsed;
     this.undoStack.length = 0;
@@ -714,4 +854,165 @@ function matchTomlStr(block: string, key: string): string | null {
   const re = new RegExp(`^${key}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`, "m");
   const m = block.match(re);
   return m ? unescapeToml(m[1]) : null;
+}
+
+
+function matchTomlNum(block: string, key: string): number | null {
+  const re = new RegExp(`^${key}\\s*=\\s*(-?\\d+)`, "m");
+  const m = block.match(re);
+  return m ? Number.parseInt(m[1], 10) : null;
+}
+
+function matchTomlFloat(block: string, key: string): number | null {
+  const re = new RegExp(`^${key}\\s*=\\s*(-?\\d+(?:\\.\\d+)?)`, "m");
+  const m = block.match(re);
+  return m ? Number.parseFloat(m[1]) : null;
+}
+
+function matchTomlBool(block: string, key: string): boolean | null {
+  const re = new RegExp(`^${key}\\s*=\\s*(true|false)`, "m");
+  const m = block.match(re);
+  return m ? m[1] === "true" : null;
+}
+
+function pointToSegmentDist(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-6) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/**
+ * Hit-tests drawings in reverse z-order (most recently added first).
+ * Checks anchor handles first (10px radius), then line/shape/badge geometry (8px tolerance).
+ */
+export function hitTestDrawing(
+  drawings: readonly DrawingObject[],
+  px: number,
+  py: number,
+  toPixel: (anchor: AnchorPoint) => { x: number | null; y: number | null },
+  canvasWidth: number,
+  canvasHeight: number,
+): DrawingHitResult | null {
+  const ANCHOR_TOL = 10;
+  const BODY_TOL = 8;
+
+  for (let i = drawings.length - 1; i >= 0; i--) {
+    const d = drawings[i];
+    const pts = d.anchors.map(toPixel);
+
+    // 1. Anchor handles first
+    for (let ai = 0; ai < pts.length; ai++) {
+      const p = pts[ai];
+      if (p.x !== null && p.y !== null && Math.hypot(px - p.x, py - p.y) <= ANCHOR_TOL) {
+        return { drawing: d, hitKind: "anchor", anchorIndex: ai };
+      }
+    }
+
+    const p0 = pts[0];
+    const p1 = pts[1];
+
+    // 2. Infinite / single-anchor lines
+    if (d.kind === "horizontal_line" && p0?.y !== null) {
+      if (Math.abs(py - p0.y) <= BODY_TOL) return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      continue;
+    }
+    if (d.kind === "horizontal_ray" && p0?.y !== null) {
+      const startX = p0.x ?? 0;
+      if (px >= startX - BODY_TOL && Math.abs(py - p0.y) <= BODY_TOL) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+    if (d.kind === "vertical_line" && p0?.x !== null) {
+      if (Math.abs(px - p0.x) <= BODY_TOL) return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      continue;
+    }
+    if (d.kind === "crossline" && p0?.x !== null && p0.y !== null) {
+      if (Math.abs(px - p0.x) <= BODY_TOL || Math.abs(py - p0.y) <= BODY_TOL) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+
+    // 3. Single-anchor text/marker badges
+    if (pts.length === 1 && p0?.x !== null && p0.y !== null) {
+      if (px >= p0.x - 16 && px <= p0.x + 120 && py >= p0.y - 24 && py <= p0.y + 24) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+      continue;
+    }
+
+    // 4. Rectangular / Fib / Position / Range zones
+    if (
+      p0?.x !== null &&
+      p0?.y !== null &&
+      p1?.x !== null &&
+      p1?.y !== null &&
+      (d.kind === "box_zone" ||
+        d.kind === "fib_retracement" ||
+        d.kind === "fib_extension" ||
+        d.kind === "long_position" ||
+        d.kind === "short_position" ||
+        d.kind === "price_range" ||
+        d.kind === "date_range" ||
+        d.kind === "date_price_range" ||
+        d.kind === "fixed_range_vp" ||
+        d.kind === "circle" ||
+        d.kind === "ellipse")
+    ) {
+      const minX = Math.min(p0.x, p1.x) - BODY_TOL;
+      const maxX = Math.max(p0.x, p1.x) + BODY_TOL;
+      const minY = Math.min(p0.y, p1.y) - BODY_TOL;
+      const maxY = Math.max(p0.y, p1.y) + BODY_TOL;
+      if (px >= minX && px <= maxX && py >= minY && py <= maxY) {
+        return { drawing: d, hitKind: "body", anchorIndex: -1 };
+      }
+    }
+
+    // 5. Extended / ray trendline hit test
+    if (
+      p0?.x !== null &&
+      p0?.y !== null &&
+      p1?.x !== null &&
+      p1?.y !== null &&
+      (d.kind === "ray" || d.kind === "extended_line" || d.extendLeft || d.extendRight)
+    ) {
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 0.5) {
+        const scale = (canvasWidth + canvasHeight) / len;
+        const sx = d.kind === "extended_line" || d.extendLeft ? p0.x - dx * scale : p0.x;
+        const sy = d.kind === "extended_line" || d.extendLeft ? p0.y - dy * scale : p0.y;
+        const ex = d.kind === "extended_line" || d.kind === "ray" || d.extendRight ? p0.x + dx * scale : p1.x;
+        const ey = d.kind === "extended_line" || d.kind === "ray" || d.extendRight ? p0.y + dy * scale : p1.y;
+        if (pointToSegmentDist(px, py, sx, sy, ex, ey) <= BODY_TOL) {
+          return { drawing: d, hitKind: "body", anchorIndex: -1 };
+        }
+      }
+    }
+
+    // 6. Polyline / multi-segment hit test across consecutive anchors
+    for (let si = 0; si < pts.length - 1; si++) {
+      const a = pts[si];
+      const b = pts[si + 1];
+      if (a.x !== null && a.y !== null && b.x !== null && b.y !== null) {
+        if (pointToSegmentDist(px, py, a.x, a.y, b.x, b.y) <= BODY_TOL) {
+          return { drawing: d, hitKind: "body", anchorIndex: -1 };
+        }
+      }
+    }
+  }
+
+  return null;
 }

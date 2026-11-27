@@ -9,12 +9,20 @@ afterEach(() => {
   cleanup();
 });
 import axe from "axe-core";
-import { BookState, ProvenanceTier } from "@allegedly/ipc-client";
+import { BookState, OfflineSimTransportAdapter, ProvenanceTier } from "@allegedly/ipc-client";
 import { ChromeToolbar, StatusBar } from "@allegedly/ui-chrome";
 import { ReplayBar } from "./components/replay-bar";
 import { DEFAULT_FAVORITE_TOOLS } from "./drawings/drawing-engine";
 import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { IndicatorsDialog } from "./components/indicators-dialog";
+import {
+  DEFAULT_TIMEFRAME_VISIBILITY,
+  IndicatorSettingsDialog,
+} from "./components/indicator-settings-dialog";
+import {
+  DrawingQuickStyleBar,
+  DrawingSettingsDialog,
+} from "./components/drawing-settings-dialog";
 import { ActiveIndicatorsLegend, ChartOverlayToolbar } from "./panels/chart-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
 
@@ -122,11 +130,11 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
       </div>,
     );
 
-    expect(screen.getByTestId("mode-badge").textContent).toContain("PAPER / SIM");
+    expect(screen.getByTestId("market-data-feed-trigger").textContent).toContain("Sim");
     expect(screen.getByTestId("live-armed-badge").textContent).toContain("LIVE_ARMED = false");
     expect(screen.getByTestId("renderer-badge").textContent).toContain("WebGL2");
-    expect(screen.getByTestId("replay-sha256-badge").textContent).toContain("BIT-EXACT");
-    expect(container.textContent).toContain("UPDATES_ON_BOOT: false");
+    expect(screen.getByRole("toolbar", { name: "Bar replay controls" })).toBeTruthy();
+    expect(screen.getByRole("contentinfo", { name: "Chart range and scale bar" })).toBeTruthy();
 
     await expectZeroCriticalOrSeriousAxe(container);
   });
@@ -166,8 +174,8 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
 
     // Close Settings and open Command Palette
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
-    fireEvent.click(screen.getByRole("button", { name: /Command/i }));
-    expect(screen.getByPlaceholderText(/Type a symbol or command/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Symbol search/i }));
+    expect(screen.getByPlaceholderText(/Type a symbol/i)).toBeTruthy();
 
     await expectZeroCriticalOrSeriousAxe(container);
   });
@@ -215,9 +223,8 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
       </div>,
     );
 
-    // StatusBar colors Disconnected as rose and hides provenance when showProvenance=false
-    const bookIndicator = screen.getByTestId("status-book-indicator");
-    expect(bookIndicator.className).toContain("text-rose-400");
+    // Clean TradingView StatusBar keeps engineering provenance/book badges off the bottom chart bar
+    expect(screen.getByRole("contentinfo", { name: "Chart range and scale bar" })).toBeTruthy();
     expect(screen.queryByTestId("status-provenance-badge")).toBeNull();
 
     // Provenance tab shows T1..T5 (never T0) and amber for Stale
@@ -316,7 +323,8 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
     fireEvent.click(screen.getByRole("button", { name: "Take chart snapshot" }));
     expect(onTakeSnapshot).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Provenance and TOML configuration" }));
+    fireEvent.click(screen.getByRole("button", { name: "Workspace menu" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Data & System Info" }));
     expect(onOpenProvenance).toHaveBeenCalledTimes(1);
 
     await expectZeroCriticalOrSeriousAxe(container);
@@ -438,7 +446,7 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
     );
 
     // Top toolbar Indicators button invokes onOpenStudies
-    fireEvent.click(screen.getByRole("button", { name: "Open Indicators and Luau Studies" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Indicators" }));
     expect(onOpenStudies).toHaveBeenCalledTimes(1);
 
     // Modal title, search input, and sidebar categories render
@@ -568,5 +576,127 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
 
     expect(screen.getByRole("button", { name: "Expand active indicators" }).textContent).toContain("2");
     await expectZeroCriticalOrSeriousAxe(container);
+  });
+
+  it("renders IndicatorSettingsDialog (Inputs/Style/Visibility), saves custom config, and passes axe-core", async () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <IndicatorSettingsDialog
+        open={true}
+        config={{
+          id: "sma-20",
+          label: "SMA (20)",
+          builtin: "sma",
+          period: 20,
+          source: "close",
+          color: "#38bdf8",
+          lineWidth: 2,
+          lineStyle: "solid",
+          opacity: 1,
+          showPriceLabel: true,
+          showPriceLine: false,
+          visibility: { ...DEFAULT_TIMEFRAME_VISIBILITY },
+        }}
+        onOpenChange={() => {}}
+        onSave={onSave}
+      />,
+    );
+
+    expect(screen.getByText("SMA (20)")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Length"), { target: { value: "50" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "dashed" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Visibility" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "sma-20",
+        period: 50,
+        lineStyle: "dashed",
+      }),
+    );
+    await expectZeroCriticalOrSeriousAxe(container);
+  });
+
+  it("renders DrawingQuickStyleBar & DrawingSettingsDialog (Style/Text/Coordinates/Visibility) and passes axe-core", async () => {
+    const onUpdate = vi.fn();
+    const onOpenSettings = vi.fn();
+    const onDelete = vi.fn();
+    const onSave = vi.fn();
+    const drawing = {
+      id: "drw-1",
+      kind: "trendline" as const,
+      symbol: "BTC/USD",
+      anchors: [
+        { timeSec: 1700000000, priceTick: 190_000n },
+        { timeSec: 1700003600, priceTick: 192_000n },
+      ],
+      color: "#2962ff",
+      lineWidth: 2 as const,
+      lineStyle: "solid" as const,
+    };
+
+    const { container } = render(
+      <div>
+        <DrawingQuickStyleBar
+          drawing={drawing}
+          onUpdate={onUpdate}
+          onOpenSettings={onOpenSettings}
+          onDelete={onDelete}
+        />
+        <DrawingSettingsDialog
+          open={true}
+          drawing={drawing}
+          tickSizeE9={500_000_000n}
+          decimals={2}
+          onOpenChange={() => {}}
+          onSave={onSave}
+        />
+      </div>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Line width 2px" }));
+    expect(onUpdate).toHaveBeenCalledWith({ lineWidth: 3 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open drawing settings" }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
+    fireEvent.change(screen.getByLabelText("Label / Annotation Text"), {
+      target: { value: "Key Support" },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Coordinates" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Visibility" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      "drw-1",
+      expect.objectContaining({
+        label: "Key Support",
+      }),
+    );
+    await expectZeroCriticalOrSeriousAxe(container);
+  });
+
+  it("enforces SV-01 offline default in OfflineSimTransportAdapter market data status and validates live symbols", async () => {
+    const adapter = new OfflineSimTransportAdapter();
+    try {
+      const status = await adapter.invokeJson<Record<string, never>, { source: string; connected: boolean }>(
+        "get_market_data_status",
+        {},
+      );
+      expect(status.source).toBe("paper_sim");
+      expect(status.connected).toBe(true);
+
+      await expect(
+        adapter.invokeJson("set_market_data_source", {
+          source: "kraken_ws_v2",
+          symbol: "ES1!",
+        }),
+      ).rejects.toThrow(/Unsupported live symbol/);
+    } finally {
+      adapter.dispose();
+    }
   });
 });

@@ -3,6 +3,7 @@ import {
   DEFAULT_FAVORITE_TOOLS,
   DRAWING_SLOTS,
   DrawingEngine,
+  hitTestDrawing,
   computeRulerMetrics,
   snapTickToMagnet,
   type PlacedDrawingKind,
@@ -162,5 +163,61 @@ describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
     const reloaded = new DrawingEngine();
     expect(reloaded.loadFromAtAnalysisToml(engine.toAtAnalysisToml())).toBe(3);
     expect(reloaded.list("ES1!")[2].label).toBe("🎯");
+  });
+
+  it("supports style/text/coordinate updates with undo/redo, TOML round-trip, and hitTestDrawing", () => {
+    const engine = new DrawingEngine();
+    const trend = engine.add("trendline", "BTC/USD", [
+      { timeSec: 1000, priceTick: 100n },
+      { timeSec: 2000, priceTick: 200n },
+    ]);
+
+    const updated = engine.update(trend.id, {
+      color: "#f23645",
+      lineWidth: 3,
+      lineStyle: "dashed",
+      extendRight: true,
+      label: "Resistance",
+      fontSize: 14,
+      textColor: "#ffffff",
+      locked: true,
+    });
+    expect(updated?.color).toBe("#f23645");
+    expect(updated?.lineWidth).toBe(3);
+    expect(updated?.lineStyle).toBe("dashed");
+    expect(updated?.extendRight).toBe(true);
+    expect(updated?.locked).toBe(true);
+
+    // TOML round-trip preserves custom style metadata
+    const reloaded = new DrawingEngine();
+    expect(reloaded.loadFromAtAnalysisToml(engine.toAtAnalysisToml())).toBe(1);
+    const rt = reloaded.list("BTC/USD")[0];
+    expect(rt.lineWidth).toBe(3);
+    expect(rt.lineStyle).toBe("dashed");
+    expect(rt.extendRight).toBe(true);
+    expect(rt.fontSize).toBe(14);
+    expect(rt.textColor).toBe("#ffffff");
+    expect(rt.locked).toBe(true);
+
+    // Undo restores previous style cleanly
+    expect(engine.undo()).toBe(true);
+    expect(engine.getById(trend.id)?.lineStyle).toBeUndefined();
+    expect(engine.redo()).toBe(true);
+    expect(engine.getById(trend.id)?.lineStyle).toBe("dashed");
+
+    // Hit-test anchor vs body vs empty canvas
+    const toPixel = (a: { timeSec: number; priceTick: bigint }) => ({
+      x: (a.timeSec - 1000) / 10, // 0..100
+      y: Number(a.priceTick), // 100..200
+    });
+    const hitAnchor = hitTestDrawing(engine.list("BTC/USD"), 2, 101, toPixel, 400, 400);
+    expect(hitAnchor?.hitKind).toBe("anchor");
+    expect(hitAnchor?.anchorIndex).toBe(0);
+
+    const hitBody = hitTestDrawing(engine.list("BTC/USD"), 50, 150, toPixel, 400, 400);
+    expect(hitBody?.hitKind).toBe("body");
+
+    const miss = hitTestDrawing(engine.list("BTC/USD"), 50, 20, toPixel, 400, 400);
+    expect(miss).toBeNull();
   });
 });
