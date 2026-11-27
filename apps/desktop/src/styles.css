@@ -5,18 +5,121 @@
 @import "@ui-sdk/core/web.css" layer(components);
 @import "dockview/dist/styles/dockview.css";
 
+/*
+ * Neutralize @ui-sdk/core/web.css cosmetic overrides while keeping @ui-sdk/react
+ * ARIA, focus-trap, and keyboard semantics intact. Because this sits inside
+ * @layer components after web.css, every Tailwind utility in @layer utilities
+ * takes full precedence without needing !important.
+ */
+@layer components {
+  :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+    inset: auto;
+    margin: 0;
+    padding: 0;
+    gap: 0;
+    width: auto;
+    height: auto;
+    max-height: 92dvh;
+    overflow: hidden;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  [data-slot="tabs"] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  [data-slot="tabs"][data-orientation="vertical"] {
+    flex-direction: row;
+  }
+
+  [data-slot="tabs-list"] {
+    display: flex;
+    border: 0;
+    background: transparent;
+  }
+
+  [data-slot="tabs-list"][data-orientation="vertical"] {
+    flex-direction: column;
+    border: 0;
+  }
+
+  [data-slot="tabs-tab"] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  [data-slot="tabs-tab"][data-selected] {
+    border-color: transparent;
+  }
+
+
+  [data-slot="tabs-panel"][hidden] {
+    display: none !important;
+  }
+
+  [data-slot="tabs-panel"],
+  [data-slot="tabs-panel"]:not([hidden]),
+  [data-slot="tabs-panel"][data-orientation="vertical"]:not([hidden]) {
+    padding: 0;
+    margin: 0;
+    font-size: inherit;
+  }
+
+  :is(
+    [data-slot="button"],
+    [data-slot="toggle"],
+    [data-slot="dialog-trigger"],
+    [data-slot="dialog-close"],
+    [data-slot="alert-dialog-trigger"],
+    [data-slot="alert-dialog-close"],
+    [data-slot="popover-trigger"],
+    [data-slot="popover-close"],
+    [data-slot="menu-trigger"]
+  ) {
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    gap: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    box-shadow: none;
+    font: inherit;
+    cursor: pointer;
+  }
+}
+
 :root {
   color-scheme: dark;
   --tv-bg: #131722;
   --tv-chrome: #131722;
+  --tv-surface: #181c27;
   --tv-elevated: #1e222d;
   --tv-hover: #2a2e39;
   --tv-active: #2a2e39;
   --tv-border: #2a2e39;
   --tv-text: #d1d4dc;
-  --tv-text-strong: #ffffff;
+  --tv-text-strong: #f0f3fa;
   --tv-muted: #787b86;
   --tv-accent: #2962ff;
+  --tv-accent-hover: #1e53e5;
   --tv-up: #089981;
   --tv-down: #f23645;
   /* Legacy aliases mapped to the single unified TradingView palette */
@@ -41,7 +144,7 @@ body,
   overflow: hidden;
   background-color: var(--tv-bg);
   color: var(--tv-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", "Inter", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "SF Pro Text", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -83,9 +186,4 @@ body,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* Prevent @ui-sdk/core/web.css negative margin-top from clipping centered modals at 720px */
-[role="dialog"] {
-  margin: 0;
 }

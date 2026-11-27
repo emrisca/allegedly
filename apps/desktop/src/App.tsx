@@ -265,7 +265,27 @@ export function App({ transport: providedTransport }: AppProps) {
     }
   }, []);
   const [activeTool, setActiveTool] = useState<DrawingToolKind>("cursor");
-  const [magnetEnabled, setMagnetEnabled] = useState<boolean>(true);
+  const [magnetEnabled, setMagnetEnabled] = useState<boolean>(false);
+  const [cmdHeld, setCmdHeld] = useState<boolean>(false);
+  useEffect(() => {
+    const isEditable = (target: EventTarget | null) =>      target instanceof HTMLInputElement ||      target instanceof HTMLTextAreaElement ||      target instanceof HTMLSelectElement ||      (target instanceof HTMLElement && target.isContentEditable);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isEditable(e.target)) return;
+      if (e.key === "Meta" || e.key === "Control") setCmdHeld(true);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta" || e.key === "Control") setCmdHeld(false);
+    };
+    const onBlur = () => setCmdHeld(false);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
   const [showFloatingBar, setShowFloatingBar] = useState<boolean>(true);
   const [stayInDrawingMode, setStayInDrawingMode] = useState<boolean>(false);
   const [drawingsLocked, setDrawingsLocked] = useState<boolean>(false);
@@ -588,7 +608,7 @@ export function App({ transport: providedTransport }: AppProps) {
   }, []);
 
   const handleSubmitOrder = useCallback(
-    (side: "buy" | "sell", orderType: "market" | "limit", explicitPrice?: number) => {
+    (side: "buy" | "sell", orderType: "market" | "limit", explicitPrice?: number, qty?: number) => {
       let limitPrice: string | undefined;
       if (orderType === "limit") {
         const meta = getSymbolMeta(symbol);
@@ -614,7 +634,7 @@ export function App({ transport: providedTransport }: AppProps) {
           symbol,
           side,
           order_type: orderType,
-          qty_e9: "500000000", // 0.50 units exact fixed-point
+          qty_e9: BigInt(Math.max(1, Math.round((qty ?? 0.5) * 1e9))).toString(),
           limit_price_e9: limitPrice,
         })
         .then(setAccount)
@@ -1019,7 +1039,7 @@ export function App({ transport: providedTransport }: AppProps) {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <LeftDrawingRail
               activeTool={activeTool}
-              magnetEnabled={magnetEnabled}
+              magnetEnabled={magnetEnabled !== cmdHeld}
               showFloatingBar={showFloatingBar}
               stayInDrawingMode={stayInDrawingMode}
               drawingsLocked={drawingsLocked}
@@ -1102,7 +1122,7 @@ export function App({ transport: providedTransport }: AppProps) {
             </div>
 
             {rightTab !== null && (
-              <div className="flex w-[276px] shrink-0 flex-col border-l border-[#2a2e39] bg-[#131722]">
+              <div className="flex w-[300px] shrink-0 flex-col border-l border-[#2a2e39] bg-[#131722]">
                 {rightTab === "watchlist" && (
                   <WatchlistPanel
                     activeSymbol={symbol}
@@ -1112,17 +1132,57 @@ export function App({ transport: providedTransport }: AppProps) {
                   />
                 )}
                 {rightTab === "dom" && (
-                  <DomLadderPanel
-                    transport={transport}
-                    symbol={symbol}
-                    compactDensity={compactDensity}
-                  />
+                  <div className="flex h-full flex-col">
+                    <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a2e39] px-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-semibold text-[#f0f3fa]">{symbol}</span>
+                        <span className="rounded bg-[#2a2e39] px-1.5 py-0.5 text-[10px] font-semibold text-[#9598a1]">
+                          DOM
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Close right drawer"
+                        onClick={() => setRightTab(null)}
+                        className="flex h-6 w-6 items-center justify-center rounded text-[#787b86] hover:bg-[#2a2e39] hover:text-[#f0f3fa]"
+                      >
+                        <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="shrink-0 px-3 pt-2.5 pb-2">
+                      <div className="grid grid-cols-2 rounded-lg bg-[#1e222d] p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setRightTab("trade")}
+                          className="h-7 rounded-md text-[12px] font-medium text-[#787b86] transition-colors hover:text-[#d1d4dc]"
+                        >
+                          Order
+                        </button>
+                        <button
+                          type="button"
+                          className="h-7 rounded-md bg-[#2a2e39] text-[12px] font-medium text-[#f0f3fa] shadow-sm"
+                        >
+                          DOM
+                        </button>
+                      </div>
+                    </div>
+                    <div className="min-h-0 flex-1">
+                      <DomLadderPanel
+                        transport={transport}
+                        symbol={symbol}
+                        compactDensity={compactDensity}
+                      />
+                    </div>
+                  </div>
                 )}
                 {(rightTab === "trade" ||
                   rightTab === "studies" ||
                   rightTab === "provenance") && (
                   <PaperOmsPanel
                     key={rightTab}
+                    panelMode={rightTab === "trade" ? "trade" : "system"}
                     defaultTab={
                       rightTab === "studies"
                         ? "studies"
@@ -1133,6 +1193,8 @@ export function App({ transport: providedTransport }: AppProps) {
                           : "ticket"
                     }
                     symbol={symbol}
+                    livePrice={livePrices[symbol]?.last ?? symbolMeta.basePrice}
+                    tickSize={Number(tickSizeE9) / 1e9}
                     account={account}
                     bookState={bookState}
                     provenanceTier={provenanceTier}
@@ -1142,6 +1204,8 @@ export function App({ transport: providedTransport }: AppProps) {
                     exportedToml={exportedToml}
                     onSubmitOrder={handleSubmitOrder}
                     onKillSwitch={handleKillSwitch}
+                    onSwitchToDom={() => setRightTab("dom")}
+                    onCollapse={() => setRightTab(null)}
                     onRunBuiltinStudy={handleRunBuiltinStudy}
                     onRunLuauStudy={handleRunLuauStudy}
                     onClearStudies={handleClearStudies}

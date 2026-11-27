@@ -174,7 +174,7 @@ export function ChartSettingsDialog({
   };
 
   const tabCls =
-    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-[#a5abb8] hover:bg-[#1c1e25] hover:text-[#f1f3f8] data-selected:bg-[#23262f] data-selected:font-medium data-selected:text-[#ffffff] focus-visible:outline-2 focus-visible:outline-sky-400";
+    "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-[#9598a1] hover:bg-[#2a2e39]/60 hover:text-[#f0f3fa] data-selected:bg-[#2962ff]/18 data-selected:font-medium data-selected:text-[#ffffff] focus-visible:outline-2 focus-visible:outline-[#2962ff]";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -199,7 +199,7 @@ export function ChartSettingsDialog({
 
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
 
-      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(640px,88vh)] w-[min(700px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#272a34] bg-[#131417] text-[#e6e8ee] shadow-2xl">
+      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(620px,86vh)] w-[min(720px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
         {/* Header */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#23262f] px-5">
           <div>
@@ -221,10 +221,10 @@ export function ChartSettingsDialog({
         </div>
 
         {/* Two-column body: vertical sidebar + scrollable form panel */}
-        <Tabs defaultValue="symbol" className="flex min-h-0 flex-1">
+        <Tabs orientation="vertical" defaultValue="symbol" className="flex min-h-0 flex-1 flex-row">
           <TabsList
             aria-label="Chart settings categories"
-            className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#23262f] p-2.5"
+            className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#2a2e39] bg-[#181c27] p-2.5"
           >
             <TabsTab value="symbol" className={tabCls}>
               <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -1545,11 +1545,11 @@ export function ChartSettingsDialog({
             <Button
               type="button"
               onClick={handleCancel}
-              className="h-8 rounded-lg border border-[#3a3e4c] bg-transparent px-4 text-xs font-medium text-[#e6e8ee] hover:bg-[#23262f] focus-visible:outline-2 focus-visible:outline-sky-400"
+              className="flex h-8 items-center justify-center rounded-md border border-[#363a45] bg-transparent px-4 text-xs font-medium text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
             >
               Cancel
             </Button>
-            <DialogClose className="h-8 rounded-lg bg-[#f1f3f8] px-4 text-xs font-semibold text-[#111318] hover:bg-white focus-visible:outline-2 focus-visible:outline-sky-400">
+            <DialogClose className="flex h-8 items-center justify-center rounded-md bg-[#2962ff] px-5 text-xs font-semibold text-white hover:bg-[#1e53e5] focus-visible:outline-2 focus-visible:outline-[#2962ff]">
               Ok
             </DialogClose>
           </div>

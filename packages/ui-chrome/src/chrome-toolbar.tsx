@@ -281,9 +281,8 @@ export function ChromeToolbar({
       {showTabStrip && (
         <div
           data-tauri-drag-region
-          className={`flex h-9 items-center gap-1 border-b border-[#2a2e39]/80 bg-[#131722] pr-2 ${
-            isMacDesktop ? "pl-[76px]" : "pl-2"
-          }`}
+          style={{ paddingLeft: isMacDesktop ? 82 : 8 }}
+          className="flex h-[38px] items-center gap-1 border-b border-[#2a2e39]/90 bg-[#131722] pr-2"
         >
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
             {resolvedTabs.map((tab) => {

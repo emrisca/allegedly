@@ -407,7 +407,7 @@ export function IndicatorsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
 
-      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(580px,84vh)] w-[min(860px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2c3140] bg-[#16181f] text-[#e6e8ee] shadow-[0_24px_64px_rgba(0,0,0,0.75)]">
+      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(580px,84vh)] w-[min(840px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
         {/* Header */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#23262f] px-5">
           <div>
@@ -480,14 +480,15 @@ export function IndicatorsDialog({
 
         {/* Two-column Body */}
         <Tabs
+          orientation="vertical"
           value={activeTab}
           onValueChange={(val) => setActiveTab(val as IndicatorCategory)}
-          className="flex min-h-0 flex-1"
+          className="flex min-h-0 flex-1 flex-row"
         >
           {/* Left Category Rail */}
           <TabsList
             aria-label="Indicator categories"
-            className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#23262f] p-2.5"
+            className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#2a2e39] bg-[#181c27] p-2.5"
           >
             <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[#787e8d]">
               Personal

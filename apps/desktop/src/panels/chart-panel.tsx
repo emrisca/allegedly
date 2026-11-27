@@ -6,6 +6,7 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
+  CrosshairMode,
   HistogramSeries,
   LineSeries,
   LineStyle,
@@ -1277,7 +1278,10 @@ export function ChartPanel({
   const [hiddenStudyIds, setHiddenStudyIds] = useState<Set<string>>(() => new Set());
 
   const [localTool, setLocalTool] = useState<DrawingToolKind>("cursor");
-  const [localMagnet, setLocalMagnet] = useState<boolean>(true);
+  const [localMagnet, setLocalMagnet] = useState<boolean>(false);
+  const [cmdHeld, setCmdHeld] = useState<boolean>(false);
+  const [shiftHeld, setShiftHeld] = useState<boolean>(false);
+  const [rulerActive, setRulerActive] = useState<boolean>(false);
   const [rendererLabel, setRendererLabel] = useState<string>("WebGL2");
   const [historyMeta, setHistoryMeta] = useState<{
     canUndo: boolean;
@@ -1318,8 +1322,61 @@ export function ChartPanel({
   const activeToolRef = useRef<DrawingToolKind>(activeTool);
   activeToolRef.current = activeTool;
 
-  const magnetRef = useRef<boolean>(magnetEnabled);
-  magnetRef.current = magnetEnabled;
+  const baseMagnetRef = useRef<boolean>(magnetEnabled);
+  baseMagnetRef.current = magnetEnabled;
+  const effectiveMagnet = magnetEnabled !== cmdHeld;
+  const magnetRef = useRef<boolean>(effectiveMagnet);
+  magnetRef.current = effectiveMagnet;
+  const cmdHeldRef = useRef<boolean>(cmdHeld);
+  cmdHeldRef.current = cmdHeld;
+  const shiftHeldRef = useRef<boolean>(shiftHeld);
+  shiftHeldRef.current = shiftHeld;
+  // Live Cmd/Ctrl (temporary magnet toggle) & Shift (quick measure + 0°/45°/90° angle snap) tracking
+  useEffect(() => {
+    const isEditable = (target: EventTarget | null) =>
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLElement && target.isContentEditable);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isEditable(e.target)) return;
+      if (e.key === "Meta" || e.key === "Control") {
+        setCmdHeld(true);
+      } else if (e.key === "Shift") {
+        setShiftHeld(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Meta" || e.key === "Control") {
+        setCmdHeld(false);
+      } else if (e.key === "Shift") {
+        setShiftHeld(false);
+      }
+    };
+    const onBlur = () => {
+      setCmdHeld(false);
+      setShiftHeld(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
+
+  // Sync Lightweight Charts crosshair mode live whenever magnet or Cmd/Ctrl state changes
+  useEffect(() => {
+    chartApiRef.current?.applyOptions({
+      crosshair: {
+        mode: effectiveMagnet ? CrosshairMode.Magnet : CrosshairMode.Normal,
+      },
+    });
+  }, [effectiveMagnet]);
+
 
   const stayInDrawingModeRef = useRef<boolean>(stayInDrawingMode);
   stayInDrawingModeRef.current = stayInDrawingMode;
@@ -1547,6 +1604,7 @@ export function ChartPanel({
         },
       },
       crosshair: {
+        mode: magnetRef.current ? CrosshairMode.Magnet : CrosshairMode.Normal,
         vertLine: {
           color: cfg.canvas.crosshairColor,
           labelBackgroundColor: "#2b3040",
@@ -1897,6 +1955,7 @@ export function ChartPanel({
         },
       },
       crosshair: {
+        mode: magnetRef.current ? CrosshairMode.Magnet : CrosshairMode.Normal,
         vertLine: {
           color: initCfg.canvas.crosshairColor,
           labelBackgroundColor: "#2b3040",
@@ -2549,10 +2608,48 @@ export function ChartPanel({
       return targets;
     };
 
-    const toAnchorFromPointer = (clientX: number, clientY: number): AnchorPoint | null => {
+    const ANGLE_SNAP_TOOLS = new Set<string>([
+      "trendline",
+      "ray",
+      "extended_line",
+      "arrow_line",
+      "info_line",
+      "parallel_channel",
+      "disjoint_channel",
+      "trend_angle",
+    ]);
+
+    const toAnchorFromPointer = (
+      clientX: number,
+      clientY: number,
+      modifiers?: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; tool?: string; originAnchor?: AnchorPoint },
+    ): AnchorPoint | null => {
       const rect = el.getBoundingClientRect();
-      const x = clientX - rect.left;
-      const y = clientY - rect.top;
+      let x = clientX - rect.left;
+      let y = clientY - rect.top;
+
+      // Shift constrains line/ray/channel tools to crisp 0° / 45° / 90° angles
+      if (
+        modifiers?.shiftKey &&
+        modifiers.originAnchor &&
+        modifiers.tool &&
+        ANGLE_SNAP_TOOLS.has(modifiers.tool)
+      ) {
+        const ax = chart.timeScale().timeToCoordinate(modifiers.originAnchor.timeSec as UTCTimestamp);
+        const ay = candleSeries.priceToCoordinate(Number(modifiers.originAnchor.priceTick) * tickFloat);
+        if (ax !== null && ay !== null) {
+          const dx = x - ax;
+          const dy = y - ay;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 4) {
+            const angle = Math.atan2(dy, dx);
+            const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+            x = ax + Math.cos(snappedAngle) * dist;
+            y = ay + Math.sin(snappedAngle) * dist;
+          }
+        }
+      }
+
       const price = candleSeries.coordinateToPrice(y);
       if (price === null || !Number.isFinite(price)) return null;
       const scaled = price / tickFloat;
@@ -2563,7 +2660,11 @@ export function ChartPanel({
           ? rawTime
           : activeBarTimeSec || Math.floor(Date.now() / 1000);
       let priceTick = BigInt(Math.round(scaled));
-      if (magnetRef.current) {
+      const useMagnet =
+        modifiers !== undefined
+          ? baseMagnetRef.current !== Boolean(modifiers.metaKey || modifiers.ctrlKey)
+          : magnetRef.current;
+      if (useMagnet) {
         const snapped = snapTickToMagnet(priceTick, collectMagnetTargets(timeSec), 250n);
         priceTick = snapped.snappedTick;
       }
@@ -2589,7 +2690,20 @@ export function ChartPanel({
       const rect = el.getBoundingClientRect();
       const px = ev.clientX - rect.left;
       const py = ev.clientY - rect.top;
-      const tool = ev.shiftKey && activeToolRef.current === "cursor" ? "ruler" : activeToolRef.current;
+      if (rulerPinned && activeToolRef.current === "cursor" && !ev.shiftKey) {
+        rulerStart = null;
+        rulerEnd = null;
+        rulerPinned = false;
+        rulerDragOrigin = null;
+        setRulerActive(false);
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+        return;
+      }
+      const tool =
+        (ev.shiftKey || (rulerStart !== null && !rulerPinned)) && activeToolRef.current === "cursor"
+          ? "ruler"
+          : activeToolRef.current;
       if (tool === "cursor") return;
 
       if (tool === "zoom_in") {
@@ -2604,7 +2718,13 @@ export function ChartPanel({
         return;
       }
 
-      const anchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+      const anchor = toAnchorFromPointer(ev.clientX, ev.clientY, {
+        shiftKey: ev.shiftKey,
+        metaKey: ev.metaKey,
+        ctrlKey: ev.ctrlKey,
+        tool,
+        originAnchor: draftAnchors[draftAnchors.length - 1],
+      });
       if (!anchor) return;
 
       if (tool === "ruler") {
@@ -2612,6 +2732,7 @@ export function ChartPanel({
           rulerStart = anchor;
           rulerEnd = anchor;
           rulerPinned = false;
+          setRulerActive(true);
           rulerDragOrigin = { x: ev.clientX, y: ev.clientY };
           try {
             pointerSurface.setPointerCapture(ev.pointerId);
@@ -2720,7 +2841,13 @@ export function ChartPanel({
         return;
       }
 
-      hoverAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+      hoverAnchor = toAnchorFromPointer(ev.clientX, ev.clientY, {
+        shiftKey: ev.shiftKey,
+        metaKey: ev.metaKey,
+        ctrlKey: ev.ctrlKey,
+        tool,
+        originAnchor: draftAnchors[draftAnchors.length - 1],
+      });
       pendingPrimitiveDirty = true;
       scheduleFlush();
     };
@@ -3368,7 +3495,7 @@ export function ChartPanel({
         <ChartOverlayToolbar
           visibility={visibility}
           activeTool={activeTool}
-          magnetEnabled={magnetEnabled}
+          magnetEnabled={effectiveMagnet}
           canUndo={historyMeta.canUndo}
           canRedo={historyMeta.canRedo}
           drawingCount={historyMeta.count}
@@ -3731,7 +3858,7 @@ export function ChartPanel({
           ref={pointerSurfaceRef}
           aria-label="Chart interactive drawing surface"
           className={
-            activeTool === "cursor"
+            activeTool === "cursor" && !shiftHeld && !rulerActive
               ? "pointer-events-none absolute inset-0 z-15 h-full w-full"
               : "pointer-events-auto absolute inset-0 z-15 h-full w-full cursor-crosshair"
           }
