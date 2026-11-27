@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AreaSeries,
+  BarSeries,
+  BaselineSeries,
   CandlestickSeries,
   ColorType,
   createChart,
   HistogramSeries,
   LineSeries,
   LineStyle,
+  LineType,
   PriceScaleMode,
   type CandlestickData,
   type HistogramData,
@@ -19,15 +23,28 @@ import {
   type LineData,
   type PrimitivePaneViewZOrder,
   type SeriesAttachedParameter,
+  type SeriesType,
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 import {
   DEFAULT_CHART_SETTINGS,
   DEFAULT_CHART_TEMPLATES,
+  type ChartBarType,
   type ChartSettings,
   type ChartSettingsTemplate,
 } from "@allegedly/ui-chrome";
+import {
+  buildVolumeWeightedCandles,
+  transformHeikinAshi,
+  transformHighLow,
+  transformKagi,
+  transformLineBreak,
+  transformPointAndFigure,
+  transformRangeBars,
+  transformRenko,
+  type PointAndFigureColumn,
+} from "../data/chart-types";
 import { Button } from "@ui-sdk/react/button";
 import { Toggle } from "@ui-sdk/react/toggle";
 import { Toolbar } from "@ui-sdk/react/toolbar";
@@ -160,6 +177,7 @@ export interface ChartPanelProps {
   favoriteTools?: readonly PlacedDrawingKind[];
   activeIconStamp?: string;
   candleStyle?: "monochrome" | "classic";
+  barType?: ChartBarType;
   autoScale?: boolean;
   onAutoScaleChange?: (auto: boolean) => void;
   logScale?: boolean;
@@ -852,11 +870,13 @@ interface PrimitiveDrawContext {
   getCandles: () => readonly CandlestickData<UTCTimestamp>[];
   getVolumes: () => readonly HistogramData<UTCTimestamp>[];
   getSessionVpConfig: () => VolumeProfileConfig;
+  getBarType: () => ChartBarType;
+  getPnfColumns: () => readonly PointAndFigureColumn[];
 }
 
 class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
   private chart: IChartApi | null = null;
-  private series: ISeriesApi<"Candlestick"> | null = null;
+  private series: ISeriesApi<SeriesType> | null = null;
   private requestUpdateCb: (() => void) | null = null;
   private readonly paneView: IPrimitivePaneView;
 
@@ -891,6 +911,79 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
 
           const candles = this.source.getCandles();
           const volumes = this.source.getVolumes();
+          const activeBarType = this.source.getBarType();
+
+          // 0. Special Bar Type visual layers (HLC Area ribbon, Point & Figure X/O columns)
+          if (activeBarType === "hlc_area" && candles.length >= 2) {
+            context.save();
+            const upperPts: Array<{ x: number; y: number }> = [];
+            const lowerPts: Array<{ x: number; y: number }> = [];
+            for (const c of candles) {
+              const x = bridge.timeToX(Number(c.time));
+              const hy = bridge.priceToY(c.high);
+              const ly = bridge.priceToY(c.low);
+              if (x === null || hy === null || ly === null) continue;
+              upperPts.push({ x, y: hy });
+              lowerPts.push({ x, y: ly });
+            }
+            if (upperPts.length >= 2) {
+              context.beginPath();
+              context.moveTo(upperPts[0].x, upperPts[0].y);
+              for (let i = 1; i < upperPts.length; i++) context.lineTo(upperPts[i].x, upperPts[i].y);
+              for (let i = lowerPts.length - 1; i >= 0; i--) context.lineTo(lowerPts[i].x, lowerPts[i].y);
+              context.closePath();
+              context.fillStyle = "rgba(41, 98, 255, 0.16)";
+              context.fill();
+
+              context.strokeStyle = "rgba(8, 153, 129, 0.65)";
+              context.lineWidth = 1;
+              context.beginPath();
+              context.moveTo(upperPts[0].x, upperPts[0].y);
+              for (let i = 1; i < upperPts.length; i++) context.lineTo(upperPts[i].x, upperPts[i].y);
+              context.stroke();
+
+              context.strokeStyle = "rgba(242, 54, 69, 0.65)";
+              context.beginPath();
+              context.moveTo(lowerPts[0].x, lowerPts[0].y);
+              for (let i = 1; i < lowerPts.length; i++) context.lineTo(lowerPts[i].x, lowerPts[i].y);
+              context.stroke();
+            }
+            context.restore();
+          } else if (activeBarType === "point_and_figure") {
+            const cols = this.source.getPnfColumns();
+            if (cols.length > 0) {
+              context.save();
+              context.lineWidth = 1.4;
+              for (const col of cols) {
+                const x = bridge.timeToX(Number(col.time));
+                if (x === null || x < -20 || x > w + 20) continue;
+                const lo = Math.min(col.open, col.close);
+                const hi = Math.max(col.open, col.close);
+                const step = Math.max(1e-6, col.boxSize);
+                const count = Math.min(48, Math.max(1, Math.round((hi - lo) / step)));
+                context.strokeStyle = col.isX ? "#089981" : "#f23645";
+                for (let k = 0; k <= count; k++) {
+                  const p = lo + k * step;
+                  const y = bridge.priceToY(p);
+                  if (y === null || y < -12 || y > h + 12) continue;
+                  const r = 3.5;
+                  if (col.isX) {
+                    context.beginPath();
+                    context.moveTo(x - r, y - r);
+                    context.lineTo(x + r, y + r);
+                    context.moveTo(x + r, y - r);
+                    context.lineTo(x - r, y + r);
+                    context.stroke();
+                  } else {
+                    context.beginPath();
+                    context.arc(x, y, r, 0, Math.PI * 2);
+                    context.stroke();
+                  }
+                }
+              }
+              context.restore();
+            }
+          }
 
           // 1. Orderflow layers (Footprint, u128 TPO via WebGL2; high-res Session VRVP via VolumeProfileConfig)
           this.overlay.compositeIntoContext(
@@ -1032,7 +1125,7 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
 
   public attached(param: SeriesAttachedParameter<Time>): void {
     this.chart = param.chart as IChartApi;
-    this.series = param.series as ISeriesApi<"Candlestick">;
+    this.series = param.series as ISeriesApi<SeriesType>;
     this.requestUpdateCb = param.requestUpdate;
   }
 
@@ -1078,6 +1171,7 @@ export function ChartPanel({
   favoriteTools,
   activeIconStamp = "★",
   candleStyle = "monochrome",
+  barType = "candles",
   autoScale: controlledAutoScale,
   onAutoScaleChange,
   logScale: controlledLogScale,
@@ -1122,7 +1216,7 @@ export function ChartPanel({
   const [floatingBarPos, setFloatingBarPos] = useState<{ x: number; y: number } | null>(() => {
     if (typeof window === "undefined" || !window.localStorage) return null;
     try {
-      const raw = window.localStorage.getItem("allegedly.floating_bar_pos.v1");
+      const raw = window.localStorage.getItem("allegedly.floating_bar_pos.v2");
       if (!raw) return null;
       const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown };
       if (typeof parsed.x === "number" && typeof parsed.y === "number") {
@@ -1280,7 +1374,7 @@ export function ChartPanel({
   selectedDrawingIdRef.current = selectedDrawingId;
   const requestOverlayRedrawRef = useRef<(() => void) | null>(null);
   const chartApiRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const studyLineSeriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
   const studyPanesRef = useRef<Map<string, IPaneApi<Time>>>(new Map());
@@ -1492,24 +1586,57 @@ export function ChartPanel({
       },
     });
 
-    cs.applyOptions({
-      upColor: cfg.symbol.bodyEnabled ? cfg.symbol.bodyUpColor : "transparent",
-      downColor: cfg.symbol.bodyEnabled ? cfg.symbol.bodyDownColor : "transparent",
-      borderVisible: cfg.symbol.borderEnabled,
-      borderUpColor: cfg.symbol.borderUpColor,
-      borderDownColor: cfg.symbol.borderDownColor,
-      wickVisible: cfg.symbol.wickEnabled,
-      wickUpColor: cfg.symbol.wickUpColor,
-      wickDownColor: cfg.symbol.wickDownColor,
+    const commonPriceOpts = {
       lastValueVisible: cfg.scales.symbolPriceLabel !== "hidden",
       priceLineVisible: cfg.scales.symbolPriceLabel === "value_line",
       priceFormat: {
-        type: "price",
+        type: "price" as const,
         precision: digits,
         minMove: Math.pow(10, -digits),
       },
-    });
-  }, [effectiveSettings, autoScale, invertScale, priceScaleMode, effectiveLogScale, symbol]);
+    };
+    if (
+      barType === "candles" ||
+      barType === "hollow_candles" ||
+      barType === "volume_candles" ||
+      barType === "high_low" ||
+      barType === "volume_footprint" ||
+      barType === "tpo" ||
+      barType === "session_vp" ||
+      barType === "heikin_ashi" ||
+      barType === "renko" ||
+      barType === "line_break" ||
+      barType === "range"
+    ) {
+      (cs as ISeriesApi<"Candlestick">).applyOptions({
+        ...commonPriceOpts,
+        upColor:
+          barType === "hollow_candles"
+            ? "transparent"
+            : cfg.symbol.bodyEnabled
+              ? cfg.symbol.bodyUpColor
+              : "transparent",
+        downColor: cfg.symbol.bodyEnabled ? cfg.symbol.bodyDownColor : "transparent",
+        borderVisible: barType === "hollow_candles" ? true : cfg.symbol.borderEnabled,
+        borderUpColor: cfg.symbol.borderUpColor,
+        borderDownColor: cfg.symbol.borderDownColor,
+        wickVisible:
+          barType === "high_low" || barType === "renko" || barType === "line_break"
+            ? false
+            : cfg.symbol.wickEnabled,
+        wickUpColor: cfg.symbol.wickUpColor,
+        wickDownColor: cfg.symbol.wickDownColor,
+      });
+    } else if (barType === "bars") {
+      (cs as ISeriesApi<"Bar">).applyOptions({
+        ...commonPriceOpts,
+        upColor: cfg.symbol.bodyUpColor,
+        downColor: cfg.symbol.bodyDownColor,
+      });
+    } else {
+      cs.applyOptions(commonPriceOpts);
+    }
+  }, [effectiveSettings, autoScale, invertScale, priceScaleMode, effectiveLogScale, symbol, barType]);
 
   // Dynamic price lines for alerts, working orders, High/Low, and Bid/Ask
   useEffect(() => {
@@ -1805,23 +1932,76 @@ export function ChartPanel({
       height: Math.max(200, el.clientHeight),
     });
 
-    const candleSeries: ISeriesApi<"Candlestick"> = chart.addSeries(CandlestickSeries, {
-      upColor: initCfg.symbol.bodyEnabled ? initCfg.symbol.bodyUpColor : "transparent",
-      downColor: initCfg.symbol.bodyEnabled ? initCfg.symbol.bodyDownColor : "transparent",
-      borderVisible: initCfg.symbol.borderEnabled,
-      borderUpColor: initCfg.symbol.borderUpColor,
-      borderDownColor: initCfg.symbol.borderDownColor,
-      wickVisible: initCfg.symbol.wickEnabled,
-      wickUpColor: initCfg.symbol.wickUpColor,
-      wickDownColor: initCfg.symbol.wickDownColor,
+    const commonInitOpts = {
       lastValueVisible: initCfg.scales.symbolPriceLabel !== "hidden",
       priceLineVisible: initCfg.scales.symbolPriceLabel === "value_line",
       priceFormat: {
-        type: "price",
+        type: "price" as const,
         precision: initDigits,
         minMove: Math.pow(10, -initDigits),
       },
-    });
+    };
+    const isHollow = barType === "hollow_candles";
+    const isPnf = barType === "point_and_figure";
+    const hideWicks = barType === "high_low" || barType === "renko" || barType === "line_break";
+
+    let candleSeries: ISeriesApi<SeriesType>;
+    if (barType === "bars") {
+      candleSeries = chart.addSeries(BarSeries, {
+        ...commonInitOpts,
+        upColor: initCfg.symbol.bodyUpColor,
+        downColor: initCfg.symbol.bodyDownColor,
+        openVisible: true,
+        thinBars: false,
+      });
+    } else if (barType === "line" || barType === "line_markers" || barType === "step_line" || barType === "hlc_area" || barType === "kagi") {
+      candleSeries = chart.addSeries(LineSeries, {
+        ...commonInitOpts,
+        color: "#2962ff",
+        lineWidth: 2,
+        lineType:
+          barType === "step_line" || barType === "kagi" ? LineType.WithSteps : LineType.Simple,
+        pointMarkersVisible: barType === "line_markers",
+        pointMarkersRadius: 3,
+      });
+    } else if (barType === "area") {
+      candleSeries = chart.addSeries(AreaSeries, {
+        ...commonInitOpts,
+        lineColor: "#2962ff",
+        topColor: "rgba(41, 98, 255, 0.30)",
+        bottomColor: "rgba(41, 98, 255, 0.02)",
+        lineWidth: 2,
+      });
+    } else if (barType === "baseline") {
+      candleSeries = chart.addSeries(BaselineSeries, {
+        ...commonInitOpts,
+        baseValue: { type: "price", price: initSymMeta.basePrice },
+        topLineColor: "#089981",
+        topFillColor1: "rgba(8, 153, 129, 0.28)",
+        topFillColor2: "rgba(8, 153, 129, 0.02)",
+        bottomLineColor: "#f23645",
+        bottomFillColor1: "rgba(242, 54, 69, 0.02)",
+        bottomFillColor2: "rgba(242, 54, 69, 0.28)",
+        lineWidth: 2,
+      });
+    } else if (barType === "columns") {
+      candleSeries = chart.addSeries(HistogramSeries, {
+        ...commonInitOpts,
+        priceScaleId: "right",
+      });
+    } else {
+      candleSeries = chart.addSeries(CandlestickSeries, {
+        ...commonInitOpts,
+        upColor: isPnf || isHollow ? "transparent" : initCfg.symbol.bodyEnabled ? initCfg.symbol.bodyUpColor : "transparent",
+        downColor: isPnf ? "transparent" : initCfg.symbol.bodyEnabled ? initCfg.symbol.bodyDownColor : "transparent",
+        borderVisible: isPnf ? false : isHollow ? true : initCfg.symbol.borderEnabled,
+        borderUpColor: initCfg.symbol.borderUpColor,
+        borderDownColor: initCfg.symbol.borderDownColor,
+        wickVisible: isPnf || hideWicks ? false : initCfg.symbol.wickEnabled,
+        wickUpColor: initCfg.symbol.wickUpColor,
+        wickDownColor: initCfg.symbol.wickDownColor,
+      });
+    }
     candleSeriesRef.current = candleSeries;
 
     const volumeSeries: ISeriesApi<"Histogram"> = chart.addSeries(HistogramSeries, {
@@ -1900,7 +2080,77 @@ export function ChartPanel({
         };
       }
     };
-    candleSeries.setData(activeCandles);
+    let activePnfColumns: PointAndFigureColumn[] = [];
+    const applyMainSeriesData = (
+      bars: readonly CandlestickData<UTCTimestamp>[],
+      vols: readonly HistogramData<UTCTimestamp>[],
+    ) => {
+      const cfg = chartSettingsRef.current;
+      if (barType === "line" || barType === "line_markers" || barType === "step_line" || barType === "hlc_area" || barType === "area") {
+        (candleSeries as ISeriesApi<"Line">).setData(
+          bars.map((b) => ({ time: b.time, value: b.close })),
+        );
+      } else if (barType === "baseline") {
+        const mid =
+          bars.length > 0
+            ? (Math.max(...bars.map((b) => b.high)) + Math.min(...bars.map((b) => b.low))) / 2
+            : symMeta.basePrice;
+        (candleSeries as ISeriesApi<"Baseline">).applyOptions({
+          baseValue: { type: "price", price: mid },
+        });
+        (candleSeries as ISeriesApi<"Baseline">).setData(
+          bars.map((b) => ({ time: b.time, value: b.close })),
+        );
+      } else if (barType === "columns") {
+        (candleSeries as ISeriesApi<"Histogram">).setData(
+          bars.map((b) => ({
+            time: b.time,
+            value: b.close,
+            color: b.close >= b.open ? cfg.symbol.bodyUpColor : cfg.symbol.bodyDownColor,
+          })),
+        );
+      } else if (barType === "kagi") {
+        const kagiPts = transformKagi(bars);
+        (candleSeries as ISeriesApi<"Line">).setData(
+          kagiPts.map((pt) => ({
+            time: pt.time,
+            value: pt.value,
+            color: pt.yang ? "#089981" : "#f23645",
+          })),
+        );
+      } else if (barType === "bars") {
+        (candleSeries as ISeriesApi<"Bar">).setData([...bars]);
+      } else if (barType === "heikin_ashi") {
+        (candleSeries as ISeriesApi<"Candlestick">).setData(transformHeikinAshi(bars));
+      } else if (barType === "renko") {
+        (candleSeries as ISeriesApi<"Candlestick">).setData(transformRenko(bars));
+      } else if (barType === "line_break") {
+        (candleSeries as ISeriesApi<"Candlestick">).setData(transformLineBreak(bars));
+      } else if (barType === "range") {
+        (candleSeries as ISeriesApi<"Candlestick">).setData(transformRangeBars(bars));
+      } else if (barType === "high_low") {
+        (candleSeries as ISeriesApi<"Candlestick">).setData(transformHighLow(bars));
+      } else if (barType === "volume_candles") {
+        (candleSeries as ISeriesApi<"Candlestick">).setData(
+          buildVolumeWeightedCandles(bars, vols, cfg.symbol.bodyUpColor, cfg.symbol.bodyDownColor),
+        );
+      } else if (barType === "point_and_figure") {
+        activePnfColumns = transformPointAndFigure(bars);
+        (candleSeries as ISeriesApi<"Candlestick">).setData(
+          activePnfColumns.map((col) => ({
+            time: col.time,
+            open: col.open,
+            high: col.high,
+            low: col.low,
+            close: col.close,
+          })),
+        );
+      } else {
+        (candleSeries as ISeriesApi<"Candlestick">).setData([...bars]);
+      }
+    };
+
+    applyMainSeriesData(activeCandles, activeVolumes);
     volumeSeries.setData(activeVolumes);
     publishSeriesSnapshot();
     chart.timeScale().fitContent();
@@ -1962,6 +2212,8 @@ export function ChartPanel({
       getCandles: () => activeCandles,
       getVolumes: () => activeVolumes,
       getSessionVpConfig: () => sessionVpConfigRef.current,
+      getBarType: () => barType,
+      getPnfColumns: () => activePnfColumns,
     });
     candleSeries.attachPrimitive(primitive);
 
@@ -1995,7 +2247,7 @@ export function ChartPanel({
           historicalLoaded = true;
           const lastBar = activeCandles[activeCandles.length - 1];
           activeBarTimeSec = Number(lastBar.time);
-          candleSeries.setData(activeCandles);
+          applyMainSeriesData(activeCandles, activeVolumes);
           volumeSeries.setData(activeVolumes);
           publishSeriesSnapshot();
           chart.timeScale().fitContent();
@@ -2018,7 +2270,30 @@ export function ChartPanel({
           activeCandles = res.bars;
           activeBarTimeSec = Number(pendingBar.time);
           if (!res.trimmed) {
-            candleSeries.update(pendingBar);
+            if (
+              barType === "candles" ||
+              barType === "hollow_candles" ||
+              barType === "volume_footprint" ||
+              barType === "tpo" ||
+              barType === "session_vp" ||
+              barType === "bars"
+            ) {
+              (candleSeries as ISeriesApi<"Candlestick">).update(pendingBar);
+            } else if (
+              barType === "line" ||
+              barType === "line_markers" ||
+              barType === "step_line" ||
+              barType === "area" ||
+              barType === "baseline" ||
+              barType === "hlc_area"
+            ) {
+              (candleSeries as ISeriesApi<"Line">).update({
+                time: pendingBar.time,
+                value: pendingBar.close,
+              });
+            } else {
+              applyMainSeriesData(activeCandles, activeVolumes);
+            }
             volumeSeries.update(pendingVol);
             if (
               activeVolumes.length > 0 &&
@@ -2033,7 +2308,7 @@ export function ChartPanel({
               activeSellVolumes.push(pendingSellVol);
             }
           } else {
-            candleSeries.setData(activeCandles);
+            applyMainSeriesData(activeCandles, activeVolumes);
             const volMap = new Map<number, HistogramData<UTCTimestamp>>();
             for (const v of activeVolumes) volMap.set(Number(v.time), v);
             volMap.set(Number(pendingVol.time), pendingVol);
@@ -2088,7 +2363,16 @@ export function ChartPanel({
           lastCrosshairPriceRef.current = p;
         }
       }
-      const bar = param.seriesData.get(candleSeries) as CandlestickData<UTCTimestamp> | undefined;
+      const rawHovered = param.seriesData.get(candleSeries) as
+        | CandlestickData<UTCTimestamp>
+        | LineData<UTCTimestamp>
+        | undefined;
+      const bar: CandlestickData<UTCTimestamp> | undefined =
+        rawHovered && "open" in rawHovered && typeof rawHovered.open === "number"
+          ? rawHovered
+          : param.time !== undefined
+            ? activeCandles.find((c) => c.time === param.time)
+            : undefined;
       const vPoint = param.seriesData.get(volumeSeries) as HistogramData<UTCTimestamp> | undefined;
       const lastBar = activeCandles[activeCandles.length - 1];
       const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
@@ -2773,7 +3057,7 @@ export function ChartPanel({
       chart.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transport, symbol, timeframe, tickSizeE9, dataSource]);
+  }, [transport, symbol, timeframe, tickSizeE9, dataSource, barType]);
 
   useEffect(() => {
     const chart = chartApiRef.current;
@@ -2879,7 +3163,7 @@ export function ChartPanel({
       series.setData(pts);
     }
     studyLatestRef.current = latestMap;
-  }, [studyOverlays, hiddenStudyIds, symbol, timeframe, dataSource, effectiveSettings.scales.indicatorsLabel]);
+  }, [studyOverlays, hiddenStudyIds, symbol, timeframe, dataSource, barType, effectiveSettings.scales.indicatorsLabel]);
 
   const handleToggleVisibility = (key: keyof OverlayVisibility) => {
     if (onToggleOverlayVisibility) {
@@ -3026,7 +3310,7 @@ export function ChartPanel({
     const finalPos = clampBarCoords(drag.startX + dx, drag.startY + dy);
     setFloatingBarPos(finalPos);
     try {
-      window.localStorage?.setItem("allegedly.floating_bar_pos.v1", JSON.stringify(finalPos));
+      window.localStorage?.setItem("allegedly.floating_bar_pos.v2", JSON.stringify(finalPos));
     } catch {
       // ignore
     }
@@ -3051,7 +3335,7 @@ export function ChartPanel({
     const next = clampBarCoords(baseX + dx, baseY + dy);
     setFloatingBarPos(next);
     try {
-      window.localStorage?.setItem("allegedly.floating_bar_pos.v1", JSON.stringify(next));
+      window.localStorage?.setItem("allegedly.floating_bar_pos.v2", JSON.stringify(next));
     } catch {
       // ignore
     }
@@ -3298,7 +3582,7 @@ export function ChartPanel({
             className={
               floatingBarPos
                 ? "absolute z-25 flex items-center gap-0.5 rounded-xl border border-[#2a2e39] bg-[#1e222d]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
-                : "absolute left-1/2 top-2 z-25 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-[#2a2e39] bg-[#1e222d]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
+                : "absolute bottom-9 left-1/2 z-25 flex -translate-x-1/2 items-center gap-0.5 rounded-xl border border-[#2a2e39] bg-[#1e222d]/95 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.62)] backdrop-blur-md select-none"
             }
           >
             <button

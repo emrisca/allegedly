@@ -32,6 +32,7 @@ import {
   StatusBar,
   WorkspaceHost,
   type CandleVisualStyle,
+  type ChartBarType,
   type ChartSettings,
   type ChartTabItem,
   type ChartSettingsTemplate,
@@ -251,6 +252,18 @@ export function App({ transport: providedTransport }: AppProps) {
   });
   const [showVolume, setShowVolume] = useState<boolean>(() => chartSettings.statusLine.volume);
   const [candleStyle, setCandleStyle] = useState<CandleVisualStyle>("monochrome");
+  const [barType, setBarType] = useState<ChartBarType>("candles");
+
+  const handleBarTypeChange = useCallback((next: ChartBarType) => {
+    setBarType(next);
+    if (next === "volume_footprint") {
+      setOverlayVisibility((prev) => ({ ...prev, footprint: true }));
+    } else if (next === "tpo") {
+      setOverlayVisibility((prev) => ({ ...prev, tpo: true }));
+    } else if (next === "session_vp") {
+      setOverlayVisibility((prev) => ({ ...prev, vrvp: true }));
+    }
+  }, []);
   const [activeTool, setActiveTool] = useState<DrawingToolKind>("cursor");
   const [magnetEnabled, setMagnetEnabled] = useState<boolean>(true);
   const [showFloatingBar, setShowFloatingBar] = useState<boolean>(true);
@@ -961,6 +974,8 @@ export function App({ transport: providedTransport }: AppProps) {
         onShowProvenanceOverlayChange={setShowProvenanceOverlay}
         candleStyle={candleStyle}
         onCandleStyleChange={handleCandleStyleChange}
+        barType={barType}
+        onBarTypeChange={handleBarTypeChange}
         chartSettings={chartSettings}
         onChartSettingsChange={setChartSettings}
         chartTemplates={chartTemplates}
@@ -1046,6 +1061,7 @@ export function App({ transport: providedTransport }: AppProps) {
                 favoriteTools={favoriteTools}
                 activeIconStamp={activeIconStamp}
                 candleStyle={candleStyle}
+                barType={barType}
                 autoScale={autoScale}
                 onAutoScaleChange={setAutoScale}
                 logScale={logScale}
@@ -1169,6 +1185,7 @@ export function App({ transport: providedTransport }: AppProps) {
                   favoriteTools={favoriteTools}
                   activeIconStamp={activeIconStamp}
                   candleStyle={candleStyle}
+                  barType={barType}
                   autoScale={autoScale}
                   onAutoScaleChange={setAutoScale}
                   logScale={logScale}

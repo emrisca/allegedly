@@ -1,6 +1,7 @@
 @layer ui-sdk;
 
 @import "tailwindcss";
+@source "../../../packages/ui-chrome/src";
 @import "@ui-sdk/core/web.css" layer(components);
 @import "dockview/dist/styles/dockview.css";
 
@@ -82,4 +83,9 @@ body,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Prevent @ui-sdk/core/web.css negative margin-top from clipping centered modals at 720px */
+[role="dialog"] {
+  margin: 0;
 }

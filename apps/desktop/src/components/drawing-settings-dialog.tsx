@@ -1146,7 +1146,7 @@ export function DrawingQuickStyleBar({
       data-testid="drawing-quick-style-bar"
       role="toolbar"
       aria-label={`Quick style toolbar for ${meta.label}`}
-      className="pointer-events-auto absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-1 rounded-md border border-[#2a2e39] bg-[#1e222d]/95 px-2 py-1 text-[11px] text-[#d1d4dc] shadow-xl backdrop-blur-sm"
+      className="pointer-events-auto absolute right-20 top-2 z-30 flex items-center gap-1 rounded-md border border-[#2a2e39] bg-[#1e222d]/95 px-2 py-1 text-[11px] text-[#d1d4dc] shadow-xl backdrop-blur-sm"
     >
       <span className="max-w-[110px] truncate pr-1 text-[11px] font-medium text-[#787b86]">
         {meta.shortLabel}

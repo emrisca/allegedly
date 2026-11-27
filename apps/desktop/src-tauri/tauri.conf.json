@@ -14,12 +14,15 @@
     "windows": [
       {
         "label": "main",
-        "title": "Allegedly — Trading Terminal (Alpha v0.1)",
+        "title": "Allegedly",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
         "minHeight": 640,
-        "visible": true
+        "visible": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "backgroundColor": "#131722"
       }
     ],
     "security": {

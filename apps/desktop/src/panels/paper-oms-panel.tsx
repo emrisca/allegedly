@@ -158,36 +158,47 @@ export function PaperOmsPanel({
       </div>
 
       <Tabs defaultValue={defaultTab} className="flex min-h-0 flex-1 flex-col">
-        <TabsList aria-label="Execution and desk panel tabs" className="mb-2 flex flex-wrap gap-1">
+        <TabsList
+          aria-label="Execution and desk panel tabs"
+          className="mb-2 grid grid-cols-5 gap-0.5 rounded-md border border-[#2a2e39] bg-[#181c27] p-0.5"
+        >
           <TabsTab
             value="ticket"
-            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
+            aria-label="Paper Ticket"
+            title="Paper Ticket"
+            className="truncate rounded px-1 py-1 text-center text-[10.5px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#2a2e39] data-selected:text-[#ffffff]"
           >
-            Paper Ticket
+            Ticket
           </TabsTab>
           <TabsTab
             value="orders"
-            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
+            title={`Journal (${account.orders.length})`}
+            className="truncate rounded px-1 py-1 text-center text-[10.5px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#2a2e39] data-selected:text-[#ffffff]"
           >
-            Journal ({account.orders.length})
+            Log{account.orders.length > 0 ? ` ${account.orders.length}` : ""}
           </TabsTab>
           <TabsTab
             value="provenance"
-            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
+            aria-label="Provenance"
+            title="Data Provenance"
+            className="truncate rounded px-1 py-1 text-center text-[10.5px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#2a2e39] data-selected:text-[#ffffff]"
           >
-            Provenance
+            Data
           </TabsTab>
           <TabsTab
             value="studies"
-            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
+            title={`Active Studies (${activeStudies.length})`}
+            className="truncate rounded px-1 py-1 text-center text-[10.5px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#2a2e39] data-selected:text-[#ffffff]"
           >
-            Studies ({activeStudies.length})
+            Studies
           </TabsTab>
           <TabsTab
             value="settings"
-            className="rounded px-2 py-1 text-[11px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#1e2330] data-selected:text-[#f1f3f8]"
+            aria-label="TOML Cascade"
+            title="TOML Cascade Config"
+            className="truncate rounded px-1 py-1 text-center text-[10.5px] font-medium text-[#8c93a4] hover:text-[#d1d4dc] data-selected:bg-[#2a2e39] data-selected:text-[#ffffff]"
           >
-            TOML Cascade
+            Config
           </TabsTab>
         </TabsList>
 

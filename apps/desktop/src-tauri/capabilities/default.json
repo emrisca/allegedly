@@ -3,5 +3,9 @@
   "identifier": "default",
   "description": "Default single-window capability for Allegedly v0.1 (no external shell or remote URL access).",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-toggle-maximize"
+  ]
 }

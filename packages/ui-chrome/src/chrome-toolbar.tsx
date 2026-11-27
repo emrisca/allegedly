@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BootConfig } from "@allegedly/ipc-client";
 import { Button } from "@ui-sdk/react/button";
 import {
@@ -26,6 +26,12 @@ import {
   type ChartSettings,
   type ChartSettingsTemplate,
 } from "./chart-settings";
+import {
+  CHART_BAR_TYPE_GROUPS,
+  ChartBarTypeIcon,
+  getChartBarTypeLabel,
+  type ChartBarType,
+} from "./chart-bar-types";
 import { ChartSettingsDialog } from "./chart-settings-dialog";
 
 export type CandleVisualStyle = "monochrome" | "classic";
@@ -59,6 +65,8 @@ export interface ChromeToolbarProps {
   workspaceName?: string;
   candleStyle?: CandleVisualStyle;
   onCandleStyleChange?: (next: CandleVisualStyle) => void;
+  barType?: ChartBarType;
+  onBarTypeChange?: (next: ChartBarType) => void;
   replayOpen?: boolean;
   onToggleReplay?: () => void;
   studiesActiveCount?: number;
@@ -143,6 +151,8 @@ export function ChromeToolbar({
   onShowProvenanceOverlayChange,
   candleStyle = "classic",
   onCandleStyleChange,
+  barType = "candles",
+  onBarTypeChange,
   replayOpen = false,
   onToggleReplay,
   studiesActiveCount = 0,
@@ -178,6 +188,7 @@ export function ChromeToolbar({
 }: ChromeToolbarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [tfMenuOpen, setTfMenuOpen] = useState(false);
+  const [barTypeMenuOpen, setBarTypeMenuOpen] = useState(false);
   const [feedMenuOpen, setFeedMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [localSettingsOpen, setLocalSettingsOpen] = useState(false);
@@ -215,9 +226,16 @@ export function ChromeToolbar({
   });
   const paletteHint = useShortcutHint("mod+k");
 
+  const isMacDesktop =
+    typeof window !== "undefined" &&
+    "__TAURI_INTERNALS__" in window &&
+    typeof navigator !== "undefined" &&
+    /Mac/i.test(navigator.platform || navigator.userAgent);
   const resolvedTabs: readonly ChartTabItem[] =
-    chartTabs && chartTabs.length > 0 ? chartTabs : [];
-  const showTabStrip = resolvedTabs.length > 1;
+    chartTabs && chartTabs.length > 0
+      ? chartTabs
+      : [{ id: "tab-default", symbol, timeframe }];
+  const showTabStrip = isMacDesktop || resolvedTabs.length > 1;
   const resolvedActiveTabId = activeTabId ?? resolvedTabs[0]?.id ?? "tab-default";
 
   const handleToggleFullscreen = () => {
@@ -231,16 +249,27 @@ export function ChromeToolbar({
 
   const closeAllMenus = () => {
     setTfMenuOpen(false);
+    setBarTypeMenuOpen(false);
     setFeedMenuOpen(false);
     setMoreMenuOpen(false);
   };
+
+  const anyMenuOpen = tfMenuOpen || barTypeMenuOpen || feedMenuOpen || moreMenuOpen;
+  useEffect(() => {
+    if (!anyMenuOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeAllMenus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [anyMenuOpen]);
 
   const activeFeed = FEED_OPTIONS.find((f) => f.id === dataSource) ?? FEED_OPTIONS[0];
   const isLiveFeed = dataSource !== "paper_sim";
 
   return (
     <header className="flex shrink-0 flex-col bg-[#131722] text-xs text-[#d1d4dc] select-none">
-      {(tfMenuOpen || feedMenuOpen || moreMenuOpen) && (
+      {(tfMenuOpen || barTypeMenuOpen || feedMenuOpen || moreMenuOpen) && (
         <div
           aria-hidden="true"
           className="fixed inset-0 z-30"
@@ -248,19 +277,25 @@ export function ChromeToolbar({
         />
       )}
 
-      {/* Optional compact tab bar — only rendered when 2+ chart tabs are open */}
+      {/* Seamless macOS Overlay titlebar & tab strip (merges traffic lights inline with app) */}
       {showTabStrip && (
-        <div className="flex h-8 items-center gap-1 border-b border-[#2a2e39] bg-[#131722] px-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+        <div
+          data-tauri-drag-region
+          className={`flex h-9 items-center gap-1 border-b border-[#2a2e39]/80 bg-[#131722] pr-2 ${
+            isMacDesktop ? "pl-[76px]" : "pl-2"
+          }`}
+        >
+          <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
             {resolvedTabs.map((tab) => {
               const isActive = tab.id === resolvedActiveTabId;
+              const isUp = typeof tab.changePct === "number" ? tab.changePct >= 0 : true;
               return (
                 <div
                   key={tab.id}
                   className={
                     isActive
-                      ? "group flex h-6 shrink-0 items-center gap-1.5 rounded bg-[#1e222d] px-2 text-white"
-                      : "group flex h-6 shrink-0 items-center gap-1.5 rounded px-2 text-[#787b86] hover:bg-[#1e222d]/60 hover:text-[#d1d4dc]"
+                      ? "group flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-[#1e222d] px-2.5 text-white"
+                      : "group flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[#787b86] hover:bg-[#1e222d]/60 hover:text-[#d1d4dc]"
                   }
                 >
                   <button
@@ -269,10 +304,32 @@ export function ChromeToolbar({
                     onClick={() => onSelectTab?.(tab.id)}
                     className="flex items-center gap-1.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                   >
-                    <span>{tab.symbol}</span>
+                    {tab.badgeColor && (
+                      <span
+                        aria-hidden="true"
+                        style={{ backgroundColor: tab.badgeColor }}
+                        className="h-2 w-2 rounded-full"
+                      />
+                    )}
+                    <span className="font-semibold">{tab.symbol}</span>
+                    {tab.priceText && (
+                      <span className="font-mono text-[11px] tabular-nums text-[#d1d4dc]">
+                        {tab.priceText}
+                      </span>
+                    )}
+                    {typeof tab.changePct === "number" && (
+                      <span
+                        className={`font-mono text-[10px] tabular-nums ${
+                          isUp ? "text-[#089981]" : "text-[#f23645]"
+                        }`}
+                      >
+                        {isUp ? "+" : ""}
+                        {tab.changePct.toFixed(2)}%
+                      </span>
+                    )}
                     <span className="text-[10px] text-[#787b86]">{tab.timeframe}</span>
                   </button>
-                  {onCloseTab && (
+                  {onCloseTab && resolvedTabs.length > 1 && (
                     <button
                       type="button"
                       aria-label={`Close ${tab.symbol} tab`}
@@ -300,6 +357,8 @@ export function ChromeToolbar({
               </button>
             )}
           </div>
+          {/* Empty draggable titlebar region */}
+          <div data-tauri-drag-region className="h-full min-w-[48px] flex-1" />
         </div>
       )}
 
@@ -500,26 +559,86 @@ export function ChromeToolbar({
 
           <ToolbarSeparator className="mx-1.5 h-5 w-px bg-[#2a2e39]" />
 
-          {/* Candle Style Toggle */}
-          <ToolbarButton
-            aria-label={`Candle style: ${candleStyle === "monochrome" ? "Monochrome" : "Classic"}`}
-            title={
-              candleStyle === "monochrome"
-                ? "Monochrome candles (click for Classic green/red)"
-                : "Classic green/red candles (click for Monochrome)"
-            }
-            onClick={() =>
-              onCandleStyleChange?.(candleStyle === "monochrome" ? "classic" : "monochrome")
-            }
-            className="flex h-7 w-7 items-center justify-center rounded text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
-          >
-            <svg aria-hidden="true" viewBox="0 0 18 18" className="h-[17px] w-[17px]" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <path d="M5.5 3v2.5M5.5 11.5V15" strokeLinecap="round" />
-              <rect x="3.8" y="5.5" width="3.4" height="6" rx="0.6" />
-              <path d="M12.5 2.5v3.5M12.5 13v2.5" strokeLinecap="round" />
-              <rect x="10.8" y="6" width="3.4" height="7" rx="0.6" fill="currentColor" fillOpacity="0.35" />
-            </svg>
-          </ToolbarButton>
+          {/* Chart / Bar Type Selector (All 21 TradingView Bar Types) */}
+          <div className="relative">
+            <ToolbarButton
+              aria-label={`Chart bar type: ${getChartBarTypeLabel(barType)}`}
+              aria-expanded={barTypeMenuOpen}
+              aria-haspopup="menu"
+              title={`Chart style: ${getChartBarTypeLabel(barType)}`}
+              onClick={() => {
+                setTfMenuOpen(false);
+                setFeedMenuOpen(false);
+                setMoreMenuOpen(false);
+                setBarTypeMenuOpen((v) => !v);
+              }}
+              className={`flex h-7 items-center gap-0.5 rounded px-1.5 hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff] ${
+                barTypeMenuOpen ? "bg-[#2a2e39] text-white" : "text-[#d1d4dc]"
+              }`}
+            >
+              <ChartBarTypeIcon type={barType} />
+              <svg aria-hidden="true" viewBox="0 0 10 10" className="h-2.5 w-2.5 opacity-60" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <path d="M2.5 4 5 6.5 7.5 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </ToolbarButton>
+            {barTypeMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Chart bar types"
+                style={{ maxHeight: "calc(100vh - 88px)" }}
+                className="absolute left-0 top-9 z-50 w-[236px] overflow-y-auto rounded-lg border border-[#2a2e39] bg-[#1e222d] py-1.5 shadow-2xl"
+              >
+                {CHART_BAR_TYPE_GROUPS.map((group, gi) => (
+                  <div
+                    key={gi}
+                    className={gi > 0 ? "mt-1 border-t border-[#2a2e39] pt-1" : ""}
+                  >
+                    {group.map((item) => {
+                      const active = barType === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={active}
+                          onClick={() => {
+                            onBarTypeChange?.(item.id);
+                            setBarTypeMenuOpen(false);
+                          }}
+                          className={`mx-1.5 flex w-[calc(100%-12px)] items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+                            active
+                              ? "bg-[#f1f3f8] font-medium text-[#131722]"
+                              : "text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white"
+                          }`}
+                        >
+                          <ChartBarTypeIcon type={item.id} className="h-4 w-4 shrink-0" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+                {onCandleStyleChange && (
+                  <div className="mt-1 border-t border-[#2a2e39] px-3 pb-1 pt-2">
+                    <div className="flex items-center justify-between text-[11px] text-[#787b86]">
+                      <span>Palette</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onCandleStyleChange(
+                            candleStyle === "monochrome" ? "classic" : "monochrome",
+                          )
+                        }
+                        className="rounded border border-[#2a2e39] bg-[#131722] px-2 py-0.5 text-[11px] font-medium text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+                      >
+                        {candleStyle === "monochrome" ? "Monochrome" : "Classic Green/Red"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <ToolbarSeparator className="mx-1.5 h-5 w-px bg-[#2a2e39]" />
 
