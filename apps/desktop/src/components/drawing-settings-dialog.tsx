@@ -59,7 +59,7 @@ function VpInputsPanel({
           id="vp-rows-layout"
           value={cfg.rowsLayout}
           onChange={(e) => onChange({ rowsLayout: e.target.value as VpRowsLayout })}
-          className="h-8 rounded border border-[#2a2e39] bg-[#131722] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
+          className="h-8 rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
         >
           <option value="number_of_rows">Number Of Rows</option>
           <option value="ticks_per_row">Ticks Per Row</option>
@@ -83,7 +83,7 @@ function VpInputsPanel({
               onChange({ rowSize: Math.min(2000, Math.max(1, parsed)) });
             }
           }}
-          className="h-8 w-full rounded border border-[#2a2e39] bg-[#131722] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
+          className="h-8 w-full rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
         />
       </div>
 
@@ -95,7 +95,7 @@ function VpInputsPanel({
           id="vp-volume-mode"
           value={cfg.volumeMode}
           onChange={(e) => onChange({ volumeMode: e.target.value as VpVolumeMode })}
-          className="h-8 rounded border border-[#2a2e39] bg-[#131722] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
+          className="h-8 rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
         >
           <option value="up_down">Up/Down</option>
           <option value="total">Total</option>
@@ -121,7 +121,7 @@ function VpInputsPanel({
                 onChange({ valueAreaPercent: Math.min(100, Math.max(10, parsed)) });
               }
             }}
-            className="h-8 w-full rounded border border-[#2a2e39] bg-[#131722] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
+            className="h-8 w-full rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
           />
           <span className="font-mono text-[11px] text-[#787b86]">%</span>
         </div>
@@ -244,7 +244,7 @@ function VpLineRow({
                 className={`flex h-7 w-7 items-center justify-center rounded border text-[11px] font-mono ${
                   width === w
                     ? "border-[#2962ff] bg-[#2962ff]/20 text-white"
-                    : "border-[#2a2e39] bg-[#131722] text-[#9aa1b2] hover:text-white"
+                    : "border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] text-[#9aa1b2] hover:text-white"
                 }`}
               >
                 {w}
@@ -304,7 +304,7 @@ function VpStylePanel({
               onChange({ widthPercent: Math.min(100, Math.max(5, parsed)) });
             }
           }}
-          className="h-8 w-full rounded border border-[#2a2e39] bg-[#131722] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
+          className="h-8 w-full rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2.5 font-mono text-[12px] text-white outline-none focus:border-[#2962ff]"
         />
       </div>
 
@@ -316,7 +316,7 @@ function VpStylePanel({
           id="vp-placement"
           value={cfg.placement}
           onChange={(e) => onChange({ placement: e.target.value as VpPlacement })}
-          className="h-8 rounded border border-[#2a2e39] bg-[#131722] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
+          className="h-8 rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2.5 text-[12px] text-white outline-none focus:border-[#2962ff]"
         >
           <option value="left">Left</option>
           <option value="right">Right</option>
@@ -559,7 +559,7 @@ export function VolumeProfileSettingsDialog({
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]" />
       <DialogContent
         aria-label={`${title} settings`}
-        className="fixed left-1/2 top-1/2 z-50 flex w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 flex w-[440px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-2xl"
       >
         <div className="flex items-center justify-between px-5 pb-2 pt-4">
           <DialogTitle className="text-[17px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
@@ -820,7 +820,7 @@ export function DrawingSettingsDialog({
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]" />
       <DialogContent
         aria-label={`${meta.label} settings`}
-        className="fixed left-1/2 top-1/2 z-50 flex w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 flex w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-2xl"
       >
         {/* Clean TradingView Header */}
         <div className="flex items-center justify-between px-5 pb-2 pt-4">
@@ -1295,7 +1295,7 @@ export function DrawingQuickStyleBar({
       data-testid="drawing-quick-style-bar"
       role="toolbar"
       aria-label={`Quick style toolbar for ${meta.label}`}
-      className="pointer-events-auto absolute right-20 top-2 z-30 flex items-center gap-1 rounded-md border border-[#2a2e39] bg-[#1e222d]/95 px-2 py-1 text-[11px] text-[#d1d4dc] shadow-xl backdrop-blur-sm"
+      className="pointer-events-auto absolute right-20 top-2 z-30 flex items-center gap-1 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)]/95 px-2 py-1 text-[11px] text-[#d1d4dc] shadow-xl backdrop-blur-sm"
     >
       <span className="max-w-[110px] truncate pr-1 text-[11px] font-medium text-[#787b86]">
         {meta.shortLabel}

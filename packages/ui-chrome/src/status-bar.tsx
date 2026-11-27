@@ -60,7 +60,7 @@ export function StatusBar({
   return (
     <footer
       aria-label="Chart range and scale bar"
-      className="flex h-7 shrink-0 items-center justify-between border-t border-[#2a2e39] bg-[#131722] px-2 text-[12px] text-[#787b86] select-none"
+      className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2 text-[12px] text-[#787b86] select-none"
     >
       {/* Left: Quick Date Ranges (1D 5D 1M 3M 6M YTD 1Y 5Y All) */}
       <div className="flex items-center gap-0.5">

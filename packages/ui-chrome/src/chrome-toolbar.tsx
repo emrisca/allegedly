@@ -33,6 +33,8 @@ import {
   type ChartBarType,
 } from "./chart-bar-types";
 import { ChartSettingsDialog } from "./chart-settings-dialog";
+import { DEFAULT_APP_APPEARANCE, type AppAppearanceSettings } from "./app-appearance";
+import { type MarketProviderConfigMap, type MarketProviderId } from "./market-providers";
 
 export type CandleVisualStyle = "monochrome" | "classic";
 export type WorkspaceLayoutMode = "focus" | "dockview";
@@ -103,6 +105,20 @@ export interface ChromeToolbarProps {
   onApplyChartDefaults?: () => void;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
+  /** Optional custom symbol search handler (opens TradingView-style multi-provider search) */
+  onOpenSymbolSearch?: () => void;
+  /** Optional App Appearance (shell chrome outside chart) */
+  appAppearance?: AppAppearanceSettings;
+  onAppAppearanceChange?: (next: AppAppearanceSettings) => void;
+  /** Market data provider configurations */
+  providerConfigs?: MarketProviderConfigMap;
+  onProviderConfigsChange?: (next: MarketProviderConfigMap) => void;
+  /** Controlled initial tab & highlighted provider when opening Settings */
+  settingsInitialTab?: string;
+  highlightProviderId?: MarketProviderId | null;
+  onOpenProviderSettings?: (providerId?: MarketProviderId) => void;
+  /** Optional active provider badge shown next to top-bar symbol */
+  activeProviderTag?: string;
 }
 
 const SYMBOLS = [
@@ -185,6 +201,15 @@ export function ChromeToolbar({
   onApplyChartDefaults,
   settingsOpen: controlledSettingsOpen,
   onSettingsOpenChange,
+  onOpenSymbolSearch,
+  appAppearance = DEFAULT_APP_APPEARANCE,
+  onAppAppearanceChange,
+  providerConfigs = {},
+  onProviderConfigsChange,
+  settingsInitialTab = "symbol",
+  highlightProviderId = null,
+  onOpenProviderSettings,
+  activeProviderTag,
 }: ChromeToolbarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [tfMenuOpen, setTfMenuOpen] = useState(false);
@@ -220,7 +245,13 @@ export function ChromeToolbar({
     onShowProvenanceOverlayChange?.(next);
   };
 
-  useShortcut("mod+k", () => setCommandOpen((open) => !open), {
+  useShortcut("mod+k", () => {
+    if (onOpenSymbolSearch) {
+      onOpenSymbolSearch();
+    } else {
+      setCommandOpen((open) => !open);
+    }
+  }, {
     description: "Open symbol search",
     allowInInput: true,
   });
@@ -362,17 +393,26 @@ export function ChromeToolbar({
       )}
 
       {/* Primary TradingView-style Single Toolbar (40px) */}
-      <div className="flex h-10 items-center justify-between gap-2 border-b border-[#2a2e39] bg-[#131722] px-2">
+      <div className="flex h-10 items-center justify-between gap-2 border-b border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-2">
         {/* Left Cluster: Symbol, Timeframes, Candles, Indicators, Alert, Replay, Undo/Redo */}
         <Toolbar
           aria-label="Primary chart controls"
           className="flex min-w-0 items-center gap-0.5"
         >
           {/* Symbol Search Trigger */}
-          <Dialog open={commandOpen} onOpenChange={setCommandOpen}>
+          <Dialog
+            open={commandOpen}
+            onOpenChange={(next) => {
+              if (next && onOpenSymbolSearch) {
+                onOpenSymbolSearch();
+                return;
+              }
+              setCommandOpen(next);
+            }}
+          >
             <DialogTrigger
               aria-label={`Symbol search (${symbol})`}
-              title={`Search symbol (${paletteHint.text || "⌘K"})`}
+              title={`Search symbol (${paletteHint.text || "⌘K"} or start typing)`}
               className="flex h-7 items-center gap-1.5 rounded px-2 text-[13px] font-semibold text-white hover:bg-[#2a2e39] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
             >
               <svg
@@ -387,9 +427,14 @@ export function ChromeToolbar({
                 <path d="m11.8 11.8 3.2 3.2" strokeLinecap="round" />
               </svg>
               <span>{symbol}</span>
+              {activeProviderTag && (
+                <span className="rounded bg-[#252a36] px-1.5 py-0.5 font-mono text-[9px] font-semibold tracking-wide text-[#9598a1]">
+                  {activeProviderTag}
+                </span>
+              )}
             </DialogTrigger>
             <DialogBackdrop className="fixed inset-0 z-40 bg-black/60 backdrop-blur-[1px]" />
-            <DialogContent className="fixed left-1/2 top-20 z-50 flex w-full max-w-[460px] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl">
+            <DialogContent className="fixed left-1/2 top-20 z-50 flex w-full max-w-[460px] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-2xl">
               <div className="flex items-center justify-between border-b border-[#2a2e39] px-4 py-3">
                 <DialogTitle className="text-[16px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
                   Symbol Search
@@ -532,7 +577,7 @@ export function ChromeToolbar({
               <div
                 role="menu"
                 aria-label="All chart timeframes"
-                className="absolute left-0 top-9 z-40 w-44 rounded-md border border-[#2a2e39] bg-[#1e222d] p-1.5 shadow-2xl"
+                className="absolute left-0 top-9 z-40 w-44 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] p-1.5 shadow-2xl"
               >
                 {EXTRA_TIMEFRAME_GROUPS.map((group) => (
                   <div key={group.heading} className="mb-1.5 last:mb-0">
@@ -597,7 +642,7 @@ export function ChromeToolbar({
                 role="menu"
                 aria-label="Chart bar types"
                 style={{ maxHeight: "calc(100vh - 88px)" }}
-                className="absolute left-0 top-9 z-50 w-[236px] overflow-y-auto rounded-lg border border-[#2a2e39] bg-[#1e222d] py-1.5 shadow-2xl"
+                className="absolute left-0 top-9 z-50 w-[236px] overflow-y-auto rounded-lg border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] py-1.5 shadow-2xl"
               >
                 {CHART_BAR_TYPE_GROUPS.map((group, gi) => (
                   <div
@@ -750,7 +795,7 @@ export function ChromeToolbar({
                 setMoreMenuOpen(false);
                 setFeedMenuOpen((v) => !v);
               }}
-              className="flex h-7 items-center gap-1.5 rounded border border-[#2a2e39] bg-[#1e222d] px-2.5 text-[11px] font-medium text-[#d1d4dc] hover:border-[#363a45] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              className="flex h-7 items-center gap-1.5 rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] px-2.5 text-[11px] font-medium text-[#d1d4dc] hover:border-[#363a45] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
             >
               <span
                 aria-hidden="true"
@@ -772,7 +817,7 @@ export function ChromeToolbar({
               <div
                 role="menu"
                 aria-label="Market data sources"
-                className="absolute right-0 top-9 z-40 w-64 rounded-md border border-[#2a2e39] bg-[#1e222d] p-1 text-xs shadow-2xl"
+                className="absolute right-0 top-9 z-40 w-64 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] p-1 text-xs shadow-2xl"
               >
                 <div className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#787b86]">
                   Market Data Feed
@@ -808,6 +853,23 @@ export function ChromeToolbar({
                     {dataSourceError}
                   </div>
                 )}
+                <div className="my-1 h-px bg-[#2a2e39]" aria-hidden="true" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setFeedMenuOpen(false);
+                    if (onOpenProviderSettings) {
+                      onOpenProviderSettings();
+                    } else {
+                      setSettingsOpen(true);
+                    }
+                  }}
+                  className="flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-[11px] font-medium text-[#5b9cf6] hover:bg-[#2a2e39] hover:text-white"
+                >
+                  <span>Configure Data Providers &amp; Keys…</span>
+                  <span>→</span>
+                </button>
               </div>
             )}
           </div>
@@ -829,6 +891,12 @@ export function ChromeToolbar({
             onCompactDensityChange={setCompactDensity}
             showProvenanceOverlay={showProvenanceOverlay}
             onShowProvenanceOverlayChange={setShowProvenanceOverlay}
+            appAppearance={appAppearance}
+            onAppAppearanceChange={onAppAppearanceChange}
+            providerConfigs={providerConfigs}
+            onProviderConfigsChange={onProviderConfigsChange}
+            initialTab={settingsInitialTab}
+            highlightProviderId={highlightProviderId}
           />
 
           {/* Fullscreen */}
@@ -880,7 +948,7 @@ export function ChromeToolbar({
               <div
                 role="menu"
                 aria-label="Workspace actions"
-                className="absolute right-0 top-9 z-40 w-52 rounded-md border border-[#2a2e39] bg-[#1e222d] p-1 text-xs text-[#d1d4dc] shadow-2xl"
+                className="absolute right-0 top-9 z-40 w-52 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] p-1 text-xs text-[#d1d4dc] shadow-2xl"
               >
                 {onAddTab && (
                   <button

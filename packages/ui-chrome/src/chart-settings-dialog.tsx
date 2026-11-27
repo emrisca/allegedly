@@ -12,6 +12,19 @@ import {
 } from "@ui-sdk/react/dialog";
 import { Switch, SwitchThumb } from "@ui-sdk/react/switch";
 import { ColorPickerButton } from "./color-picker";
+import {
+  APP_THEME_PRESETS,
+  cloneAppAppearance,
+  DEFAULT_APP_APPEARANCE,
+  type AppAppearanceSettings,
+} from "./app-appearance";
+import {
+  isProviderConfigured,
+  MARKET_DATA_PROVIDERS,
+  type MarketProviderConfigMap,
+  type MarketProviderId,
+  type StoredProviderConfig,
+} from "./market-providers";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
 import {
   cloneChartSettings,
@@ -46,6 +59,16 @@ export interface ChartSettingsDialogProps {
   onCompactDensityChange: (next: boolean) => void;
   showProvenanceOverlay: boolean;
   onShowProvenanceOverlayChange: (next: boolean) => void;
+  /** App-wide appearance (shell/chrome outside the chart canvas) */
+  appAppearance?: AppAppearanceSettings;
+  onAppAppearanceChange?: (next: AppAppearanceSettings) => void;
+  /** Market data provider credentials / subscriptions */
+  providerConfigs?: MarketProviderConfigMap;
+  onProviderConfigsChange?: (next: MarketProviderConfigMap) => void;
+  /** Optional tab to focus when opening (e.g. "appearance" or "providers") */
+  initialTab?: string;
+  /** Optional provider ID to auto-expand on the Data Providers tab */
+  highlightProviderId?: MarketProviderId | null;
 }
 
 const SELECT_CLS =
@@ -112,8 +135,23 @@ export function ChartSettingsDialog({
   onCompactDensityChange,
   showProvenanceOverlay,
   onShowProvenanceOverlayChange,
+  appAppearance = DEFAULT_APP_APPEARANCE,
+  onAppAppearanceChange,
+  providerConfigs = {},
+  onProviderConfigsChange,
+  initialTab = "symbol",
+  highlightProviderId = null,
 }: ChartSettingsDialogProps) {
   const snapshotRef = useRef<ChartSettings>(cloneChartSettings(settings));
+  const appearanceSnapshotRef = useRef<AppAppearanceSettings>(cloneAppAppearance(appAppearance));
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [expandedProvider, setExpandedProvider] = useState<MarketProviderId | null>(
+    highlightProviderId,
+  );
+  const [draftProviderFields, setDraftProviderFields] = useState<
+    Partial<Record<MarketProviderId, StoredProviderConfig>>
+  >({});
+  const [savedNoticeId, setSavedNoticeId] = useState<MarketProviderId | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState("");
@@ -121,11 +159,17 @@ export function ChartSettingsDialog({
   useEffect(() => {
     if (open) {
       snapshotRef.current = cloneChartSettings(settings);
+      appearanceSnapshotRef.current = cloneAppAppearance(appAppearance);
+      setActiveTab(initialTab || "symbol");
+      if (highlightProviderId) {
+        setExpandedProvider(highlightProviderId);
+      }
       setTemplateMenuOpen(false);
       setSaveAsOpen(false);
       setSaveAsName("");
+      setSavedNoticeId(null);
     }
-  }, [open]);
+  }, [open, initialTab, highlightProviderId]);
 
   const update = <K extends keyof ChartSettings>(
     section: K,
@@ -150,7 +194,71 @@ export function ChartSettingsDialog({
 
   const handleCancel = () => {
     onSettingsChange(cloneChartSettings(snapshotRef.current));
+    onAppAppearanceChange?.(cloneAppAppearance(appearanceSnapshotRef.current));
     onOpenChange(false);
+  };
+
+  const updateAppearance = (patch: Partial<AppAppearanceSettings>) => {
+    if (!onAppAppearanceChange) return;
+    onAppAppearanceChange({
+      ...appAppearance,
+      ...patch,
+      preset: patch.preset ?? "custom",
+    });
+  };
+
+  const getDraftForProvider = (id: MarketProviderId): StoredProviderConfig => {
+    return (
+      draftProviderFields[id] ??
+      providerConfigs[id] ?? {
+        enabled: false,
+      }
+    );
+  };
+
+  const setDraftField = (
+    id: MarketProviderId,
+    field: keyof StoredProviderConfig,
+    val: string,
+  ) => {
+    const cur = getDraftForProvider(id);
+    setDraftProviderFields((prev) => ({
+      ...prev,
+      [id]: {
+        ...cur,
+        [field]: val,
+      },
+    }));
+  };
+
+  const handleSaveProvider = (id: MarketProviderId) => {
+    if (!onProviderConfigsChange) return;
+    const draft = getDraftForProvider(id);
+    const next: MarketProviderConfigMap = {
+      ...providerConfigs,
+      [id]: {
+        ...draft,
+        enabled: true,
+        savedAt: Date.now(),
+      },
+    };
+    onProviderConfigsChange(next);
+    setSavedNoticeId(id);
+    window.setTimeout(() => {
+      setSavedNoticeId((curr) => (curr === id ? null : curr));
+    }, 2200);
+  };
+
+  const handleDisconnectProvider = (id: MarketProviderId) => {
+    if (!onProviderConfigsChange) return;
+    const next: MarketProviderConfigMap = { ...providerConfigs };
+    delete next[id];
+    onProviderConfigsChange(next);
+    setDraftProviderFields((prev) => {
+      const copy = { ...prev };
+      delete copy[id];
+      return copy;
+    });
   };
 
   const handleSaveTemplateSubmit = () => {
@@ -188,7 +296,7 @@ export function ChartSettingsDialog({
 
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
 
-      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(620px,86vh)] w-[min(720px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
+      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(620px,86vh)] w-[min(720px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
         {/* Header */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#23262f] px-5">
           <div>
@@ -210,10 +318,10 @@ export function ChartSettingsDialog({
         </div>
 
         {/* Two-column body: vertical sidebar + scrollable form panel */}
-        <Tabs orientation="vertical" defaultValue="symbol" className="flex min-h-0 flex-1 flex-row">
+        <Tabs orientation="vertical" value={activeTab} onValueChange={(v) => { if (v) setActiveTab(v); }} className="flex min-h-0 flex-1 flex-row">
           <TabsList
             aria-label="Chart settings categories"
-            className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#2a2e39] bg-[#181c27] p-2.5"
+            className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] p-2.5"
           >
             <TabsTab value="symbol" className={tabCls}>
               <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -262,8 +370,26 @@ export function ChartSettingsDialog({
               <span>Events</span>
             </TabsTab>
 
-            <div className="my-1.5 h-px bg-[#23262f]" aria-hidden="true" />
+            <div className="my-1.5 h-px bg-[var(--app-border,#23262f)]" aria-hidden="true" />
 
+            <TabsTab value="appearance" className={tabCls}>
+              <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <circle cx="9" cy="9" r="6" />
+                <circle cx="6.8" cy="7.5" r="1" fill="currentColor" stroke="none" />
+                <circle cx="10.2" cy="6.4" r="1" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="9.2" r="1" fill="currentColor" stroke="none" />
+                <path d="M9 15a2.5 2.5 0 0 0 2.5-2.5c0-.8-.5-1.3-.5-1.9 0-.5.4-.8 1-.8h1.5" strokeLinecap="round" />
+              </svg>
+              <span>Appearance</span>
+            </TabsTab>
+            <TabsTab value="providers" className={tabCls}>
+              <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4">
+                <ellipse cx="9" cy="4.8" rx="5.5" ry="2.2" />
+                <path d="M3.5 4.8v4.2c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V4.8" />
+                <path d="M3.5 9v4.2c0 1.2 2.5 2.2 5.5 2.2s5.5-1 5.5-2.2V9" />
+              </svg>
+              <span>Data Providers</span>
+            </TabsTab>
             <TabsTab value="display" className={tabCls}>
               <svg aria-hidden="true" viewBox="0 0 18 18" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4">
                 <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" />
@@ -1382,6 +1508,274 @@ export function ChartSettingsDialog({
                 />
                 <span>News notification</span>
               </label>
+            </TabsPanel>
+
+            {/* 7b. APPEARANCE (App shell/chrome outside the chart canvas) */}
+            <TabsPanel value="appearance" className="space-y-4">
+              <div>
+                <div className={SECTION_HDR_CLS}>App Chrome Theme (Outside Chart)</div>
+                <p className="mb-3 text-[12px] leading-relaxed text-[#9598a1]">
+                  Customize the top bar, sidebars, watchlist, modals, and panels independently from the chart canvas.
+                </p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {APP_THEME_PRESETS.map((preset) => {
+                    const active = appAppearance.preset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() =>
+                          onAppAppearanceChange?.({
+                            preset: preset.id,
+                            ...preset.colors,
+                          })
+                        }
+                        className={
+                          active
+                            ? "flex flex-col gap-2 rounded-lg border border-[#2962ff] bg-[#2962ff]/12 p-3 text-left transition-colors"
+                            : "flex flex-col gap-2 rounded-lg border border-[#2a2e39] bg-[#181a20] p-3 text-left transition-colors hover:border-[#3e4556]"
+                        }
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[12px] font-semibold text-[#f0f3fa]">
+                            {preset.name}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <span
+                              className="h-3.5 w-3.5 rounded-full border border-white/15"
+                              style={{ backgroundColor: preset.colors.chromeBg }}
+                            />
+                            <span
+                              className="h-3.5 w-3.5 rounded-full border border-white/15"
+                              style={{ backgroundColor: preset.colors.panelBg }}
+                            />
+                            <span
+                              className="h-3.5 w-3.5 rounded-full border border-white/15"
+                              style={{ backgroundColor: preset.colors.accentColor }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-[#868993]">{preset.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className={SECTION_HDR_CLS}>Custom Shell Colors</div>
+                <div className="space-y-2.5 rounded-lg border border-[#2a2e39] bg-[#181a20] p-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[12px] font-medium text-[#e6e8ee]">App Shell Background</div>
+                      <div className="text-[11px] text-[#787e8d]">Top bar, left rail, watchlist &amp; bottom bar</div>
+                    </div>
+                    <ColorSwatch
+                      label="App shell background color"
+                      value={appAppearance.chromeBg}
+                      onChange={(chromeBg) => updateAppearance({ chromeBg })}
+                    />
+                  </div>
+                  <div className="h-px bg-[#262a34]" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[12px] font-medium text-[#e6e8ee]">Secondary Panels &amp; Sidebars</div>
+                      <div className="text-[11px] text-[#787e8d]">Settings sidebar, inspector drawers &amp; cards</div>
+                    </div>
+                    <ColorSwatch
+                      label="Secondary panel background color"
+                      value={appAppearance.panelBg}
+                      onChange={(panelBg) => updateAppearance({ panelBg })}
+                    />
+                  </div>
+                  <div className="h-px bg-[#262a34]" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[12px] font-medium text-[#e6e8ee]">Modals &amp; Popovers</div>
+                      <div className="text-[11px] text-[#787e8d]">Symbol search, menus &amp; settings dialogs</div>
+                    </div>
+                    <ColorSwatch
+                      label="Modal and popover surface color"
+                      value={appAppearance.surfaceBg}
+                      onChange={(surfaceBg) => updateAppearance({ surfaceBg })}
+                    />
+                  </div>
+                  <div className="h-px bg-[#262a34]" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[12px] font-medium text-[#e6e8ee]">Borders &amp; Dividers</div>
+                      <div className="text-[11px] text-[#787e8d]">Hairline panel edges across the chrome</div>
+                    </div>
+                    <ColorSwatch
+                      label="App chrome border color"
+                      value={appAppearance.borderColor}
+                      onChange={(borderColor) => updateAppearance({ borderColor })}
+                    />
+                  </div>
+                  <div className="h-px bg-[#262a34]" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[12px] font-medium text-[#e6e8ee]">Accent Color</div>
+                      <div className="text-[11px] text-[#787e8d]">Active highlights, badges &amp; primary actions</div>
+                    </div>
+                    <ColorSwatch
+                      label="App accent color"
+                      value={appAppearance.accentColor}
+                      onChange={(accentColor) => updateAppearance({ accentColor })}
+                    />
+                  </div>
+                </div>
+                <div className="mt-2.5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onAppAppearanceChange?.(cloneAppAppearance(DEFAULT_APP_APPEARANCE))}
+                    className="rounded-md border border-[#323642] bg-[#181a20] px-3 py-1.5 text-[11px] font-medium text-[#d1d4dc] hover:bg-[#23262f] hover:text-white"
+                  >
+                    Reset App Appearance
+                  </button>
+                </div>
+              </div>
+            </TabsPanel>
+
+            {/* 7c. MARKET DATA PROVIDERS */}
+            <TabsPanel value="providers" className="space-y-4">
+              <div>
+                <div className={SECTION_HDR_CLS}>Built-in Free Feeds</div>
+                <div className="space-y-2">
+                  {MARKET_DATA_PROVIDERS.filter((p) => p.category === "builtin").map((prov) => (
+                    <div
+                      key={prov.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[#2a2e39] bg-[#181a20] px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: prov.badgeColor }}
+                          />
+                          <span className="text-[13px] font-medium text-[#f0f3fa]">{prov.name}</span>
+                          <span className="rounded bg-[#252a36] px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
+                            {prov.shortTag}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-[#868993]">{prov.subscriptionNote}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
+                        Free · Ready
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className={SECTION_HDR_CLS}>Subscription &amp; API Key Providers</div>
+                <p className="mb-2.5 text-[11px] text-[#868993]">
+                  Enter your own broker or market data credentials below. Keys are stored locally on this device and never sent to Allegedly servers.
+                </p>
+                <div className="space-y-2">
+                  {MARKET_DATA_PROVIDERS.filter((p) => p.category === "subscription").map((prov) => {
+                    const configured = isProviderConfigured(prov.id, providerConfigs);
+                    const isOpen = expandedProvider === prov.id;
+                    const draft = getDraftForProvider(prov.id);
+
+                    return (
+                      <div
+                        key={prov.id}
+                        className={
+                          isOpen
+                            ? "rounded-lg border border-[#2962ff]/70 bg-[#181a20]"
+                            : "rounded-lg border border-[#2a2e39] bg-[#181a20]"
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setExpandedProvider(isOpen ? null : prov.id)}
+                          aria-expanded={isOpen}
+                          className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{ backgroundColor: prov.badgeColor }}
+                              />
+                              <span className="text-[13px] font-medium text-[#f0f3fa]">{prov.name}</span>
+                              <span className="rounded bg-[#252a36] px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
+                                {prov.shortTag}
+                              </span>
+                              <span className="text-[10px] text-[#787e8d]">
+                                {prov.assetClasses.slice(0, 3).join(" · ")}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {configured ? (
+                              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                                Configured
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                                Subscription required
+                              </span>
+                            )}
+                            <span className="text-[11px] text-[#868993]">{isOpen ? "▴" : "▾"}</span>
+                          </div>
+                        </button>
+
+                        {isOpen && (
+                          <div className="space-y-2.5 border-t border-[#262a34] px-3 pb-3 pt-2.5">
+                            <p className="text-[11px] leading-relaxed text-[#9598a1]">
+                              {prov.subscriptionNote}
+                            </p>
+                            <div className="space-y-2">
+                              {prov.fields.map((field) => (
+                                <label key={field.key} className="block space-y-1">
+                                  <span className="text-[11px] font-medium text-[#b2b5be]">
+                                    {field.label}
+                                    {field.required ? " *" : ""}
+                                  </span>
+                                  <input
+                                    type={field.secret ? "password" : "text"}
+                                    aria-label={`${prov.name} ${field.label}`}
+                                    placeholder={field.placeholder}
+                                    value={String(draft[field.key] ?? "")}
+                                    onChange={(e) => setDraftField(prov.id, field.key, e.target.value)}
+                                    className="h-8 w-full rounded-md border border-[#323642] bg-[#111318] px-2.5 font-mono text-[12px] text-[#f0f3fa] placeholder:text-[#5c6270] focus:border-[#2962ff] focus:outline-none"
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <div className="text-[11px] text-emerald-400">
+                                {savedNoticeId === prov.id ? "Credentials saved locally" : ""}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {configured && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDisconnectProvider(prov.id)}
+                                    className="h-7 rounded-md border border-[#3a262c] bg-[#24161a] px-2.5 text-[11px] font-medium text-[#f27983] hover:bg-[#331b21]"
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveProvider(prov.id)}
+                                  className="h-7 rounded-md bg-[#2962ff] px-3 text-[11px] font-semibold text-white hover:bg-[#1e53e5]"
+                                >
+                                  Save {prov.shortTag}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </TabsPanel>
 
             {/* 8. WORKSPACE DISPLAY (preserves @ui-sdk/react Switch a11y test contract) */}

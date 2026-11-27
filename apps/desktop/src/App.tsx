@@ -38,6 +38,16 @@ import {
   type ChartSettingsTemplate,
   type MarketDataFeedId,
   type QuickRangePreset,
+  applyAppAppearanceToDocument,
+  getMarketProviderMeta,
+  isProviderConfigured,
+  loadStoredAppAppearance,
+  loadStoredProviderConfigs,
+  saveStoredAppAppearance,
+  saveStoredProviderConfigs,
+  type AppAppearanceSettings,
+  type MarketProviderConfigMap,
+  type MarketProviderId,
   type WorkspaceLayoutMode,
 } from "@allegedly/ui-chrome";
 import {
@@ -68,7 +78,8 @@ import {
 } from "./panels/chart-panel";
 import { DomLadderPanel } from "./panels/dom-ladder-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
-import { WatchlistPanel } from "./panels/watchlist-panel";
+import { SymbolSearchDialog, type SymbolSearchMode } from "./components/symbol-search-dialog";
+import { WatchlistPanel, type WatchlistItemEntry } from "./panels/watchlist-panel";
 import type { OverlayVisibility } from "./render/webgl2-orderflow-overlay";
 
 const DEFAULT_BOOT_CONFIG: BootConfig = {
@@ -199,6 +210,33 @@ export interface AppProps {
   transport?: TransportAdapter;
 }
 
+
+const WATCHLIST_STORAGE_KEY = "allegedly.watchlist.v1";
+
+function loadStoredWatchlist(): WatchlistItemEntry[] {
+  const defaults: WatchlistItemEntry[] = WATCHLIST_SYMBOLS.map((m) => ({
+    symbol: m.symbol,
+    providerId: m.defaultProvider,
+    flag: null,
+  }));
+  if (typeof window === "undefined") return defaults;
+  try {
+    const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw) as WatchlistItemEntry[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return defaults;
+    return parsed
+      .filter((x) => x && typeof x.symbol === "string")
+      .map((x) => ({
+        symbol: x.symbol,
+        providerId: x.providerId ?? getSymbolMeta(x.symbol).defaultProvider,
+        flag: x.flag ?? null,
+      }));
+  } catch {
+    return defaults;
+  }
+}
+
 export function App({ transport: providedTransport }: AppProps) {
   const transport = useMemo<TransportAdapter>(
     () =>
@@ -243,6 +281,41 @@ export function App({ transport: providedTransport }: AppProps) {
     loadStoredChartTemplates,
   );
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<string>("symbol");
+  const [highlightProviderId, setHighlightProviderId] = useState<MarketProviderId | null>(null);
+  const [appAppearance, setAppAppearance] = useState<AppAppearanceSettings>(loadStoredAppAppearance);
+  const [providerConfigs, setProviderConfigs] = useState<MarketProviderConfigMap>(
+    loadStoredProviderConfigs,
+  );
+  const [watchlistItems, setWatchlistItems] = useState<WatchlistItemEntry[]>(loadStoredWatchlist);
+  const [activeProviderId, setActiveProviderId] = useState<MarketProviderId>("paper_sim");
+  const [symbolSearchOpen, setSymbolSearchOpen] = useState<boolean>(false);
+  const [symbolSearchQuery, setSymbolSearchQuery] = useState<string>("");
+  const [symbolSearchMode, setSymbolSearchMode] = useState<SymbolSearchMode>("switch");
+
+  useEffect(() => {
+    applyAppAppearanceToDocument(appAppearance);
+    saveStoredAppAppearance(appAppearance);
+  }, [appAppearance]);
+
+  const handleProviderConfigsChange = useCallback((next: MarketProviderConfigMap) => {
+    setProviderConfigs(next);
+    saveStoredProviderConfigs(next);
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlistItems));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [watchlistItems]);
+
+  const openSettingsAtTab = useCallback((tab: string, providerId?: MarketProviderId) => {
+    setSettingsInitialTab(tab);
+    setHighlightProviderId(providerId ?? null);
+    setSettingsOpen(true);
+  }, []);
   const [indicatorsOpen, setIndicatorsOpen] = useState<boolean>(false);
   const [overlayVisibility, setOverlayVisibility] = useState<OverlayVisibility>({
     footprint: false,
@@ -900,6 +973,78 @@ export function App({ transport: providedTransport }: AppProps) {
     setLayoutEpoch((e) => e + 1);
   }, []);
 
+  // TradingView-style type-anywhere symbol search: typing any letter or digit on the chart
+  // immediately opens the Symbol Search popup pre-filled with what you started typing.
+  useEffect(() => {
+    const onGlobalType = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (symbolSearchOpen || settingsOpen || indicatorsOpen || editingStudyId !== null) return;
+      const target = e.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement &&
+          (target.isContentEditable || target.closest('[role="dialog"], [role="alertdialog"]')))
+      ) {
+        return;
+      }
+      if (e.key.length === 1 && /^[a-zA-Z0-9]$/.test(e.key)) {
+        e.preventDefault();
+        setSymbolSearchMode("switch");
+        setSymbolSearchQuery(e.key.toUpperCase());
+        setSymbolSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onGlobalType);
+    return () => window.removeEventListener("keydown", onGlobalType);
+  }, [symbolSearchOpen, settingsOpen, indicatorsOpen, editingStudyId]);
+
+  const handleSelectSymbolWithProvider = useCallback(
+    (nextSym: string, providerId: MarketProviderId) => {
+      setActiveProviderId(providerId);
+      handleSymbolChange(nextSym);
+      const meta = getMarketProviderMeta(providerId);
+      if (meta.nativeFeedId && (LIVE_MARKET_DATA_SYMBOLS as readonly string[]).includes(nextSym)) {
+        handleDataSourceChange(meta.nativeFeedId);
+      } else if (providerId === "paper_sim") {
+        handleDataSourceChange("paper_sim");
+      } else if (!isProviderConfigured(providerId, providerConfigs)) {
+        // Stay on offline paper sim until user enters subscription API key
+        handleDataSourceChange("paper_sim");
+      }
+    },
+    [handleSymbolChange, handleDataSourceChange, providerConfigs],
+  );
+
+  const handleToggleWatchlistSymbol = useCallback(
+    (sym: string, providerId: MarketProviderId) => {
+      setWatchlistItems((prev) => {
+        const exists = prev.some((it) => it.symbol === sym);
+        if (exists) {
+          return prev.length > 1 ? prev.filter((it) => it.symbol !== sym) : prev;
+        }
+        return [...prev, { symbol: sym, providerId, flag: null }];
+      });
+    },
+    [],
+  );
+
+  const handleRemoveWatchlistSymbol = useCallback((sym: string) => {
+    setWatchlistItems((prev) => (prev.length > 1 ? prev.filter((it) => it.symbol !== sym) : prev));
+  }, []);
+
+  const handleCycleWatchlistFlag = useCallback((sym: string) => {
+    const order: (WatchlistItemEntry["flag"])[] = [null, "red", "blue", "green", "orange"];
+    setWatchlistItems((prev) =>
+      prev.map((it) => {
+        if (it.symbol !== sym) return it;
+        const idx = order.indexOf(it.flag ?? null);
+        return { ...it, flag: order[(idx + 1) % order.length] };
+      }),
+    );
+  }, []);
+
   const handleToggleRightTab = useCallback((tab: Exclude<RightDrawerTab, null>) => {
     setRightTab((curr) => (curr === tab ? null : tab));
   }, []);
@@ -965,7 +1110,7 @@ export function App({ transport: providedTransport }: AppProps) {
   const tickSizeE9 = symbolMeta.tickSizeE9;
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#131722] text-[#d1d4dc]">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--app-chrome-bg,#131722)] text-[#d1d4dc]">
       <ChromeToolbar
         symbol={symbol}
         timeframe={timeframe}
@@ -1003,7 +1148,13 @@ export function App({ transport: providedTransport }: AppProps) {
         onSaveChartTemplate={handleSaveChartTemplate}
         onApplyChartDefaults={handleApplyChartDefaults}
         settingsOpen={settingsOpen}
-        onSettingsOpenChange={setSettingsOpen}
+        onSettingsOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (!open) {
+            setSettingsInitialTab("symbol");
+            setHighlightProviderId(null);
+          }
+        }}
         replayOpen={replayOpen}
         onToggleReplay={() => setReplayOpen((v) => !v)}
         studiesActiveCount={
@@ -1031,7 +1182,23 @@ export function App({ transport: providedTransport }: AppProps) {
         dataSource={dataSource}
         dataSourceConnected={dataSourceConnected}
         dataSourceError={dataSourceError}
-        onDataSourceChange={handleDataSourceChange}
+        onDataSourceChange={(src) => {
+          setActiveProviderId(src);
+          handleDataSourceChange(src);
+        }}
+        onOpenSymbolSearch={() => {
+          setSymbolSearchMode("switch");
+          setSymbolSearchQuery("");
+          setSymbolSearchOpen(true);
+        }}
+        appAppearance={appAppearance}
+        onAppAppearanceChange={setAppAppearance}
+        providerConfigs={providerConfigs}
+        onProviderConfigsChange={handleProviderConfigsChange}
+        settingsInitialTab={settingsInitialTab}
+        highlightProviderId={highlightProviderId}
+        onOpenProviderSettings={(pid) => openSettingsAtTab("providers", pid)}
+        activeProviderTag={getMarketProviderMeta(activeProviderId).shortTag}
       />
 
       <main className="flex min-h-0 flex-1 overflow-hidden">
@@ -1122,12 +1289,23 @@ export function App({ transport: providedTransport }: AppProps) {
             </div>
 
             {rightTab !== null && (
-              <div className="flex w-[300px] shrink-0 flex-col border-l border-[#2a2e39] bg-[#131722]">
+              <div className="flex w-[312px] shrink-0 flex-col border-l border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)]">
                 {rightTab === "watchlist" && (
                   <WatchlistPanel
+                    items={watchlistItems}
                     activeSymbol={symbol}
+                    activeProviderId={activeProviderId}
                     livePrices={livePrices}
-                    onSelectSymbol={handleSymbolChange}
+                    providerConfigs={providerConfigs}
+                    onSelectSymbol={handleSelectSymbolWithProvider}
+                    onAddSymbolClick={() => {
+                      setSymbolSearchMode("watchlist");
+                      setSymbolSearchQuery("");
+                      setSymbolSearchOpen(true);
+                    }}
+                    onRemoveSymbol={handleRemoveWatchlistSymbol}
+                    onCycleFlag={handleCycleWatchlistFlag}
+                    onConfigureProvider={(pid) => openSettingsAtTab("providers", pid)}
                     onCollapse={() => setRightTab(null)}
                   />
                 )}
@@ -1387,6 +1565,18 @@ export function App({ transport: providedTransport }: AppProps) {
           if (!open) setEditingStudyId(null);
         }}
         onSave={handleSaveStudyConfig}
+      />
+
+      <SymbolSearchDialog
+        open={symbolSearchOpen}
+        initialQuery={symbolSearchQuery}
+        mode={symbolSearchMode}
+        watchlistSymbols={watchlistItems.map((it) => it.symbol)}
+        providerConfigs={providerConfigs}
+        onOpenChange={setSymbolSearchOpen}
+        onSelectSymbol={handleSelectSymbolWithProvider}
+        onToggleWatchlist={handleToggleWatchlistSymbol}
+        onConfigureProvider={(pid) => openSettingsAtTab("providers", pid)}
       />
 
       <StatusBar

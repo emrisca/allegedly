@@ -14,6 +14,7 @@ import { ChromeToolbar, StatusBar } from "@allegedly/ui-chrome";
 import { ReplayBar } from "./components/replay-bar";
 import { DEFAULT_FAVORITE_TOOLS } from "./drawings/drawing-engine";
 import { LeftDrawingRail } from "./components/left-drawing-rail";
+import { SymbolSearchDialog } from "./components/symbol-search-dialog";
 import { IndicatorsDialog } from "./components/indicators-dialog";
 import {
   DEFAULT_TIMEFRAME_VISIBILITY,
@@ -698,5 +699,45 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
     } finally {
       adapter.dispose();
     }
+  });
+
+  it("renders SymbolSearchDialog with multi-provider picker, subscription-required prompt, and Settings Appearance/Data Providers tabs", async () => {
+    const onSelect = vi.fn();
+    const onToggleWl = vi.fn();
+    const onConfigure = vi.fn();
+    const { container, unmount } = render(
+      <SymbolSearchDialog
+        open
+        initialQuery="NQ"
+        mode="switch"
+        watchlistSymbols={["BTC/USD"]}
+        providerConfigs={{}}
+        onOpenChange={vi.fn()}
+        onSelectSymbol={onSelect}
+        onToggleWatchlist={onToggleWl}
+        onConfigureProvider={onConfigure}
+      />,
+    );
+
+    // Filter pills & matched Futures ticker with CME + Databento
+    expect(screen.getByRole("button", { name: "Futures" })).toBeTruthy();
+    expect(screen.getByText("E-mini Nasdaq-100 Futures")).toBeTruthy();
+
+    // Expand multi-provider list for NQ1!
+    const expandBtn = screen.getByRole("button", { name: /more providers for NQ1!/i });
+    fireEvent.click(expandBtn);
+    expect(screen.getByText("Rithmic")).toBeTruthy();
+    expect(screen.getByText("Tradovate")).toBeTruthy();
+    expect(screen.getByText("ProjectX")).toBeTruthy();
+
+    // Clicking an unconfigured subscription provider shows Subscription Required prompt
+    fireEvent.click(screen.getByText("Rithmic"));
+    expect(screen.getByRole("alertdialog", { name: "Subscription required" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Configure Rithmic Key/i }));
+    expect(onConfigure).toHaveBeenCalledWith("rithmic");
+
+    const results = await axe.run(container);
+    expect(results.violations).toEqual([]);
+    unmount();
   });
 });

@@ -20,7 +20,7 @@ export function ReplayBar({ status, onControl, onClose }: ReplayBarProps) {
   return (
     <Toolbar
       aria-label="Bar replay controls"
-      className="flex flex-wrap items-center justify-between gap-2 border-t border-[#2a2e39] bg-[#131722] px-3 py-1.5 text-xs text-[#d1d4dc]"
+      className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-3 py-1.5 text-xs text-[#d1d4dc]"
     >
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] font-semibold tracking-wide text-[#2962ff]">

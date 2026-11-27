@@ -311,7 +311,7 @@ export function PaperOmsPanel({
           className={
             isTradeView
               ? "mx-3 mt-1.5 flex shrink-0 items-center gap-3 border-b border-[#2a2e39] text-[11px]"
-              : "mx-2.5 mt-2 mb-1 grid shrink-0 grid-cols-5 gap-0.5 rounded-md border border-[#2a2e39] bg-[#181c27] p-0.5"
+              : "mx-2.5 mt-2 mb-1 grid shrink-0 grid-cols-5 gap-0.5 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] p-0.5"
           }
         >
           <TabsTab
@@ -375,7 +375,7 @@ export function PaperOmsPanel({
         <TabsPanel value="ticket" className="min-h-0 flex-1 overflow-y-auto px-3 py-2.5">
           <div className="space-y-3">
             {/* Two-sided Sell (Bid) | Spread | Buy (Ask) Quote Selector */}
-            <div className="relative grid grid-cols-2 overflow-hidden rounded-lg border border-[#2a2e39] bg-[#181c27]">
+            <div className="relative grid grid-cols-2 overflow-hidden rounded-lg border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)]">
               <button
                 type="button"
                 aria-pressed={side === "sell"}
@@ -470,7 +470,7 @@ export function PaperOmsPanel({
                     Snap to {side === "buy" ? "Ask" : "Bid"}
                   </button>
                 </div>
-                <div className="flex h-9 items-center rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 focus-within:border-[#2962ff]">
+                <div className="flex h-9 items-center rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 focus-within:border-[#2962ff]">
                   <input
                     id="order-price-input"
                     type="text"
@@ -494,7 +494,7 @@ export function PaperOmsPanel({
                   ≈ ${formatMoney(notionalUsd, 2)} USD
                 </span>
               </div>
-              <div className="flex h-9 items-center rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 focus-within:border-[#2962ff]">
+              <div className="flex h-9 items-center rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 focus-within:border-[#2962ff]">
                 <input
                   id="order-qty-input"
                   type="text"
@@ -516,7 +516,7 @@ export function PaperOmsPanel({
                     className={`h-6 rounded border font-mono text-[10.5px] tabular-nums transition-colors ${
                       qtyText === preset
                         ? "border-[#2962ff] bg-[#2962ff]/18 text-[#f0f3fa]"
-                        : "border-[#2a2e39] bg-[#181c27] text-[#9598a1] hover:border-[#363a45] hover:text-[#f0f3fa]"
+                        : "border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] text-[#9598a1] hover:border-[#363a45] hover:text-[#f0f3fa]"
                     }`}
                   >
                     {preset}
@@ -526,7 +526,7 @@ export function PaperOmsPanel({
             </div>
 
             {/* Compact Account & Margin Summary Card */}
-            <div className="space-y-1.5 rounded-lg border border-[#2a2e39] bg-[#181c27] px-3 py-2.5 text-[11px]">
+            <div className="space-y-1.5 rounded-lg border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-3 py-2.5 text-[11px]">
               <div className="flex items-center justify-between">
                 <span className="text-[#787b86]">Trade value</span>
                 <span className="font-mono tabular-nums text-[#d1d4dc]">
@@ -599,7 +599,7 @@ export function PaperOmsPanel({
                     <div
                       className={`flex h-8 items-center justify-between rounded-md border px-2.5 font-mono text-[12px] tabular-nums ${
                         tpEnabled
-                          ? "border-[#2a2e39] bg-[#181c27] text-[#f0f3fa]"
+                          ? "border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] text-[#f0f3fa]"
                           : "border-[#2a2e39]/60 bg-[#181c27]/50 text-[#5d606b]"
                       }`}
                     >
@@ -643,7 +643,7 @@ export function PaperOmsPanel({
                     <div
                       className={`flex h-8 items-center justify-between rounded-md border px-2.5 font-mono text-[12px] tabular-nums ${
                         slEnabled
-                          ? "border-[#2a2e39] bg-[#181c27] text-[#f0f3fa]"
+                          ? "border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] text-[#f0f3fa]"
                           : "border-[#2a2e39]/60 bg-[#181c27]/50 text-[#5d606b]"
                       }`}
                     >
@@ -695,7 +695,7 @@ export function PaperOmsPanel({
                     id="order-tif-select"
                     value={tif}
                     onChange={(e) => setTif(e.target.value as "GTC" | "DAY" | "IOC" | "FOK")}
-                    className="h-8 w-full rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 text-[12px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
+                    className="h-8 w-full rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 text-[12px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
                   >
                     <option value="GTC">Good til canceled (GTC)</option>
                     <option value="DAY">Day</option>
@@ -740,7 +740,7 @@ export function PaperOmsPanel({
               {account.orders.slice(0, 20).map((ord) => (
                 <li
                   key={ord.order_id}
-                  className="flex items-center justify-between rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 py-2"
+                  className="flex items-center justify-between rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 py-2"
                 >
                   <div className="flex flex-col">
                     <span className={ord.side === "buy" ? "font-semibold text-[#089981]" : "font-semibold text-[#f23645]"}>
@@ -760,11 +760,11 @@ export function PaperOmsPanel({
 
         {/* TAB 3: DATA PROVENANCE (T1..T5) */}
         <TabsPanel value="provenance" className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2.5 py-2 font-mono text-[11px]">
-          <div className="flex justify-between rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 py-1.5">
+          <div className="flex justify-between rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 py-1.5">
             <span className="text-[#787b86]">Active Tier</span>
             <span className="text-[#6fa1ff]">{PROVENANCE_TIER_LABELS[provenanceTier] ?? "UNKNOWN"}</span>
           </div>
-          <div className="flex justify-between rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 py-1.5">
+          <div className="flex justify-between rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 py-1.5">
             <span className="text-[#787b86]">Book State · PIQ</span>
             <span
               data-testid="oms-book-state-badge"
@@ -783,7 +783,7 @@ export function PaperOmsPanel({
                   className={
                     active
                       ? "flex items-center justify-between rounded-md border border-[#2962ff]/60 bg-[#2962ff]/12 px-2.5 py-1.5 text-[10px]"
-                      : "flex items-center justify-between rounded-md border border-[#2a2e39] bg-[#181c27]/70 px-2.5 py-1.5 text-[10px] text-[#787b86]"
+                      : "flex items-center justify-between rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)]/70 px-2.5 py-1.5 text-[10px] text-[#787b86]"
                   }
                 >
                   <div>
@@ -806,44 +806,44 @@ export function PaperOmsPanel({
           <div className="flex flex-wrap gap-1">
             <Button
               onClick={() => onRunBuiltinStudy?.("sma", 20)}
-              className="rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
             >
               + SMA(20)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("ema", 9)}
-              className="rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
             >
               + EMA(9)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("vwap", 1)}
-              className="rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
             >
               + VWAP
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("wilder_rsi", 14)}
-              className="rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
             >
               + RSI(14)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("cvd", 1)}
-              className="rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
             >
               + CVD
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("footprint_delta", 1)}
-              className="rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
             >
               + FP Delta
             </Button>
             {activeStudies.length > 0 && (
               <Button
                 onClick={() => onClearStudies?.()}
-                className="rounded border border-[#2a2e39] bg-[#1e222d] px-2 py-1 text-[10px] text-[#f23645] hover:bg-[#f23645]/12"
+                className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] px-2 py-1 text-[10px] text-[#f23645] hover:bg-[#f23645]/12"
               >
                 Clear
               </Button>
@@ -864,7 +864,7 @@ export function PaperOmsPanel({
               value={luauDraft}
               onChange={(e) => setLuauDraft(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-[#2a2e39] bg-[#181c27] p-2 font-mono text-[10px] text-[#d1d4dc] focus:border-[#2962ff] focus:outline-none"
+              className="w-full rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] p-2 font-mono text-[10px] text-[#d1d4dc] focus:border-[#2962ff] focus:outline-none"
             />
             <Button
               onClick={() => onRunLuauStudy?.(luauDraft)}
@@ -887,7 +887,7 @@ export function PaperOmsPanel({
                 return (
                   <li
                     key={st.id}
-                    className="flex items-center justify-between rounded-md border border-[#2a2e39] bg-[#181c27] px-2.5 py-1.5"
+                    className="flex items-center justify-between rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 py-1.5"
                   >
                     <span className="text-[#f0f3fa]">{st.label}</span>
                     <span className="tabular-nums text-[#9598a1]">
@@ -909,7 +909,7 @@ export function PaperOmsPanel({
             </span>
             <Button
               onClick={() => onExportWorkspaceToml?.()}
-              className="shrink-0 rounded border border-[#2a2e39] bg-[#181c27] px-2 py-1 text-[10px] text-[#d1d4dc] hover:bg-[#2a2e39]"
+              className="shrink-0 rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:bg-[#2a2e39]"
             >
               Export .atworkspace.toml
             </Button>
@@ -921,7 +921,7 @@ export function PaperOmsPanel({
               return (
                 <li
                   key={s.key}
-                  className="flex items-center justify-between gap-2 rounded-md border border-[#2a2e39] bg-[#181c27] px-2 py-1.5"
+                  className="flex items-center justify-between gap-2 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1.5"
                 >
                   <div className="min-w-0 truncate">
                     <span className="text-[#d1d4dc]">{s.key}</span>
@@ -950,7 +950,7 @@ export function PaperOmsPanel({
                         </Button>
                         <Button
                           onClick={() => setEditingSettingKey(null)}
-                          className="rounded border border-[#2a2e39] bg-[#1e222d] px-1.5 py-0.5 text-[9.5px] text-[#9598a1] hover:text-white"
+                          className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] px-1.5 py-0.5 text-[9.5px] text-[#9598a1] hover:text-white"
                         >
                           Cancel
                         </Button>
@@ -966,14 +966,14 @@ export function PaperOmsPanel({
                           <>
                             <Button
                               onClick={() => beginEditSetting(s)}
-                              className="rounded border border-[#2a2e39] bg-[#131722] px-1.5 py-0.5 text-[9.5px] text-[#9598a1] hover:text-white"
+                              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] px-1.5 py-0.5 text-[9.5px] text-[#9598a1] hover:text-white"
                             >
                               Override
                             </Button>
                             {s.is_overridden && (
                               <Button
                                 onClick={() => onResetSetting?.(s.key)}
-                                className="rounded border border-[#2a2e39] bg-[#1e222d] px-1.5 py-0.5 text-[9.5px] text-[#d1d4dc] hover:bg-[#2a2e39]"
+                                className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] px-1.5 py-0.5 text-[9.5px] text-[#d1d4dc] hover:bg-[#2a2e39]"
                               >
                                 Reset
                               </Button>
@@ -991,7 +991,7 @@ export function PaperOmsPanel({
           {exportedToml && (
             <pre
               data-testid="exported-workspace-toml"
-              className="max-h-28 overflow-auto rounded-md border border-[#2a2e39] bg-[#131722] p-2 text-[9px] text-[#089981]"
+              className="max-h-28 overflow-auto rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] p-2 text-[9px] text-[#089981]"
             >
               {exportedToml}
             </pre>

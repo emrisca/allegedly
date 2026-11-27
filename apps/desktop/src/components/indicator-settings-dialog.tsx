@@ -163,7 +163,7 @@ export function IndicatorSettingsDialog({
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[1px]" />
       <DialogContent
         aria-label={`Indicator settings for ${draft.label}`}
-        className="fixed left-1/2 top-1/2 z-50 flex w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#2a2e39] bg-[#1e222d] text-[#d1d4dc] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 flex w-[420px] max-w-[94vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-2xl"
       >
         <div className="flex items-center justify-between px-5 pb-2 pt-4">
           <DialogTitle className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">

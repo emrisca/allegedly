@@ -68,7 +68,7 @@ export function RightIconRail({
   return (
     <aside
       aria-label="Right panel switcher"
-      className="flex w-10 shrink-0 flex-col items-center border-l border-[#2a2e39] bg-[#131722] py-2 select-none"
+      className="flex w-10 shrink-0 flex-col items-center border-l border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)] py-2 select-none"
     >
       <div className="flex flex-col items-center gap-1">
         {items.map((item) => {
