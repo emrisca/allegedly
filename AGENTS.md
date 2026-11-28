@@ -30,3 +30,8 @@ For **all** React UI development in Allegedly (requires **React 19 or newer**):
 - **Rust Build Cache Isolation:** Always set `export CARGO_TARGET_DIR=/Users/abelmora/.cache/allegedly-target` before any `cargo` command so no Rust `target/` directory is created inside this Obsidian vault.
 - **Financial Correctness:** Prices, ticks, and quantities use fixed-point integers (`i64` / `i128`) — never IEEE-754 `f64` for money, tick math, or order quantities.
 - **Execution Safety:** Zero live broker orders and zero real credentials in development, spikes, or tests. Paper/sandbox/local mocks only (`live_armed: false` default).
+
+## Icons (`shadcn.io/icons` & Finance Tag)
+
+- Use [`https://www.shadcn.io/icons/tag/finance`](https://www.shadcn.io/icons/tag/finance) and the broader [`https://www.shadcn.io/icons`](https://www.shadcn.io/icons) (Lucide / Tabler) catalog for all finance, trading, and UI chrome icons.
+- Always use `<SettingsCogIcon />` from `@allegedly/ui-chrome` for Settings buttons (never sun-ray or plain hexagon icons).

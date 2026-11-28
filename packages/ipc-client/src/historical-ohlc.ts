@@ -28,7 +28,29 @@ const TIMEFRAME_SECONDS: Record<string, number> = {
 };
 
 export function timeframeToSeconds(tf: string): number {
-  return TIMEFRAME_SECONDS[tf] ?? 60;
+  if (tf in TIMEFRAME_SECONDS) return TIMEFRAME_SECONDS[tf];
+  const m = /^(\d+)([tsmhDWM])$/.exec(tf.trim());
+  if (!m) return 60;
+  const n = Math.max(1, Number.parseInt(m[1], 10));
+  switch (m[2]) {
+    case "t":
+      // Tick bars synthesize a smooth time step proportional to tick count
+      return Math.max(5, Math.min(3600, Math.round(n * 0.6)));
+    case "s":
+      return n;
+    case "m":
+      return n * 60;
+    case "h":
+      return n * 3600;
+    case "D":
+      return n * 86400;
+    case "W":
+      return n * 604800;
+    case "M":
+      return n * 2592000;
+    default:
+      return 60;
+  }
 }
 
 /**

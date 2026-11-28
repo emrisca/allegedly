@@ -133,16 +133,124 @@ const SYMBOLS = [
   "VIX",
 ] as const;
 
-const PRIMARY_TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "D", "W"] as const;
-
-const EXTRA_TIMEFRAME_GROUPS: readonly {
-  heading: string;
-  items: readonly string[];
-}[] = [
-  { heading: "Minutes", items: ["1m", "2m", "3m", "5m", "10m", "15m", "30m", "45m"] },
-  { heading: "Hours", items: ["1h", "2h", "4h", "12h"] },
-  { heading: "Days & Higher", items: ["D", "3D", "W", "M"] },
+const DEFAULT_FAVORITE_TIMEFRAMES: readonly string[] = [
+  "1m",
+  "5m",
+  "15m",
+  "30m",
+  "1h",
+  "4h",
+  "D",
+  "W",
+  "M",
 ];
+
+const FAVORITE_TF_STORAGE_KEY = "allegedly.favorite_timeframes.v1";
+const CUSTOM_TF_STORAGE_KEY = "allegedly.custom_timeframes.v1";
+
+type CustomIntervalUnit = "t" | "s" | "m" | "h" | "D" | "W" | "M";
+
+interface TimeframeOptionItem {
+  code: string;
+  label: string;
+  custom?: boolean;
+}
+
+const BUILTIN_TIMEFRAME_GROUPS: readonly {
+  id: string;
+  heading: string;
+  items: readonly TimeframeOptionItem[];
+}[] = [
+  {
+    id: "ticks",
+    heading: "TICKS",
+    items: [
+      { code: "1t", label: "1 tick" },
+      { code: "10t", label: "10 ticks" },
+      { code: "100t", label: "100 ticks" },
+      { code: "1000t", label: "1000 ticks" },
+    ],
+  },
+  {
+    id: "seconds",
+    heading: "SECONDS",
+    items: [
+      { code: "1s", label: "1 second" },
+      { code: "5s", label: "5 seconds" },
+      { code: "10s", label: "10 seconds" },
+      { code: "15s", label: "15 seconds" },
+      { code: "30s", label: "30 seconds" },
+      { code: "45s", label: "45 seconds" },
+    ],
+  },
+  {
+    id: "minutes",
+    heading: "MINUTES",
+    items: [
+      { code: "1m", label: "1 minute" },
+      { code: "2m", label: "2 minutes" },
+      { code: "3m", label: "3 minutes" },
+      { code: "5m", label: "5 minutes" },
+      { code: "10m", label: "10 minutes" },
+      { code: "15m", label: "15 minutes" },
+      { code: "30m", label: "30 minutes" },
+      { code: "45m", label: "45 minutes" },
+    ],
+  },
+  {
+    id: "hours",
+    heading: "HOURS",
+    items: [
+      { code: "1h", label: "1 hour" },
+      { code: "2h", label: "2 hours" },
+      { code: "3h", label: "3 hours" },
+      { code: "4h", label: "4 hours" },
+    ],
+  },
+  {
+    id: "days",
+    heading: "DAYS",
+    items: [
+      { code: "D", label: "1 day" },
+      { code: "W", label: "1 week" },
+      { code: "M", label: "1 month" },
+    ],
+  },
+];
+
+function formatCustomIntervalLabel(code: string): string {
+  if (code === "D") return "1 day";
+  if (code === "W") return "1 week";
+  if (code === "M") return "1 month";
+  const m = /^(\d+)([tsmhDWM])$/.exec(code);
+  if (!m) return code;
+  const n = Number.parseInt(m[1], 10);
+  const unitNames: Record<CustomIntervalUnit, [string, string]> = {
+    t: ["tick", "ticks"],
+    s: ["second", "seconds"],
+    m: ["minute", "minutes"],
+    h: ["hour", "hours"],
+    D: ["day", "days"],
+    W: ["week", "weeks"],
+    M: ["month", "months"],
+  };
+  const [sing, plur] = unitNames[m[2] as CustomIntervalUnit] ?? [m[2], m[2]];
+  return `${n} ${n === 1 ? sing : plur}`;
+}
+
+function loadStoredStringArray(key: string, fallback: readonly string[]): string[] {
+  if (typeof window === "undefined") return [...fallback];
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [...fallback];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...fallback];
+    const filtered = parsed.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+    return filtered.length > 0 || fallback.length === 0 ? filtered : [...fallback];
+  } catch {
+    return [...fallback];
+  }
+}
 
 const FEED_OPTIONS: ReadonlyArray<{ id: MarketDataFeedId; label: string; desc: string }> = [
   { id: "paper_sim", label: "Sim", desc: "Offline deterministic simulator" },
@@ -213,6 +321,88 @@ export function ChromeToolbar({
 }: ChromeToolbarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [tfMenuOpen, setTfMenuOpen] = useState(false);
+  const [favoriteTimeframes, setFavoriteTimeframes] = useState<string[]>(() =>
+    loadStoredStringArray(FAVORITE_TF_STORAGE_KEY, DEFAULT_FAVORITE_TIMEFRAMES),
+  );
+  const [customTimeframes, setCustomTimeframes] = useState<string[]>(() =>
+    loadStoredStringArray(CUSTOM_TF_STORAGE_KEY, []),
+  );
+  const [addingCustomTf, setAddingCustomTf] = useState(false);
+  const [customTfValue, setCustomTfValue] = useState("2");
+  const [customTfUnit, setCustomTfUnit] = useState<CustomIntervalUnit>("m");
+  const [collapsedTfGroups, setCollapsedTfGroups] = useState<Record<string, boolean>>({});
+
+  const toggleFavoriteTimeframe = (code: string) => {
+    setFavoriteTimeframes((prev) => {
+      const exists = prev.includes(code);
+      const next = exists ? prev.filter((x) => x !== code) : [...prev, code];
+      const safeNext = next.length > 0 ? next : [code];
+      try {
+        window.localStorage.setItem(FAVORITE_TF_STORAGE_KEY, JSON.stringify(safeNext));
+      } catch {
+        // ignore
+      }
+      return safeNext;
+    });
+  };
+
+  const handleAddCustomInterval = () => {
+    const n = Math.max(1, Math.min(9999, Math.round(Number.parseInt(customTfValue, 10) || 1)));
+    const code =
+      n === 1 && (customTfUnit === "D" || customTfUnit === "W" || customTfUnit === "M")
+        ? customTfUnit
+        : `${n}${customTfUnit}`;
+    const isBuiltin = BUILTIN_TIMEFRAME_GROUPS.some((g) => g.items.some((it) => it.code === code));
+    if (!isBuiltin) {
+      setCustomTimeframes((prev) => {
+        const next = prev.includes(code) ? prev : [...prev, code];
+        try {
+          window.localStorage.setItem(CUSTOM_TF_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+    setFavoriteTimeframes((prev) => {
+      const next = prev.includes(code) ? prev : [...prev, code];
+      try {
+        window.localStorage.setItem(FAVORITE_TF_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    onTimeframeChange(code);
+    setAddingCustomTf(false);
+    setTfMenuOpen(false);
+  };
+
+  const handleRemoveCustomInterval = (code: string) => {
+    setCustomTimeframes((prev) => {
+      const next = prev.filter((x) => x !== code);
+      try {
+        window.localStorage.setItem(CUSTOM_TF_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    setFavoriteTimeframes((prev) => {
+      const next = prev.filter((x) => x !== code);
+      const safe = next.length > 0 ? next : ["15m"];
+      try {
+        window.localStorage.setItem(FAVORITE_TF_STORAGE_KEY, JSON.stringify(safe));
+      } catch {
+        // ignore
+      }
+      return safe;
+    });
+  };
+
+  const visibleBarTimeframes = favoriteTimeframes.includes(timeframe)
+    ? favoriteTimeframes
+    : [...favoriteTimeframes, timeframe];
   const [barTypeMenuOpen, setBarTypeMenuOpen] = useState(false);
   const [feedMenuOpen, setFeedMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -534,9 +724,9 @@ export function ChromeToolbar({
 
           <ToolbarSeparator className="mx-1.5 h-5 w-px bg-[#2a2e39]" />
 
-          {/* Timeframe Strip */}
+          {/* Timeframe Strip (Favorited + Active Timeframes, plus Custom Interval & Favorites Menu) */}
           <div className="relative flex items-center gap-0.5">
-            {PRIMARY_TIMEFRAMES.map((tf) => {
+            {visibleBarTimeframes.map((tf) => {
               const active = timeframe === tf;
               return (
                 <ToolbarButton
@@ -549,8 +739,8 @@ export function ChromeToolbar({
                   aria-pressed={active}
                   className={
                     active
-                      ? "flex h-7 items-center justify-center rounded px-2 text-[12px] font-medium text-[#2962ff] bg-[#2962ff]/12 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
-                      : "flex h-7 items-center justify-center rounded px-2 text-[12px] font-medium text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                      ? "flex h-7 items-center justify-center rounded-md bg-[#2a2e39] px-2 text-[12px] font-semibold text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                      : "flex h-7 items-center justify-center rounded-md px-2 text-[12px] font-medium text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
                   }
                 >
                   {tf}
@@ -564,9 +754,10 @@ export function ChromeToolbar({
               onClick={() => {
                 setFeedMenuOpen(false);
                 setMoreMenuOpen(false);
+                setBarTypeMenuOpen(false);
                 setTfMenuOpen((v) => !v);
               }}
-              className="flex h-7 w-6 items-center justify-center rounded text-[#787b86] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              className="flex h-7 w-6 items-center justify-center rounded-md text-[#868993] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
             >
               <svg aria-hidden="true" viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M3 4.5 6 7.5 9 4.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -577,38 +768,204 @@ export function ChromeToolbar({
               <div
                 role="menu"
                 aria-label="All chart timeframes"
-                className="absolute left-0 top-9 z-40 w-44 rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] p-1.5 shadow-2xl"
+                style={{ maxHeight: "calc(100vh - 84px)" }}
+                className="absolute left-0 top-9 z-50 flex w-[244px] flex-col overflow-hidden rounded-lg border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#16181f)] shadow-[0_20px_56px_rgba(0,0,0,0.75)]"
               >
-                {EXTRA_TIMEFRAME_GROUPS.map((group) => (
-                  <div key={group.heading} className="mb-1.5 last:mb-0">
-                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#787b86]">
-                      {group.heading}
-                    </div>
-                    <div className="grid grid-cols-4 gap-0.5">
-                      {group.items.map((tf) => {
-                        const active = timeframe === tf;
-                        return (
-                          <button
-                            key={tf}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              onTimeframeChange(tf);
-                              setTfMenuOpen(false);
-                            }}
-                            className={
-                              active
-                                ? "rounded bg-[#2962ff]/15 px-1.5 py-1 text-[11px] font-semibold text-[#2962ff]"
-                                : "rounded px-1.5 py-1 text-[11px] text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white"
-                            }
+                {/* + Add custom interval... */}
+                <div className="shrink-0 border-b border-[var(--app-border,#262a34)] p-1.5">
+                  {!addingCustomTf ? (
+                    <button
+                      type="button"
+                      onClick={() => setAddingCustomTf(true)}
+                      className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] font-medium text-[#e6e8ee] hover:bg-[#242834]"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 text-[#b2b5be]" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M8 3v10M3 8h10" strokeLinecap="round" />
+                      </svg>
+                      <span>Add custom interval…</span>
+                    </button>
+                  ) : (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleAddCustomInterval();
+                      }}
+                      className="space-y-2 rounded-md bg-[#111318] p-2"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          max={9999}
+                          aria-label="Custom interval value"
+                          value={customTfValue}
+                          onChange={(e) => setCustomTfValue(e.target.value)}
+                          autoFocus
+                          className="h-7 w-16 rounded-md border border-[#323642] bg-[#181b24] px-2 font-mono text-[12px] text-white focus:border-[#2962ff] focus:outline-none"
+                        />
+                        <select
+                          aria-label="Custom interval unit"
+                          value={customTfUnit}
+                          onChange={(e) => setCustomTfUnit(e.target.value as CustomIntervalUnit)}
+                          className="h-7 flex-1 rounded-md border border-[#323642] bg-[#181b24] px-2 text-[12px] text-[#e6e8ee] focus:border-[#2962ff] focus:outline-none"
+                        >
+                          <option value="t">Ticks</option>
+                          <option value="s">Seconds</option>
+                          <option value="m">Minutes</option>
+                          <option value="h">Hours</option>
+                          <option value="D">Days</option>
+                          <option value="W">Weeks</option>
+                          <option value="M">Months</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setAddingCustomTf(false)}
+                          className="h-6 rounded px-2 text-[11px] text-[#9aa1b2] hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="h-6 rounded bg-[var(--app-accent,#2962ff)] px-2.5 text-[11px] font-semibold text-white hover:bg-[#1e53e5]"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                {/* Collapsible Interval Groups with Star Favorites */}
+                <div className="min-h-0 flex-1 overflow-y-auto py-1">
+                  {[
+                    ...(customTimeframes.length > 0
+                      ? [
+                          {
+                            id: "custom",
+                            heading: "CUSTOM",
+                            items: customTimeframes.map((code) => ({
+                              code,
+                              label: formatCustomIntervalLabel(code),
+                              custom: true,
+                            })),
+                          },
+                        ]
+                      : []),
+                    ...BUILTIN_TIMEFRAME_GROUPS,
+                  ].map((group, gi) => {
+                    const collapsed = Boolean(collapsedTfGroups[group.id]);
+                    return (
+                      <div
+                        key={group.id}
+                        className={gi > 0 ? "border-t border-[var(--app-border,#232632)] pt-1" : ""}
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCollapsedTfGroups((prev) => ({ ...prev, [group.id]: !prev[group.id] }))
+                          }
+                          className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#787b86] hover:text-[#b2b5be]"
+                        >
+                          <span>{group.heading}</span>
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 12 12"
+                            className={`h-3 w-3 transition-transform ${collapsed ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
                           >
-                            {tf}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                            <path d="M3 7.5 6 4.5 9 7.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+
+                        {!collapsed && (
+                          <div className="px-1.5 pb-1">
+                            {group.items.map((item) => {
+                              const active = timeframe === item.code;
+                              const starred = favoriteTimeframes.includes(item.code);
+                              return (
+                                <div
+                                  key={item.code}
+                                  className={
+                                    active
+                                      ? "group/tf flex items-center justify-between rounded-md bg-[#f0f3fa] px-2.5 py-1.5 text-[12.5px] font-medium text-[#111318]"
+                                      : "group/tf flex items-center justify-between rounded-md px-2.5 py-1.5 text-[12.5px] text-[#d1d4dc] hover:bg-[#242834] hover:text-white"
+                                  }
+                                >
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      onTimeframeChange(item.code);
+                                      setTfMenuOpen(false);
+                                    }}
+                                    className="flex-1 text-left"
+                                  >
+                                    {item.label}
+                                  </button>
+
+                                  <div className="flex items-center gap-1">
+                                    {"custom" in item && item.custom && (
+                                      <button
+                                        type="button"
+                                        title={`Delete custom ${item.label}`}
+                                        aria-label={`Delete custom ${item.label}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemoveCustomInterval(item.code);
+                                        }}
+                                        className={
+                                          active
+                                            ? "rounded px-1 text-[12px] text-[#4b5563] hover:text-rose-600"
+                                            : "hidden rounded px-1 text-[12px] text-[#787b86] hover:text-rose-400 group-hover/tf:inline-flex"
+                                        }
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      title={starred ? `Remove ${item.label} from top bar` : `Add ${item.label} to top bar`}
+                                      aria-label={starred ? `Unfavorite ${item.label}` : `Favorite ${item.label}`}
+                                      aria-pressed={starred}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleFavoriteTimeframe(item.code);
+                                      }}
+                                      className={
+                                        starred
+                                          ? active
+                                            ? "flex h-5 w-5 items-center justify-center text-[#111318]"
+                                            : "flex h-5 w-5 items-center justify-center text-[#f0f3fa] hover:text-amber-300"
+                                          : active
+                                            ? "flex h-5 w-5 items-center justify-center text-[#6b7280] hover:text-[#111318]"
+                                            : "flex h-5 w-5 items-center justify-center text-[#5c6270] opacity-0 transition-opacity hover:text-amber-300 group-hover/tf:opacity-100 focus-visible:opacity-100"
+                                      }
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        viewBox="0 0 16 16"
+                                        className="h-3.5 w-3.5"
+                                        fill={starred ? "currentColor" : "none"}
+                                        stroke="currentColor"
+                                        strokeWidth="1.4"
+                                      >
+                                        <path d="M8 2.2 9.8 5.9l4 .6-2.9 2.8.7 4-3.6-1.9-3.6 1.9.7-4-2.9-2.8 4-.6L8 2.2Z" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@ui-sdk/react/dialog";
-import { UiSettingRow, UiSwitch } from "./primitives";
+import { SettingsCogIcon, UiSettingRow, UiSwitch } from "./primitives";
 import { ColorPickerButton } from "./color-picker";
 import {
   APP_THEME_PRESETS,
@@ -280,18 +280,7 @@ export function ChartSettingsDialog({
         title="Chart & Terminal Settings"
         className="flex h-7 w-7 items-center justify-center rounded-md text-[#959baa] hover:bg-[#1c1f28] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
       >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 18 18"
-          className="h-[17px] w-[17px]"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.35"
-          strokeLinejoin="round"
-        >
-          <path d="M9 2.3 14.6 5.55v6.9L9 15.7 3.4 12.45v-6.9L9 2.3Z" />
-          <circle cx="9" cy="9" r="2.25" />
-        </svg>
+        <SettingsCogIcon className="h-[17px] w-[17px]" />
       </DialogTrigger>
 
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />

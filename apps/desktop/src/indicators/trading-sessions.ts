@@ -8,6 +8,7 @@ export type SessionTimezone =
   | "Etc/UTC";
 
 export interface TradingSessionsConfig {
+  showSessions: boolean;
   timezone: SessionTimezone;
   showTokyo: boolean;
   tokyoHours: string;
@@ -24,6 +25,7 @@ export interface TradingSessionsConfig {
 }
 
 export const DEFAULT_TRADING_SESSIONS_CONFIG: TradingSessionsConfig = {
+  showSessions: true,
   timezone: "America/New_York",
   showTokyo: true,
   tokyoHours: "2000-0200",
@@ -147,7 +149,7 @@ export function computeTradingSessionBoxes(
   config: TradingSessionsConfig,
   timeframe: string,
 ): ComputedSessionBox[] {
-  if (candles.length === 0 || !isIntradayTimeframe(timeframe)) return [];
+  if (!config.showSessions || candles.length === 0 || !isIntradayTimeframe(timeframe)) return [];
 
   const defs: {
     id: "tokyo" | "london" | "newYork";

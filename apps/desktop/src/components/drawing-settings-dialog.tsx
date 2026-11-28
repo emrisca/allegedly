@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@ui-sdk/react/dialog";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
-import { ColorPickerButton } from "@allegedly/ui-chrome";
+import { ColorPickerButton, SettingsCogIcon } from "@allegedly/ui-chrome";
 import {
   DEFAULT_DRAWING_VISIBILITY,
   getDrawingToolMeta,
@@ -1407,10 +1407,7 @@ export function DrawingQuickStyleBar({
         onClick={onOpenSettings}
         className="flex h-6 w-6 items-center justify-center rounded text-[#9aa1b2] hover:bg-[#2a2e39] hover:text-white"
       >
-        <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
-          <circle cx="8" cy="8" r="2.2" />
-          <path d="M8 2.2v1.3M8 12.5v1.3M2.2 8h1.3M12.5 8h1.3M3.9 3.9l.9.9M11.2 11.2l.9.9M12.1 3.9l-.9.9M4.8 11.2l-.9.9" />
-        </svg>
+        <SettingsCogIcon className="h-3.5 w-3.5" />
       </button>
 
       {/* Lock Toggle */}

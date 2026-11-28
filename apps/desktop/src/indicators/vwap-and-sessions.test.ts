@@ -83,3 +83,19 @@ describe("Trading Sessions indicator", () => {
     expect(dailyBoxes).toHaveLength(0);
   });
 });
+
+describe("VWAP Key Levels & custom timeframe defaults", () => {
+  it("matches Abel's exact VWAP Key Levels defaults (10 bars, 3 offset, orange/gray/white/red, traditional off)", () => {
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.lineBars).toBe(10);
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.rightOffset).toBe(3);
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.monthVwapColor).toBe("#ff9800");
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.monthBandColor).toBe("#9598a1");
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.prevVwapColor).toBe("#ffffff");
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.prevBandColor).toBe("#ffffff");
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.weekVwapColor).toBe("#f23645");
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.weekBandColor).toBe("#9598a1");
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.showTraditionalMonthly).toBe(false);
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.showTraditionalYearly).toBe(false);
+    expect(DEFAULT_VWAP_KEY_LEVELS_CONFIG.showTraditionalWeekly).toBe(false);
+  });
+});

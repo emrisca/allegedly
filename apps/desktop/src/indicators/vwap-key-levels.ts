@@ -26,20 +26,20 @@ export const DEFAULT_VWAP_KEY_LEVELS_CONFIG: VwapKeyLevelsConfig = {
   showMonthly: true,
   showPreviousWeek: true,
   showWeekly: true,
-  lineBars: 18,
-  rightOffset: 5,
-  showTraditionalMonthly: true,
-  showTraditionalYearly: true,
-  showTraditionalWeekly: true,
-  monthVwapColor: "#9c50be", // rgb(156, 80, 190)
-  monthBandColor: "#9c50be",
-  prevVwapColor: "#e6be23", // rgb(230, 190, 35)
-  prevBandColor: "#e6be23",
-  weekVwapColor: "#dc3737", // rgb(220, 55, 55)
-  weekBandColor: "#dc3737",
+  lineBars: 10,
+  rightOffset: 3,
+  showTraditionalMonthly: false,
+  showTraditionalYearly: false,
+  showTraditionalWeekly: false,
+  monthVwapColor: "#ff9800", // Orange (Monthly VWAP)
+  monthBandColor: "#9598a1", // Neutral gray (Monthly VAH / VAL)
+  prevVwapColor: "#ffffff", // Pure white (Previous week VWAP)
+  prevBandColor: "#ffffff", // Pure white (Previous week VAH / VAL)
+  weekVwapColor: "#f23645", // Red (Weekly VWAP)
+  weekBandColor: "#9598a1", // Neutral gray (Weekly VAH / VAL)
 };
 
-const STORAGE_KEY = "allegedly.vwap_key_levels.v1";
+const STORAGE_KEY = "allegedly.vwap_key_levels.v2";
 
 export function cloneVwapKeyLevelsConfig(src: VwapKeyLevelsConfig): VwapKeyLevelsConfig {
   return { ...src };
@@ -328,23 +328,26 @@ export function drawVwapKeyLevelsOverlay(
   }
 
   // 2. Right-side projected key level lines + labels (mVAH/mVWAP/mVAL, pwVAH/pwVWAP/pwVAL, wVAH/wVWAP/wVAL)
-  const lastCandle = candles[candles.length - 1];
-  const lastX = bridge.timeToX(Number(lastCandle.time));
+  // Always strictly anchored at the last candle + rightOffset bars, spanning lineBars bars.
+  const barSpacing = estimateBarSpacingPx(candles, bridge);
+  const lastIdx = candles.length - 1;
+  let lastX = bridge.timeToX(Number(candles[lastIdx].time));
+  if (lastX === null) {
+    // Extrapolate from the nearest mapped candle so levels stay glued to the last candle while panning
+    for (let i = lastIdx - 1; i >= 0; i--) {
+      const xi = bridge.timeToX(Number(candles[i].time));
+      if (xi !== null) {
+        lastX = xi + (lastIdx - i) * barSpacing;
+        break;
+      }
+    }
+  }
   if (lastX === null) return;
 
-  const barSpacing = estimateBarSpacingPx(candles, bridge);
-  const rawX1 = lastX + config.rightOffset * barSpacing;
-  const rawX2 = rawX1 + config.lineBars * barSpacing;
-
-  // Keep projected lines & tags gracefully visible inside the right margin even when chart isn't scrolled right
-  const rightPadding = 54;
-  let x1 = rawX1;
-  let x2 = rawX2;
-  if (x2 > w - rightPadding) {
-    const desiredSpan = Math.min(Math.max(32, rawX2 - rawX1), Math.max(40, w * 0.25));
-    x2 = w - rightPadding;
-    x1 = Math.max(0, x2 - desiredSpan);
-  }
+  const x1 = lastX + config.rightOffset * barSpacing;
+  const x2 = x1 + config.lineBars * barSpacing;
+  // Skip drawing if the entire projected segment + label lies completely outside the viewport
+  if (x2 + 64 < 0 || x1 > w + 24) return;
 
   const L = computed.latestLevels;
   const levels: VwapKeyLevelItem[] = [];

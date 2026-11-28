@@ -189,7 +189,7 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
     paneButtons: "hover",
     marginTopPct: 10,
     marginBottomPct: 8,
-    marginRightBars: 10,
+    marginRightBars: 18,
   },
   trading: {
     buySellButtons: false,

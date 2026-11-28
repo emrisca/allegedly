@@ -50,3 +50,8 @@ Before reporting any UI change complete:
    - Checked / ON / Active state
    - Open modal / popover state
 3. Confirm thumbs sit centered inside tracks with symmetric `2px` inset, text never clips, and buttons align cleanly across rows and modal footers.
+
+## Icons (`shadcn.io/icons` & Finance Tag)
+
+- Use [`https://www.shadcn.io/icons/tag/finance`](https://www.shadcn.io/icons/tag/finance) and the broader [`https://www.shadcn.io/icons`](https://www.shadcn.io/icons) (Lucide / Tabler) catalog for all finance, trading, and UI chrome icons.
+- Always use `<SettingsCogIcon />` from `@allegedly/ui-chrome` for Settings buttons (never sun-ray or plain hexagon icons).
