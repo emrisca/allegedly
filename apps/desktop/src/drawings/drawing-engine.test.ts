@@ -7,6 +7,8 @@ import {
   rectangleHandles,
   resizeRectangle,
   computeRulerMetrics,
+  snapPriceToCandleZone,
+  snapTickToCandleZone,
   snapTickToMagnet,
   type PlacedDrawingKind,
 } from "./drawing-engine";
@@ -110,6 +112,35 @@ describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
     const miss = snapTickToMagnet(190_100n, [{ priceTick: 190_000n, source: "tpo_poc" }], 5n);
     expect(miss.snappedTick).toBe(190_100n);
     expect(miss.target).toBeNull();
+  });
+
+  it("snaps candle magnet by wick/body zone instead of close-only", () => {
+    // Bullish candle: open=100, close=104 (bodyTop=104, bodyBottom=100), high=108, low=96
+    const bull = { open: 100, high: 108, low: 96, close: 104 };
+    expect(snapPriceToCandleZone(112, bull)).toBe(108); // above wick -> top of wick
+    expect(snapPriceToCandleZone(108, bull)).toBe(108); // at wick top -> top of wick
+    expect(snapPriceToCandleZone(107.9, bull)).toBe(104); // between wick top & body top -> body top
+    expect(snapPriceToCandleZone(104.1, bull)).toBe(104); // just above body top -> body top
+    expect(snapPriceToCandleZone(103, bull)).toBe(104); // upper half of body -> body top
+    expect(snapPriceToCandleZone(101, bull)).toBe(100); // lower half of body -> body bottom
+    expect(snapPriceToCandleZone(99.9, bull)).toBe(100); // between body bottom & wick low -> body bottom
+    expect(snapPriceToCandleZone(96.1, bull)).toBe(100); // just above wick low -> body bottom
+    expect(snapPriceToCandleZone(96, bull)).toBe(96); // at wick low -> bottom of wick
+    expect(snapPriceToCandleZone(90, bull)).toBe(96); // below wick -> bottom of wick
+
+    // Bearish candle: open=104 (bodyTop), close=100 (bodyBottom), high=108, low=96
+    const bear = { open: 104, high: 108, low: 96, close: 100 };
+    expect(snapPriceToCandleZone(110, bear)).toBe(108); // above wick -> high
+    expect(snapPriceToCandleZone(107.5, bear)).toBe(104); // between wick & body top -> open (body top)
+    expect(snapPriceToCandleZone(96.5, bear)).toBe(100); // between wick & body bottom -> close (body bottom)
+    expect(snapPriceToCandleZone(92, bear)).toBe(96); // below wick -> low
+
+    // Exact integer tick variant
+    const ticks = { openTick: 400n, highTick: 432n, lowTick: 384n, closeTick: 416n };
+    expect(snapTickToCandleZone(440n, ticks)).toBe(432n);
+    expect(snapTickToCandleZone(431n, ticks)).toBe(416n);
+    expect(snapTickToCandleZone(385n, ticks)).toBe(400n);
+    expect(snapTickToCandleZone(380n, ticks)).toBe(384n);
   });
 
   it("computes exact BigInt ruler metrics (delta, %, ticks, bars, duration, cumulative volume)", () => {

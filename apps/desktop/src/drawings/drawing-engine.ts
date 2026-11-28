@@ -549,6 +549,62 @@ export function computeRulerMetrics(params: {
 }
 
 /**
+ * Zone-based candle magnet snap (price space):
+ * - Above (or at) top of wick (`high`) -> `high` (top of wick)
+ * - Between top of wick and top of candle body (`max(open, close)`) -> top of candle body
+ * - Below (or at) bottom of wick (`low`) -> `low` (bottom of wick)
+ * - Between bottom of wick and bottom of candle body (`min(open, close)`) -> bottom of candle body
+ * - Inside candle body -> closer of body top or body bottom
+ */
+export function snapPriceToCandleZone(
+  cursorPrice: number,
+  bar: { open: number; high: number; low: number; close: number },
+): number {
+  const { open, high, low, close } = bar;
+  const bodyTop = Math.max(open, close);
+  const bodyBottom = Math.min(open, close);
+
+  if (cursorPrice >= high) {
+    return high;
+  }
+  if (cursorPrice > bodyTop) {
+    return bodyTop;
+  }
+  if (cursorPrice <= low) {
+    return low;
+  }
+  if (cursorPrice < bodyBottom) {
+    return bodyBottom;
+  }
+  return cursorPrice >= (bodyTop + bodyBottom) / 2 ? bodyTop : bodyBottom;
+}
+
+/**
+ * Exact integer tick version of zone-based candle magnet snap.
+ */
+export function snapTickToCandleZone(
+  cursorTick: bigint,
+  bar: { openTick: bigint; highTick: bigint; lowTick: bigint; closeTick: bigint },
+): bigint {
+  const bodyTop = bar.openTick >= bar.closeTick ? bar.openTick : bar.closeTick;
+  const bodyBottom = bar.openTick <= bar.closeTick ? bar.openTick : bar.closeTick;
+
+  if (cursorTick >= bar.highTick) {
+    return bar.highTick;
+  }
+  if (cursorTick > bodyTop) {
+    return bodyTop;
+  }
+  if (cursorTick <= bar.lowTick) {
+    return bar.lowTick;
+  }
+  if (cursorTick < bodyBottom) {
+    return bodyBottom;
+  }
+  return cursorTick * 2n >= bodyTop + bodyBottom ? bodyTop : bodyBottom;
+}
+
+/**
  * Exact integer SV-17 magnet snap (0 sub-tick float error).
  */
 export function snapTickToMagnet(

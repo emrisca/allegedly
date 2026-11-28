@@ -23,6 +23,7 @@ import {
   LineSeries,
   LineStyle,
   LineType,
+  MismatchDirection,
   PriceScaleMode,
   type CandlestickData,
   type HistogramData,
@@ -88,6 +89,7 @@ import {
   hitTestDrawing,
   resizeRectangle,
   type RectangleHandle,
+  snapPriceToCandleZone,
   snapTickToMagnet,
   type AnchorPoint,
   type DrawingObject,
@@ -2041,13 +2043,9 @@ export function ChartPanel({
     };
   }, []);
 
-  // Sync Lightweight Charts crosshair mode live whenever magnet or Cmd/Ctrl state changes
+  // Sync Lightweight Charts / drawing crosshair magnet snap live whenever magnet or Cmd/Ctrl state changes
   useEffect(() => {
-    chartApiRef.current?.applyOptions({
-      crosshair: {
-        mode: effectiveMagnet ? CrosshairMode.Magnet : CrosshairMode.Normal,
-      },
-    });
+    syncCrosshairMagnetRef.current?.();
   }, [effectiveMagnet]);
 
   useEffect(() => {
@@ -2131,6 +2129,7 @@ export function ChartPanel({
   const selectedDrawingIdRef = useRef<string | null>(null);
   selectedDrawingIdRef.current = selectedDrawingId;
   const requestOverlayRedrawRef = useRef<(() => void) | null>(null);
+  const syncCrosshairMagnetRef = useRef<(() => void) | null>(null);
   const chartApiRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
@@ -2403,7 +2402,7 @@ export function ChartPanel({
         },
       },
       crosshair: {
-        mode: magnetRef.current ? CrosshairMode.Magnet : CrosshairMode.Normal,
+        mode: CrosshairMode.Normal,
         vertLine: {
           color: cfg.canvas.crosshairColor,
           labelBackgroundColor: "#2b3040",
@@ -2767,7 +2766,7 @@ export function ChartPanel({
         },
       },
       crosshair: {
-        mode: magnetRef.current ? CrosshairMode.Magnet : CrosshairMode.Normal,
+        mode: CrosshairMode.Normal,
         vertLine: {
           color: initCfg.canvas.crosshairColor,
           labelBackgroundColor: "#2b3040",
@@ -3115,6 +3114,16 @@ export function ChartPanel({
     let rulerDragOrigin: { x: number; y: number } | null = null;
     let zoomBox: { x1: number; y1: number; x2: number; y2: number } | null = null;
     let drawingCrosshairPx: { x: number; y: number } | null = null;
+    let lastCrosshairHover: {
+      rawY: number;
+      time: UTCTimestamp;
+      bar: CandlestickData<UTCTimestamp> | LineData<UTCTimestamp>;
+    } | null = null;
+    let lastDrawingPointerClient: {
+      clientX: number;
+      clientY: number;
+      shiftKey: boolean;
+    } | null = null;
     let rafId = 0;
     let lastWatchlistNotifyMs = 0;
     let lastStudyRecomputeMs = 0;
@@ -3646,13 +3655,20 @@ export function ChartPanel({
       scheduleFlush();
     };
 
-    chart.subscribeCrosshairMove((param) => {
-      if (param.point) {
-        const p = candleSeries.coordinateToPrice(param.point.y);
-        if (p !== null && Number.isFinite(p)) {
-          lastCrosshairPriceRef.current = p;
-        }
+    const resolveSnapPriceForBar = (
+      rawPrice: number,
+      snapBar: CandlestickData<UTCTimestamp> | LineData<UTCTimestamp>,
+    ): number => {
+      if ("open" in snapBar && typeof snapBar.open === "number") {
+        return snapPriceToCandleZone(rawPrice, snapBar);
       }
+      if ("value" in snapBar && typeof snapBar.value === "number" && Number.isFinite(snapBar.value)) {
+        return snapBar.value;
+      }
+      return rawPrice;
+    };
+
+    chart.subscribeCrosshairMove((param) => {
       const rawHovered = param.seriesData.get(candleSeries) as
         | CandlestickData<UTCTimestamp>
         | LineData<UTCTimestamp>
@@ -3663,6 +3679,44 @@ export function ChartPanel({
           : param.time !== undefined
             ? activeCandles.find((c) => c.time === param.time)
             : undefined;
+      const snapBar: CandlestickData<UTCTimestamp> | LineData<UTCTimestamp> | undefined =
+        rawHovered &&
+        (("open" in rawHovered && typeof rawHovered.open === "number") ||
+          ("value" in rawHovered && typeof rawHovered.value === "number"))
+          ? rawHovered
+          : bar;
+
+      if (param.point && (param.paneIndex ?? 0) === 0) {
+        const rawPrice = candleSeries.coordinateToPrice(param.point.y);
+        const magnetNow = param.sourceEvent
+          ? baseMagnetRef.current !== Boolean(param.sourceEvent.metaKey || param.sourceEvent.ctrlKey)
+          : magnetRef.current;
+        if (param.time !== undefined && snapBar) {
+          lastCrosshairHover = { rawY: param.point.y, time: snapBar.time, bar: snapBar };
+          let displayPrice: number | null = rawPrice !== null ? Number(rawPrice) : null;
+          if (magnetNow && displayPrice !== null && Number.isFinite(displayPrice)) {
+            const snappedPrice = resolveSnapPriceForBar(displayPrice, snapBar);
+            displayPrice = snappedPrice;
+            try {
+              chart.setCrosshairPosition(snappedPrice, snapBar.time, candleSeries);
+            } catch {
+              // Ignore if bar time is not currently indexed
+            }
+          }
+          if (displayPrice !== null && Number.isFinite(displayPrice)) {
+            lastCrosshairPriceRef.current = displayPrice;
+          }
+        } else {
+          lastCrosshairHover = null;
+          if (rawPrice !== null && Number.isFinite(rawPrice)) {
+            lastCrosshairPriceRef.current = rawPrice;
+          }
+        }
+      } else {
+        if (!param.point) {
+          lastCrosshairHover = null;
+        }
+      }
       const vPoint = param.seriesData.get(volumeSeries) as HistogramData<UTCTimestamp> | undefined;
       const lastBar = activeCandles[activeCandles.length - 1];
       const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
@@ -3813,30 +3867,9 @@ export function ChartPanel({
       }
     });
 
-    const collectMagnetTargets = (cursorTimeSec?: number): MagnetTarget[] => {
+    const collectVpMagnetTargets = (): MagnetTarget[] => {
       const targets: MagnetTarget[] = [];
-      if (activeCandles.length > 0 && tickFloat > 0) {
-        let targetBar = activeCandles[activeCandles.length - 1];
-        if (typeof cursorTimeSec === "number" && Number.isFinite(cursorTimeSec)) {
-          let bestDist = Infinity;
-          for (let i = 0; i < activeCandles.length; i++) {
-            const dist = Math.abs(Number(activeCandles[i].time) - cursorTimeSec);
-            if (dist < bestDist) {
-              bestDist = dist;
-              targetBar = activeCandles[i];
-            }
-          }
-        }
-        if (targetBar) {
-          for (const price of [targetBar.open, targetBar.high, targetBar.low, targetBar.close]) {
-            const scaled = price / tickFloat;
-            if (Number.isFinite(scaled)) {
-              targets.push({ priceTick: BigInt(Math.round(scaled)), source: "ohlc" });
-            }
-          }
-        }
-      }
-      if (vpSummary) {
+      if (vpSummary && visibilityRef.current.vrvp) {
         targets.push(
           { priceTick: vpSummary.pocPrice, source: "tpo_poc" },
           { priceTick: vpSummary.vahPrice, source: "tpo_vah" },
@@ -3846,6 +3879,7 @@ export function ChartPanel({
       if (tickFloat > 0) {
         for (const d of drawingEngineRef.current!.list(symbol)) {
           if (
+            !d.hidden &&
             (d.kind === "fixed_range_vp" || d.kind === "anchored_vp") &&
             d.anchors.length >= 1
           ) {
@@ -3948,8 +3982,25 @@ export function ChartPanel({
           ? baseMagnetRef.current !== Boolean(modifiers.metaKey || modifiers.ctrlKey)
           : magnetRef.current;
       if (useMagnet) {
-        const snapped = snapTickToMagnet(priceTick, collectMagnetTargets(timeSec), 250n);
-        priceTick = snapped.snappedTick;
+        const rawLogical = chart.timeScale().coordinateToLogical(x);
+        const barIdx = rawLogical !== null && Number.isFinite(rawLogical) ? Math.round(rawLogical) : null;
+        const seriesBar =
+          barIdx !== null
+            ? (candleSeries.dataByIndex(barIdx, MismatchDirection.None) as
+                | CandlestickData<UTCTimestamp>
+                | LineData<UTCTimestamp>
+                | null)
+            : null;
+        if (seriesBar) {
+          const snappedPrice = resolveSnapPriceForBar(price, seriesBar);
+          const snappedScaled = snappedPrice / tickFloat;
+          if (Number.isFinite(snappedScaled)) {
+            priceTick = BigInt(Math.round(snappedScaled));
+          }
+        } else {
+          const snapped = snapTickToMagnet(priceTick, collectVpMagnetTargets(), 250n);
+          priceTick = snapped.snappedTick;
+        }
       }
       return { timeSec, priceTick };
     };
@@ -4093,9 +4144,14 @@ export function ChartPanel({
       const tool = activeToolRef.current;
       const isDrawingSurfaceActive = tool !== "cursor" || shiftPressedRef.current;
       if (isDrawingSurfaceActive) {
+        lastDrawingPointerClient = {
+          clientX: ev.clientX,
+          clientY: ev.clientY,
+          shiftKey: ev.shiftKey,
+        };
         let cx = px;
         let cy = py;
-        const magnetNow = ev.metaKey || ev.ctrlKey ? !magnetRef.current : magnetRef.current;
+        const magnetNow = baseMagnetRef.current !== Boolean(ev.metaKey || ev.ctrlKey);
         if (magnetNow && !zoomBox) {
           const snapped = toAnchorFromPointer(ev.clientX, ev.clientY, {
             shiftKey: ev.shiftKey,
@@ -4129,7 +4185,7 @@ export function ChartPanel({
       }
 
       if (rulerStart && !rulerPinned) {
-        const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+        const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY, { metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
         if (nextAnchor) {
           rulerEnd = nextAnchor;
           pendingPrimitiveDirty = true;
@@ -4145,7 +4201,7 @@ export function ChartPanel({
         if (lastFreehandPx && Math.hypot(px - lastFreehandPx.x, py - lastFreehandPx.y) < 4) {
           return;
         }
-        const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+        const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY, { metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
         if (nextAnchor) {
           draftAnchors.push(nextAnchor);
           lastFreehandPx = { x: px, y: py };
@@ -4189,7 +4245,7 @@ export function ChartPanel({
       if (rulerStart && !rulerPinned && rulerDragOrigin) {
         const moved = Math.hypot(ev.clientX - rulerDragOrigin.x, ev.clientY - rulerDragOrigin.y);
         if (moved > 8) {
-          const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+          const nextAnchor = toAnchorFromPointer(ev.clientX, ev.clientY, { metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
           if (nextAnchor) rulerEnd = nextAnchor;
           rulerPinned = true;
           rulerDragOrigin = null;
@@ -4316,6 +4372,52 @@ export function ChartPanel({
       primitive.requestUpdate();
     };
 
+    syncCrosshairMagnetRef.current = () => {
+      const tool = activeToolRef.current;
+      if (tool === "cursor" && !shiftPressedRef.current) {
+        if (!lastCrosshairHover) return;
+        const rawPrice = candleSeries.coordinateToPrice(lastCrosshairHover.rawY);
+        if (rawPrice === null || !Number.isFinite(rawPrice)) return;
+        const nextPrice = magnetRef.current
+          ? resolveSnapPriceForBar(rawPrice, lastCrosshairHover.bar)
+          : rawPrice;
+        lastCrosshairPriceRef.current = nextPrice;
+        try {
+          chart.setCrosshairPosition(nextPrice, lastCrosshairHover.time, candleSeries);
+        } catch {
+          // Ignore if bar time is not currently indexed
+        }
+        return;
+      }
+      if (lastDrawingPointerClient && !zoomBox) {
+        const rect = el.getBoundingClientRect();
+        let cx = lastDrawingPointerClient.clientX - rect.left;
+        let cy = lastDrawingPointerClient.clientY - rect.top;
+        if (magnetRef.current) {
+          const snapped = toAnchorFromPointer(
+            lastDrawingPointerClient.clientX,
+            lastDrawingPointerClient.clientY,
+            {
+              shiftKey: lastDrawingPointerClient.shiftKey,
+              metaKey: cmdHeldRef.current,
+              ctrlKey: false,
+              tool,
+              originAnchor: draftAnchors.length > 0 ? draftAnchors[draftAnchors.length - 1] : undefined,
+            },
+          );
+          if (snapped) {
+            const sy = candleSeries.priceToCoordinate(Number(snapped.priceTick) * tickFloat);
+            const sx = timeSecToCoordinateExt(chart, activeCandles, snapped.timeSec, barSecStep);
+            if (sy !== null && Number.isFinite(Number(sy))) cy = Number(sy);
+            if (sx !== null && Number.isFinite(sx)) cx = sx;
+          }
+        }
+        drawingCrosshairPx = { x: cx, y: cy };
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+      }
+    };
+
     const toPixel = (anchor: AnchorPoint): { x: number | null; y: number | null } => {
       const xCoord = timeSecToCoordinateExt(chart, activeCandles, anchor.timeSec, barSecStep);
       const yCoord = candleSeries.priceToCoordinate(Number(anchor.priceTick) * tickFloat);
@@ -4361,7 +4463,7 @@ export function ChartPanel({
       primitive.requestUpdate();
 
       if (drawingsLockedRef.current || hit.drawing.locked) return;
-      const startAnchor = toAnchorFromPointer(ev.clientX, ev.clientY);
+      const startAnchor = toAnchorFromPointer(ev.clientX, ev.clientY, { metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
       if (!startAnchor) return;
 
       ev.stopPropagation();
@@ -4379,7 +4481,7 @@ export function ChartPanel({
 
     const onHostPointerMoveWindow = (ev: PointerEvent) => {
       if (!dragState) return;
-      const cur = toAnchorFromPointer(ev.clientX, ev.clientY);
+      const cur = toAnchorFromPointer(ev.clientX, ev.clientY, { metaKey: ev.metaKey, ctrlKey: ev.ctrlKey });
       if (!cur) return;
       ev.preventDefault();
       let nextAnchors: AnchorPoint[];
@@ -4461,6 +4563,7 @@ export function ChartPanel({
     window.addEventListener("keydown", onDeleteSelectedKey);
 
     const onPointerLeave = () => {
+      lastDrawingPointerClient = null;
       if (drawingCrosshairPx !== null) {
         drawingCrosshairPx = null;
         pendingPrimitiveDirty = true;
@@ -4494,6 +4597,7 @@ export function ChartPanel({
       unsub();
       ro.disconnect();
       requestOverlayRedrawRef.current = null;
+      syncCrosshairMagnetRef.current = null;
       tpoRef.current = null;
       el.removeEventListener("pointerdown", onHostPointerDownCapture, { capture: true });
       el.removeEventListener("dblclick", onHostDoubleClickCapture, { capture: true });
