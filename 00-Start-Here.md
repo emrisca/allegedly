@@ -23,7 +23,7 @@ updated: 2026-11-25
 | **Phase 3** | Architecture Specs (9 docs), ADRs (`0001`–`0010`), `Architecture.canvas`, Red-Team Audit | **COMPLETE — Red-Team `PASS` (`18/18` closed)** |
 | **Phase 4** | Roadmap, Milestones (`v0.1`–`v1.0`), Epics/Stories, `v0.1` Sprint Plan & DoD | **COMPLETE — Red-Team `PASS` (`12/12` closed)** |
 | **Phase 5** | Final Holistic Red-Team Audit & `Plan-of-Record.md` | **COMPLETE — Red-Team `PASS` (`6/6` closed)** |
-| **Stage D (`v0.1` Build)** | 9 Rust Crates + Tauri v2 (`custom-protocol`) / React 19 / `@ui-sdk/react` / WebGL2 `ISeriesPrimitive` / Luau / SV-09 Stepped Replay / M2 `.app` (`15.07 MB`) & `.dmg` (`5.26 MB`) | **Apple M2 Verified (`RTSD-01`–`RTSD-17` Closed)** · Cross-Platform CI (`macos-latest` + `windows-latest`) Active |
+| **Stage D (`v0.1` Build)** | 9 Rust Crates + Tauri v2 (`custom-protocol`) / React 19 / `@ui-sdk/react` / WebGL2 `ISeriesPrimitive` / Luau / SV-09 Stepped Replay / M2 `.app` (`15.07 MB`) & `.dmg` (`5.26 MB`) | **Apple M2 Stage D PASS at `3dda8d6` (18/18 findings closed)** · Cross-platform CI 6/6 passed |
 
 ---
 
@@ -81,7 +81,7 @@ updated: 2026-11-25
 - [[Red-Team-Phase4]] — **Verdict: `PASS`** (`12/12` findings verified closed on `2026-11-25`)
 - [[Plan-of-Record]] — Canonical executive Plan of Record & Stage D `v0.1` kickoff guide
 - [[Red-Team-Phase5]] — Final holistic Red-Team audit (**Verdict: `PASS`**)
-- [[Red-Team-StageD-M2]] — Stage D Apple M2 implementation adversarial audit (`RTSD-01`–`RTSD-17` verified closed; `RTSD-18` CI completion tracked on run `45671009080`)
+- [[Red-Team-StageD-M2]] — Stage D Apple M2 implementation adversarial audit (`RTSD-01`–`RTSD-18` closed on run `45671009080`; scope and verification caveats in review)
 
 ## 08 — Dashboards & Visual Maps
 - [[Open-Questions]] | [[Unverified-Claims]] | [[Blocked-Items]] | [[ADR-Status]]
