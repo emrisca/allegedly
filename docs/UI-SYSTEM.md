@@ -5,7 +5,7 @@ This document is the single source of truth for UI consistency across **Allegedl
 ## 1. Reference Architecture
 
 - **Visual Pattern & Component Reference:** [`https://www.shadcn.io/ui`](https://www.shadcn.io/ui)
-  - Check the corresponding `shadcn.io/ui/<component>` spec (Switch, Button, Dialog, Tabs, Input, Select, Checkbox, Command, Popover, Sidebar, Table) before implementing or editing any UI control.
+  - Inspect the corresponding `shadcn.io/ui/<component>` spec (Switch, Button, Dialog, Tabs, Input, Select, Checkbox, Command, Popover, Sidebar, Table) before implementing or editing any UI control.
 - **Accessibility & Behavior Engine:** `@ui-sdk/react` (`0.1.0-beta.17`) + `@ui-sdk/core` (`0.1.0-beta.17`).
 - **Shared Implementation:** `packages/ui-chrome/src/primitives.tsx` (re-exported from `@allegedly/ui-chrome`).
 
@@ -25,11 +25,11 @@ This document is the single source of truth for UI consistency across **Allegedl
 The app shell and chart canvas are **strictly separated**:
 
 - **App Shell (Settings → Appearance):**
-  - `--app-chrome-bg` (default `#131722`) — top bar, left rail, watchlist, right rail, status bar
-  - `--app-panel-bg` (default `#181c27`) — sidebar nav, setting rows, nested cards
-  - `--app-surface-bg` (default `#1e222d`) — modals, popovers, dropdown menus
-  - `--app-border` (default `#2a2e39`) — hairline borders & dividers
-  - `--app-accent` (default `#2962ff`) — active highlights, checked switches, primary buttons
+  - `--app-chrome-bg` (default `#131722`): top bar, left rail, watchlist, right rail, status bar
+  - `--app-panel-bg` (default `#181c27`): sidebar nav, setting rows, nested cards
+  - `--app-surface-bg` (default `#1e222d`): modals, popovers, dropdown menus
+  - `--app-border` (default `#2a2e39`): hairline borders & dividers
+  - `--app-accent` (default `#2962ff`): active highlights, checked switches, primary buttons
 - **Chart Canvas (Settings → Canvas):** Controlled exclusively by `chartSettings.canvas`.
 
 ## 4. Preventing `@ui-sdk/core/web.css` Collisions
@@ -49,7 +49,7 @@ Before reporting any UI change complete:
    - Default / OFF state
    - Checked / ON / Active state
    - Open modal / popover state
-3. Confirm thumbs sit centered inside tracks with symmetric `2px` inset, text never clips, and buttons align cleanly across rows and modal footers.
+3. Check that thumbs sit centered inside tracks with symmetric `2px` inset, text never clips, and buttons align cleanly across rows and modal footers.
 
 ## Icons (`shadcn.io/icons` & Finance Tag)
 

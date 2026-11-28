@@ -157,3 +157,8 @@ updated: 2026-11-25
 ## 2026-11-27 — Stage D Apple M2 Red-Team Closeout
 
 - Independent review issued **PASS** for Slices 1–5 at `3dda8d6`. All 18 findings are closed and [CI run 45671009080](https://github.com/emrisca/allegedly/actions/runs/45671009080) passed all six jobs. [[Red-Team-StageD-M2]] records the remaining verification caveats.
+
+## 2026-11-28 — Post-Stage-D UI Polish, Magnet Snapping, App Icon & Docs Sync
+
+- Added live Kraken Spot WS v2 and Coinbase Advanced Trade WS feeds (`Paper / Sim` remains the offline boot default) plus `1,500+` candle backfill. Added `21` chart bar types, VWAP Key Levels, Trading Sessions, Cursor/Linear dark restyle, Object Tree, Alerts panel, Flipdot boot intro, and window geometry persistence. Added candle wick/body-zone magnet snapping (`c89b289`) and the rounded Allegedly `A` app icon (`07a8514`).
+- Captured running macOS desktop screenshots into `docs/assets/`. Updated `README.md`, `00-Start-Here.md`, `docs/UI-SYSTEM.md`, and `AGENTS.md` with `ste100` rules, and stripped local user paths from research audit files before pushing `main`.

@@ -7,10 +7,10 @@
 
 ## Specialist Audit Reports
 
-1. **UI, Chart Output, Settings & Drawings:** [01-ChartOutput-Settings-Drawings.md](file:///Users/abelmora/Documents/Obsidian/Allegedly/02-Research/OpenMarket-Audit/01-ChartOutput-Settings-Drawings.md)
-2. **Indicators, Scripting Runtime, Language & Cookbook:** [02-Indicators-Scripting-Language-Cookbook.md](file:///Users/abelmora/Documents/Obsidian/Allegedly/02-Research/OpenMarket-Audit/02-Indicators-Scripting-Language-Cookbook.md)
-3. **Strategies, Order Flow & Alerts:** [03-Strategies-OrderFlow-Alerts.md](file:///Users/abelmora/Documents/Obsidian/Allegedly/02-Research/OpenMarket-Audit/03-Strategies-OrderFlow-Alerts.md)
-4. **Market Data Feeds & Licensing:** [04-Market-Data-Feeds.md](file:///Users/abelmora/Documents/Obsidian/Allegedly/02-Research/OpenMarket-Audit/04-Market-Data-Feeds.md)
+1. **UI, Chart Output, Settings & Drawings:** [01-ChartOutput-Settings-Drawings.md](./OpenMarket-Audit/01-ChartOutput-Settings-Drawings.md)
+2. **Indicators, Scripting Runtime, Language & Cookbook:** [02-Indicators-Scripting-Language-Cookbook.md](./OpenMarket-Audit/02-Indicators-Scripting-Language-Cookbook.md)
+3. **Strategies, Order Flow & Alerts:** [03-Strategies-OrderFlow-Alerts.md](./OpenMarket-Audit/03-Strategies-OrderFlow-Alerts.md)
+4. **Market Data Feeds & Licensing:** [04-Market-Data-Feeds.md](./OpenMarket-Audit/04-Market-Data-Feeds.md)
 
 ---
 
