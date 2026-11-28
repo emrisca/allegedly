@@ -1,9 +1,8 @@
+import type { TradeFootprints } from "./trade-footprints";
 import {
   BIT_BUY_IMBAL,
   BIT_POC,
   BIT_SELL_IMBAL,
-  type FootprintCell,
-  type TpoRow128,
   type VolumeProfileBin,
   type VolumeProfileSummary,
 } from "@allegedly/ipc-client";
@@ -19,15 +18,15 @@ export interface OverlayVisibility {
 
 export interface OverlayRenderData {
   tickSizeFloat: number;
-  activeBarTimeSec: number;
-  footprintCells: readonly FootprintCell[];
+  footprints: TradeFootprints;
   vpSummary: VolumeProfileSummary | null;
   vpBins: readonly VolumeProfileBin[];
-  tpoRows: readonly TpoRow128[];
   visibility: OverlayVisibility;
 }
 
 export interface CoordinateBridge {
+  barSpacing: number;
+  visibleTimeRange: { from: unknown; to: unknown } | null;
   timeToX(timeSec: number): number | null;
   priceToY(price: number): number | null;
 }
@@ -184,6 +183,7 @@ export class WebGl2OrderflowOverlay {
 
   private buildQuads(
     width: number,
+    height: number,
     data: OverlayRenderData,
     bridge: CoordinateBridge,
   ): number {
@@ -242,63 +242,58 @@ export class WebGl2OrderflowOverlay {
       }
     }
 
-    // 2. TPO u128 profile brackets anchored on left margin
-    if (data.visibility.tpo && data.tpoRows.length > 0) {
-      for (const row of data.tpoRows) {
-        const y = bridge.priceToY(Number(row.priceTick) * data.tickSizeFloat);
-        if (y === null) continue;
-        let bits = row.periodMask;
-        let pop = 0;
-        while (bits > 0n) {
-          bits &= bits - 1n;
-          pop++;
-        }
-        const w = Math.min(96, pop * 6);
-        pushQuad(8, y - 3.5, w, 7, 0.65, 0.55, 0.98, 0.38);
-      }
-    }
+    const tickRow = (price: number, y: number, maxHeight: number, ticks = 1) => {
+      const nextY = bridge.priceToY(price + data.tickSizeFloat * ticks);
+      return Math.max(1, Math.min(maxHeight, nextY === null ? 1 : Math.abs(y - nextY)));
+    };
 
-    // 3. Active Footprint bid/ask cells + imbalance/POC markers aligned to active bar X
-    if (data.visibility.footprint && data.footprintCells.length > 0) {
-      const barX = bridge.timeToX(data.activeBarTimeSec);
-      if (barX !== null) {
+    const visible = bridge.visibleTimeRange;
+    if (data.visibility.footprint && visible &&
+        typeof visible.from === "number" && typeof visible.to === "number") {
+      const gap = Math.min(2, bridge.barSpacing * 0.15);
+      const halfW = Math.min(34, bridge.barSpacing / 2 - gap);
+      for (const [time, cells] of data.footprints.visible(visible.from, visible.to)) {
+        const barX = bridge.timeToX(time);
+        if (barX === null || halfW < 0.5) continue;
+        const levels = [...cells];
         let maxSide = 1n;
-        for (const c of data.footprintCells) {
-          if (c.bidVolE9 > maxSide) maxSide = c.bidVolE9;
-          if (c.askVolE9 > maxSide) maxSide = c.askVolE9;
+        for (const cell of levels) {
+          if (cell.bidVolE9 > maxSide) maxSide = cell.bidVolE9;
+          if (cell.askVolE9 > maxSide) maxSide = cell.askVolE9;
         }
-        const halfW = 34;
-        for (const cell of data.footprintCells) {
-          const y = bridge.priceToY(Number(cell.priceTick) * data.tickSizeFloat);
-          if (y === null) continue;
-          const bidW = Number((cell.bidVolE9 * BigInt(halfW)) / maxSide);
-          const askW = Number((cell.askVolE9 * BigInt(halfW)) / maxSide);
+        for (const cell of levels) {
+          const price = Number(cell.priceTick) * data.tickSizeFloat;
+          const y = bridge.priceToY(price);
+          if (y === null || y < -8 || y > height + 8) continue;
+          const rowHeight = tickRow(price, y, 8);
+          const bidW = (Number(cell.bidVolE9) / Number(maxSide)) * halfW;
+          const askW = (Number(cell.askVolE9) / Number(maxSide)) * halfW;
           const isSellImb = (cell.imbalanceFlags & BIT_SELL_IMBAL) !== 0;
           const isBuyImb = (cell.imbalanceFlags & BIT_BUY_IMBAL) !== 0;
           const isPoc = (cell.imbalanceFlags & BIT_POC) !== 0;
 
           pushQuad(
-            barX - bidW - 2,
-            y - 4,
+            barX - bidW - gap,
+            y - rowHeight / 2,
             bidW,
-            8,
+            rowHeight,
             0.96,
             0.25,
             0.37,
             isSellImb ? 0.85 : 0.42,
           );
           pushQuad(
-            barX + 2,
-            y - 4,
+            barX + gap,
+            y - rowHeight / 2,
             askW,
-            8,
+            rowHeight,
             0.06,
             0.72,
             0.51,
             isBuyImb ? 0.85 : 0.42,
           );
           if (isPoc) {
-            pushQuad(barX - halfW - 3, y - 4.5, halfW * 2 + 6, 1.5, 0.98, 0.75, 0.14, 0.95);
+            pushQuad(barX - halfW - gap, y - rowHeight / 2, (halfW + gap) * 2, 1, 0.98, 0.75, 0.14, 0.95);
           }
         }
       }
@@ -322,7 +317,7 @@ export class WebGl2OrderflowOverlay {
     bridge: CoordinateBridge,
   ): number {
     if (width <= 0 || height <= 0) return 0;
-    const quadCount = this.buildQuads(width, data, bridge);
+    const quadCount = this.buildQuads(width, height, data, bridge);
     if (quadCount === 0) return 0;
 
     if (this.gl && this.program && this.vao && this.instanceBuf) {

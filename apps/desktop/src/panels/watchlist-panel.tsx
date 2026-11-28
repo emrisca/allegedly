@@ -47,12 +47,13 @@ function formatPrice(val: number, decimals: number): string {
   });
 }
 
-function formatSigned(val: number, decimals: number): string {
+function formatSigned(val: number, decimals: number, suffix = ""): string {
+  if (!Number.isFinite(val)) return "—";
   const abs = Math.abs(val).toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-  return val >= 0 ? `+${abs}` : `−${abs}`;
+  return `${val >= 0 ? "+" : "−"}${abs}${suffix}`;
 }
 
 export function WatchlistPanel({
@@ -104,15 +105,15 @@ export function WatchlistPanel({
   return (
     <section
       aria-label="Watchlist"
-      className="flex h-full flex-col bg-[var(--app-chrome-bg,#131722)] text-[#d1d4dc]"
+      className="flex h-full flex-col bg-[var(--app-panel-bg,#12141a)] text-[#d1d4dc]"
     >
       {/* TradingView-style Watchlist Header */}
-      <div className="relative flex h-11 shrink-0 items-center justify-between border-b border-[var(--app-border,#2a2e39)] px-3">
+      <div className="relative flex h-11 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] font-semibold tracking-[-0.01em] text-[#f0f3fa]">
             Watchlist
           </span>
-          <span className="rounded bg-[var(--app-surface-bg,#1e222d)] px-1.5 py-0.5 font-mono text-[10px] text-[#787b86]">
+          <span className="px-0.5 text-[10px] tabular-nums text-[#6b7280]">
             {items.length}
           </span>
         </div>
@@ -123,7 +124,7 @@ export function WatchlistPanel({
             title="Add symbol to watchlist (or start typing anywhere)"
             aria-label="Add symbol to watchlist"
             onClick={onAddSymbolClick}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[#b2b5be] hover:bg-[var(--app-surface-bg,#2a2e39)] hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[#8b8f9c] hover:bg-white/[0.06] hover:text-[#f4f4f5] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/50"
           >
             <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M8 3v10M3 8h10" strokeLinecap="round" />
@@ -136,7 +137,7 @@ export function WatchlistPanel({
             aria-label="Watchlist options"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[#b2b5be] hover:bg-[var(--app-surface-bg,#2a2e39)] hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[#8b8f9c] hover:bg-white/[0.06] hover:text-[#f4f4f5] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/50"
           >
             <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor">
               <circle cx="3.5" cy="8" r="1.1" />
@@ -150,7 +151,7 @@ export function WatchlistPanel({
             title="Collapse watchlist"
             aria-label="Collapse right sidebar"
             onClick={onCollapse}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[#787b86] hover:bg-[var(--app-surface-bg,#2a2e39)] hover:text-[#f0f3fa]"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[#8b8f9c] hover:bg-white/[0.06] hover:text-[#f4f4f5] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/50"
           >
             <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M6 3.5 10.5 8 6 12.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -162,7 +163,7 @@ export function WatchlistPanel({
           <div
             role="menu"
             aria-label="Watchlist sort options"
-            className="absolute right-2 top-11 z-40 w-44 rounded-lg border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] p-1 text-[12px] shadow-2xl"
+            className="absolute right-2 top-11 z-40 w-44 rounded-[6px] border border-white/[0.10] bg-[var(--app-surface-bg,#16181f)] p-1 text-[12px] shadow-[0_12px_32px_rgba(0,0,0,0.5)]"
           >
             {(
               [
@@ -183,12 +184,12 @@ export function WatchlistPanel({
                 }}
                 className={
                   sortMode === id
-                    ? "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left font-medium text-white bg-[#2962ff]/18"
-                    : "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-[#d1d4dc] hover:bg-[#2a2e39]"
+                    ? "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left font-medium text-white bg-white/[0.10]"
+                    : "flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left text-[#d1d4dc] hover:bg-white/[0.06]"
                 }
               >
                 <span>{label}</span>
-                {sortMode === id && <span className="text-[10px] text-[#5b9cf6]">✓</span>}
+                {sortMode === id && <span className="text-[10px] text-[#e4e4e7]">✓</span>}
               </button>
             ))}
           </div>
@@ -196,7 +197,7 @@ export function WatchlistPanel({
       </div>
 
       {/* Column Headers */}
-      <div className="grid grid-cols-[minmax(116px,1.5fr)_minmax(62px,0.9fr)_minmax(50px,0.75fr)_minmax(50px,0.75fr)] items-center border-b border-[var(--app-border,#2a2e39)]/70 px-2.5 py-1.5 text-[10px] font-medium text-[#787b86]">
+      <div className="grid grid-cols-[minmax(116px,1.5fr)_minmax(62px,0.9fr)_minmax(50px,0.75fr)_minmax(50px,0.75fr)] items-center border-b border-[var(--app-border,#2a2e39)]/70 px-2.5 py-2 text-[10px] font-medium text-[#787b86]">
         <span className="pl-3.5">Symbol</span>
         <span className="text-right">Last</span>
         <span className="text-right">Chg</span>
@@ -204,7 +205,7 @@ export function WatchlistPanel({
       </div>
 
       {/* Rows */}
-      <div className="flex-1 overflow-y-auto py-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {sortedItems.map((entry) => {
           const item = getSymbolMeta(entry.symbol);
           const prov = getMarketProviderMeta(entry.providerId);
@@ -224,8 +225,8 @@ export function WatchlistPanel({
               key={item.symbol}
               className={
                 active
-                  ? "group relative mx-1 my-0.5 rounded-md border border-[#3a4152] bg-[var(--app-surface-bg,#1e222d)]/90 transition-colors"
-                  : "group relative mx-1 my-0.5 rounded-md border border-transparent transition-colors hover:bg-[var(--app-surface-bg,#1e222d)]/60"
+                  ? "group relative mx-1 my-px rounded-md border border-white/[0.10] bg-white/[0.05] transition-colors"
+                  : "group relative mx-1 my-px rounded-md border border-transparent transition-colors hover:bg-white/[0.04]"
               }
             >
               {/* Color Flag Ribbon */}
@@ -240,7 +241,7 @@ export function WatchlistPanel({
                 className="absolute left-0 top-1/2 z-10 flex h-5 w-3 -translate-y-1/2 items-center justify-start opacity-75 transition-opacity hover:opacity-100"
               >
                 <span
-                  className={flagHex ? "block h-3 w-2 rounded-r-sm" : "block h-3 w-1.5 rounded-r-sm bg-transparent group-hover:bg-[#363c4d]"}
+                  className={flagHex ? "block h-3 w-2 rounded-r-sm" : "block h-3 w-1.5 rounded-r-sm bg-transparent group-hover:bg-white/[0.16]"}
                   style={flagHex ? { backgroundColor: flagHex } : undefined}
                 />
               </button>
@@ -248,7 +249,7 @@ export function WatchlistPanel({
               <button
                 type="button"
                 onClick={() => onSelectSymbol(item.symbol, entry.providerId)}
-                className="grid w-full grid-cols-[minmax(116px,1.5fr)_minmax(62px,0.9fr)_minmax(50px,0.75fr)_minmax(50px,0.75fr)] items-center py-2 pl-3 pr-2 text-left"
+                className="grid w-full grid-cols-[minmax(116px,1.5fr)_minmax(62px,0.9fr)_minmax(50px,0.75fr)_minmax(50px,0.75fr)] items-center py-1.5 pl-3 pr-2 text-left"
               >
                 <span className="flex min-w-0 items-center gap-1.5 pr-1">
                   <span
@@ -285,7 +286,7 @@ export function WatchlistPanel({
                   {formatSigned(change, item.decimals > 1 ? 1 : 2)}
                 </span>
                 <span className={`truncate text-right font-mono text-[10.5px] tabular-nums group-hover:opacity-0 ${colorCls}`}>
-                  {formatSigned(changePct, 2)}%
+                  {formatSigned(changePct, 2, "%")}
                 </span>
               </button>
 
@@ -339,7 +340,7 @@ export function WatchlistPanel({
               {formatPrice(activeLast, activeMeta.decimals)}
             </span>
             <span className={`font-mono text-[11.5px] font-medium ${activeIsUp ? "text-[#089981]" : "text-[#f23645]"}`}>
-              {formatSigned(activeChange, 2)} ({formatSigned(activeChangePct, 2)}%)
+              {formatSigned(activeChange, 2)} ({formatSigned(activeChangePct, 2, "%")})
             </span>
           </div>
 

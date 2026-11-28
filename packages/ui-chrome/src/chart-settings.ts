@@ -278,7 +278,7 @@ export const DEFAULT_CHART_TEMPLATES: readonly ChartSettingsTemplate[] = [
       },
       scales: {
         ...DEFAULT_CHART_SETTINGS.scales,
-        bidAndAsk: "lines_and_labels",
+        bidAndAsk: "hidden",
       },
       canvas: {
         ...DEFAULT_CHART_SETTINGS.canvas,

@@ -367,15 +367,18 @@ export async function fetchHistoricalOhlc(
 
     // Single older window when scroll-back requests candles strictly before `endTimeSec`.
     if (typeof endTimeSec === "number" && Number.isFinite(endTimeSec) && endTimeSec > 0) {
-      const endIso = new Date(endTimeSec * 1000).toISOString();
-      const startIso = new Date(Math.max(0, endTimeSec - windowSec) * 1000).toISOString();
+      const endIso = new Date((endTimeSec - granularity) * 1000).toISOString();
+      const windowStart = Math.max(0, endTimeSec - windowSec);
+      const firstBucket = alignTimeSecToTimeframe(windowStart, timeframe);
+      const start = firstBucket < windowStart ? timeframeBucketCloseSec(firstBucket, timeframe) : firstBucket;
+      const startIso = new Date(start * 1000).toISOString();
       const url = `${baseUrl}?granularity=${granularity}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`;
       const res = await fetchImpl(url, { signal });
       if (!res.ok) {
         throw new Error(`Coinbase candles HTTP ${res.status}`);
       }
       const json: unknown = await res.json();
-      const raw = parseCoinbaseCandlesResponse(json, 0);
+      const raw = parseCoinbaseCandlesResponse(json, 0).filter((bar) => bar.time >= start && bar.time < endTimeSec);
       return granularity < tfSec
         ? aggregateOhlcBars(raw, timeframe, limit)
         : finalizeSortedBars(raw, limit);

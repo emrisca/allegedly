@@ -1,6 +1,14 @@
 import type { ReactNode } from "react";
 
-export type RightPanelTab = "watchlist" | "dom" | "trade" | "studies" | "provenance" | null;
+export type RightPanelTab =
+  | "watchlist"
+  | "alerts"
+  | "object_tree"
+  | "dom"
+  | "trade"
+  | "studies"
+  | "provenance"
+  | null;
 export type RightDrawerTab = RightPanelTab;
 
 export interface RightIconRailProps {
@@ -8,12 +16,14 @@ export interface RightIconRailProps {
   onSelectTab: (tab: Exclude<RightPanelTab, null>) => void;
   studiesCount: number;
   openOrdersCount: number;
+  alertsCount?: number;
 }
 
 export function RightIconRail({
   activeTab,
   onSelectTab,
   openOrdersCount,
+  alertsCount = 0,
 }: RightIconRailProps) {
   const items: ReadonlyArray<{
     id: Exclude<RightPanelTab, null>;
@@ -27,6 +37,29 @@ export function RightIconRail({
       icon: (
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M4 5.5h12M4 10h12M4 14.5h12" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: "alerts",
+      label: "Alerts",
+      badge: alertsCount > 0 ? alertsCount : undefined,
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 20 20" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="10" cy="10.8" r="5.5" />
+          <path d="M10 8v3l2 1.3" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 4.5 3.3 6.2M15 4.5l1.7 1.7" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      id: "object_tree",
+      label: "Object Tree and Data Window",
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 20 20" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path d="M10 3.8 16.2 7.2 10 10.6 3.8 7.2 10 3.8Z" strokeLinejoin="round" />
+          <path d="m3.8 10.6 6.2 3.4 6.2-3.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m3.8 13.8 6.2 3.4 6.2-3.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
     },
@@ -83,13 +116,13 @@ export function RightIconRail({
               onClick={() => onSelectTab(item.id)}
               className={
                 active
-                  ? "relative flex h-8 w-8 items-center justify-center rounded bg-[#2962ff]/15 text-[#2962ff] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
-                  : "relative flex h-8 w-8 items-center justify-center rounded text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                  ? "relative flex h-8 w-8 items-center justify-center rounded bg-[#ededed]/15 text-[#f4f4f5] focus-visible:outline-2 focus-visible:outline-white/50"
+                  : "relative flex h-8 w-8 items-center justify-center rounded text-[#d1d4dc] hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
               }
             >
               {item.icon}
               {item.badge !== undefined && (
-                <span className="absolute -right-0.5 -top-0.5 rounded-full bg-[#2962ff] px-1 text-[9px] font-semibold text-white">
+                <span className="absolute -right-0.5 -top-0.5 rounded-full bg-[#ededed] px-1 text-[9px] font-semibold text-[#0d0f12]">
                   {item.badge}
                 </span>
               )}

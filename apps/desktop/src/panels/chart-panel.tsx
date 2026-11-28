@@ -1,4 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { calculateVwap, type VwapSettings } from "../indicators/vwap-settings";
+import {
+  createDefaultAlertDraft,
+  formatAlertConditionSummary,
+  getAlertPrimaryPrice,
+  type ChartAlert,
+} from "../alerts/alert-engine";
+import type {
+  DataWindowIndicatorValue,
+  DataWindowSnapshot,
+} from "../components/object-tree-panel";
+import { DEFAULT_VOLUME } from "../indicators/volume-settings";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AreaSeries,
   BarSeries,
@@ -32,6 +44,7 @@ import {
 import {
   DEFAULT_CHART_SETTINGS,
   SettingsCogIcon,
+  UiButton,
   DEFAULT_CHART_TEMPLATES,
   type ChartBarType,
   type ChartSettings,
@@ -52,19 +65,17 @@ import { Button } from "@ui-sdk/react/button";
 import { Toggle } from "@ui-sdk/react/toggle";
 import { Toolbar } from "@ui-sdk/react/toolbar";
 import {
-  decodeFootprintDelta,
+  decodeLiveTradeBatch,
   decodeFrameHeader,
   decodeLiveBarUpdateBatch,
-  decodeTpoProfileBitmask,
   decodeVolumeProfile,
   fetchHistoricalOhlc,
   alignTimeSecToTimeframe,
   timeframeBucketCloseSec,
   timeframeToSeconds,
   FrameType,
-  type FootprintCell,
+
   type MarketDataSourceId,
-  type TpoRow128,
   type TransportAdapter,
   type VolumeProfileBin,
   type VolumeProfileSummary,
@@ -75,6 +86,8 @@ import {
   DrawingEngine,
   getDrawingToolMeta,
   hitTestDrawing,
+  resizeRectangle,
+  type RectangleHandle,
   snapTickToMagnet,
   type AnchorPoint,
   type DrawingObject,
@@ -89,6 +102,7 @@ import {
   drawVolumeHistogram,
 } from "../drawings/render-drawings";
 import {
+  cloneAvpConfig,
   cloneVpConfig,
   computeFixedRangeVolumeProfile,
   loadStoredVpDefaults,
@@ -118,6 +132,10 @@ import {
   VolumeProfileSettingsDialog,
 } from "../components/drawing-settings-dialog";
 import {
+  DEFAULT_TIMEFRAME_VISIBILITY,
+  IndicatorSettingsDialog,
+  type IndicatorConfig,
+  type IndicatorPriceSource,
   hexWithOpacity,
   isTimeframeVisible,
   type IndicatorLineStyle,
@@ -128,6 +146,10 @@ import {
   ChartContextMenu,
   type ChartContextMenuState,
 } from "../components/chart-context-menu";
+import { drawSessionTpo, hitTestTpoProfile, SessionTpo } from "../render/session-tpo";
+import { loadTpoMerges, loadTpoSettings, saveTpoPreference, type TpoSettings } from "../render/tpo-settings";
+import { TpoSettingsDialog } from "../components/tpo-settings-dialog";
+import { TradeFootprints } from "../render/trade-footprints";
 import { applyBarHysteresis } from "../render/hysteresis";
 import {
   WebGl2OrderflowOverlay,
@@ -141,6 +163,11 @@ export interface StudyOverlaySeries {
   label: string;
   color: string;
   overlay?: boolean;
+  vwap?: VwapSettings;
+  source?: IndicatorPriceSource;
+  precision?: number;
+  showStatusValue?: boolean;
+  showStatusInputs?: boolean;
   values: Array<number | null>;
   lineWidth?: 1 | 2 | 3 | 4;
   lineStyle?: IndicatorLineStyle;
@@ -148,6 +175,12 @@ export interface StudyOverlaySeries {
   showPriceLabel?: boolean;
   showPriceLine?: boolean;
   visibility?: TimeframeVisibility;
+}
+
+interface VwapFill {
+  color: string;
+  opacity: number;
+  points: Array<{ time: number; lower: number; upper: number; anchor: number } | null>;
 }
 
 export interface ChartSeriesSnapshot {
@@ -165,9 +198,21 @@ export interface ChartHistoryActions {
   undo: () => void;
   redo: () => void;
   clear: () => void;
-  addAlert?: () => void;
+  addAlert?: (explicitPrice?: number) => void;
   takeSnapshot?: () => void;
   resetZoom?: () => void;
+  getCurrentPrice?: () => number | undefined;
+  showToast?: (msg: string) => void;
+  selectDrawing?: (id: string | null) => void;
+  updateDrawing?: (id: string, patch: Partial<DrawingObject>) => void;
+  deleteDrawing?: (id: string) => void;
+  openDrawingSettings?: (id: string) => void;
+  reorderDrawing?: (id: string, targetId: string) => void;
+  toggleStudyHidden?: (id: string) => void;
+  toggleOrderflowHidden?: (key: keyof OverlayVisibility) => void;
+  openOrderflowSettings?: (key: keyof OverlayVisibility) => void;
+  toggleVolumeHidden?: () => void;
+  openVolumeSettings?: () => void;
 }
 
 export interface ChartOrderOverlay {
@@ -209,7 +254,7 @@ export interface ChartPanelProps {
   onHistoryMetaChange?: (meta: { canUndo: boolean; canRedo: boolean; count: number }) => void;
   onRemoveStudy?: (id: string) => void;
   onOpenStudySettings?: (id: string) => void;
-  onLivePriceSample?: (symbol: string, last: number) => void;
+  onLivePriceSample?: (symbol: string, last: number, previousClose?: number | null) => void;
   /** Live Chart Settings + Templates + Context Menu actions */
   chartSettings?: ChartSettings;
   replayOpen?: boolean;
@@ -226,7 +271,20 @@ export interface ChartPanelProps {
   onClearAllStudies?: () => void;
   onOpenObjectTree?: () => void;
   activeOrders?: readonly ChartOrderOverlay[];
+  alerts?: readonly ChartAlert[];
+  onRequestCreateAlert?: (price?: number) => void;
+  onEditAlert?: (alert: ChartAlert) => void;
+  onDeleteAlert?: (alertId: string) => void;
+  onMoveAlert?: (alertId: string, price: number) => void;
   onAlertsCountChange?: (count: number) => void;
+  onDrawingsSnapshotChange?: (drawings: readonly DrawingObject[], selectedId: string | null) => void;
+  onIndicatorHiddenStateChange?: (state: {
+    hiddenStudyIds: ReadonlySet<string>;
+    hiddenOrderflowLayers: ReadonlySet<keyof OverlayVisibility>;
+    volumeHidden: boolean;
+  }) => void;
+  dataWindowActive?: boolean;
+  onDataWindowSnapshot?: (snap: DataWindowSnapshot) => void;
   /** Controlled orderflow & volume layer visibility synced with Indicators modal */
   overlayVisibility?: OverlayVisibility;
   onToggleOverlayVisibility?: (key: keyof OverlayVisibility) => void;
@@ -235,6 +293,7 @@ export interface ChartPanelProps {
   /** Render legacy inline toolbar when used standalone */
   /** Active market data source (`paper_sim` stays 100% offline per SV-01) */
   dataSource?: MarketDataSourceId;
+  marketStreamReady?: boolean;
   /** Called after historical OHLC backfill or throttled live updates so active studies recompute */
   onSeriesUpdated?: () => void;
   showInlineToolbar?: boolean;
@@ -426,6 +485,9 @@ export interface ActiveIndicatorsLegendProps {
   onToggleExpanded: () => void;
   onToggleVolumeHidden: () => void;
   onRemoveVolume: () => void;
+  onOpenVolumeSettings?: () => void;
+  volumeLabel?: string;
+  volumeValues?: boolean;
   onToggleStudyHidden: (id: string) => void;
   onRemoveStudy?: (id: string) => void;
   onOpenStudySettings?: (id: string) => void;
@@ -450,6 +512,9 @@ export function ActiveIndicatorsLegend({
   onToggleExpanded,
   onToggleVolumeHidden,
   onRemoveVolume,
+  onOpenVolumeSettings,
+  volumeLabel = "Vol",
+  volumeValues = true,
   onToggleStudyHidden,
   onRemoveStudy,
   onOpenStudySettings,
@@ -464,14 +529,14 @@ export function ActiveIndicatorsLegend({
   return (
     <div
       data-testid="active-indicators-legend"
-      className="pointer-events-auto mt-1 flex flex-col items-start gap-0.5 text-[12px]"
+      className="pointer-events-none mt-1 flex flex-col items-start gap-0.5 text-[12px]"
     >
       {expanded && (
         <div className="flex flex-col items-start gap-0.5">
           {showVolumeRow && (
-            <div className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85">
-              <span className={volumeHidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>Vol</span>
-              {!volumeHidden && (
+            <div onDoubleClick={onOpenVolumeSettings} className="pointer-events-auto group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85">
+              <span className={volumeHidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>{volumeLabel}</span>
+              {!volumeHidden && volumeValues && (
                 <span
                   ref={(el) => {
                     if (volLegendRef) volLegendRef.current = el;
@@ -494,6 +559,10 @@ export function ActiveIndicatorsLegend({
                 >
                   <LegendEyeIcon hidden={volumeHidden} />
                 </button>
+                {onOpenVolumeSettings && <button type="button" aria-label="Settings for Volume" onClick={onOpenVolumeSettings}
+                  className="rounded p-0.5 text-[#868c9b] opacity-0 hover:text-white group-hover/ind:opacity-100 focus-visible:opacity-100">
+                  <SettingsCogIcon />
+                </button>}
                 <button
                   type="button"
                   aria-label="Remove Volume"
@@ -511,19 +580,19 @@ export function ActiveIndicatorsLegend({
             const lastVal = [...st.values]
               .reverse()
               .find((v): v is number => typeof v === "number" && Number.isFinite(v));
-            const titleText = indicatorInputs
+            const titleText = indicatorInputs && st.showStatusInputs !== false
               ? st.label
               : st.label.replace(/\s*\([^)]*\)/g, "");
             return (
               <div
                 key={st.id}
                 onDoubleClick={() => onOpenStudySettings?.(st.id)}
-                className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
+                className="pointer-events-auto group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
               >
                 <span className={hidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>
                   {titleText}
                 </span>
-                {!hidden && indicatorValues && lastVal !== undefined && (
+                {!hidden && indicatorValues && st.showStatusValue !== false && lastVal !== undefined && (
                   <span
                     ref={(el) => {
                       if (!studyValRefs) return;
@@ -533,7 +602,7 @@ export function ActiveIndicatorsLegend({
                     style={{ color: st.color }}
                     className="font-mono text-[12px] tabular-nums"
                   >
-                    {formatPriceValue(lastVal)}
+                    {st.precision === undefined ? formatPriceValue(lastVal) : lastVal.toFixed(st.precision)}
                   </span>
                 )}
                 <div className="flex items-center gap-1">
@@ -577,14 +646,14 @@ export function ActiveIndicatorsLegend({
 
           {activeOrderflowRows.map((layer) => {
             const hidden = hiddenOrderflowLayers.has(layer.key);
-            const hasSettings = Boolean(onOpenOrderflowSettings && (layer.key === "vrvp" || layer.key === "vwapKeyLevels" || layer.key === "tradingSessions"));
+            const hasSettings = Boolean(onOpenOrderflowSettings && (layer.key === "tpo" || layer.key === "vrvp" || layer.key === "vwapKeyLevels" || layer.key === "tradingSessions"));
             return (
               <div
                 key={layer.key}
                 onDoubleClick={() => {
                   if (hasSettings) onOpenOrderflowSettings?.(layer.key);
                 }}
-                className="group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
+                className="pointer-events-auto group/ind flex items-center gap-2 rounded px-1 py-0.5 leading-tight transition-colors hover:bg-[#1a1d26]/85"
               >
                 <span className={hidden ? "text-[#6d7384]" : "text-[#d4d8e2]"}>
                   {layer.label}
@@ -643,7 +712,7 @@ export function ActiveIndicatorsLegend({
         }
         aria-expanded={expanded}
         onClick={onToggleExpanded}
-        className="mt-0.5 inline-flex h-5 items-center gap-1 rounded border border-[#2c3140] bg-[#16181f]/90 px-1.5 text-[10px] text-[#9aa1b2] hover:bg-[#232733] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+        className="pointer-events-auto mt-0.5 inline-flex h-5 items-center gap-1 rounded border border-[#2c3140] bg-[#16181f]/90 px-1.5 text-[10px] text-[#9aa1b2] hover:bg-[#232733] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
       >
         <svg
           aria-hidden="true"
@@ -1084,6 +1153,9 @@ function coordinateToTimeSecExt(
 
 interface PrimitiveDrawContext {
   getOverlayData: () => OverlayRenderData;
+  getTpo: () => SessionTpo;
+  getVwapFills: () => VwapFill[];
+  getTpoSettings: () => { settings: TpoSettings; merges: number[] };
   getDrawings: () => readonly DrawingObject[];
   getDrawingsHidden: () => boolean;
   getDrawingsLocked: () => boolean;
@@ -1106,6 +1178,18 @@ interface PrimitiveDrawContext {
   getBarType: () => ChartBarType;
   getPnfColumns: () => readonly PointAndFigureColumn[];
   getBarStepSec: () => number;
+  getCountdownText: () => string;
+  getPriceScaleBadgeMeta: () => {
+    showIntegratedCountdown: boolean;
+    upColor: string;
+    downColor: string;
+  };
+  getDrawingCrosshair: () => {
+    x: number;
+    y: number;
+    color: string;
+    labelBg: string;
+  } | null;
 }
 
 class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
@@ -1113,6 +1197,8 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
   private series: ISeriesApi<SeriesType> | null = null;
   private requestUpdateCb: (() => void) | null = null;
   private readonly paneView: IPrimitivePaneView;
+  private readonly priceAxisPaneView: IPrimitivePaneView;
+  private readonly vpLabelCache = new Map<string, { vah: number; val: number; poc: number } | null>();
 
   constructor(
     private readonly overlay: WebGl2OrderflowOverlay,
@@ -1132,6 +1218,8 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
               timeSec,
               this.source.getBarStepSec(),
             ),
+          barSpacing: chart.timeScale().options().barSpacing,
+          visibleTimeRange: chart.timeScale().getVisibleRange(),
           priceToY: (price: number): number | null => {
             const coord = series.priceToCoordinate(price);
             return coord === null ? null : Number(coord);
@@ -1222,7 +1310,39 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
             }
           }
 
-          // 1. Orderflow layers (Footprint, u128 TPO via WebGL2; high-res Session VRVP via VolumeProfileConfig)
+          for (const fill of this.source.getVwapFills()) {
+            context.save();
+            context.fillStyle = fill.color;
+            context.globalAlpha = fill.opacity;
+            let previous: { x: number; high: number; low: number; anchor: number } | undefined;
+            for (const point of fill.points) {
+              const x = point ? bridge.timeToX(point.time) : null;
+              const hi = point ? bridge.priceToY(point.upper) : null;
+              const lo = point ? bridge.priceToY(point.lower) : null;
+              if (!point || x === null || hi === null || lo === null) {
+                previous = undefined;
+                continue;
+              }
+              if (previous?.anchor === point.anchor && x >= 0 && previous.x <= w) {
+                context.beginPath();
+                context.moveTo(previous.x, previous.high);
+                context.lineTo(x, hi);
+                context.lineTo(x, lo);
+                context.lineTo(previous.x, previous.low);
+                context.fill();
+              }
+              previous = { x, high: hi, low: lo, anchor: point.anchor };
+            }
+            context.restore();
+          }
+          const range = bridge.visibleTimeRange;
+          if (data.visibility.tpo && typeof range?.from === "number" && typeof range.to === "number") {
+            const { settings, merges } = this.source.getTpoSettings();
+            if (!settings.intradayOnly || timeframeToSeconds(this.source.getTimeframe()) < 86_400) {
+              const profiles = this.source.getTpo().visible(range.from, range.to, merges, settings.valueArea, settings.blockMinutes);
+              drawSessionTpo(context, profiles, bridge, data.tickSizeFloat, w, h, settings);
+            }
+          }
           this.overlay.compositeIntoContext(
             context,
             w,
@@ -1302,7 +1422,8 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
           const currentTf = this.source.getTimeframe();
           if (!hidden) {
             for (const d of this.source.getDrawings()) {
-              if (!isTimeframeVisible(currentTf, d.visibility)) continue;
+              if (d.hidden) continue;
+              if (!isTimeframeVisible(currentTf, d.visibility, activeBarType)) continue;
               const isSelected = d.id === selectedId;
               drawVectorDrawing(
                 context,
@@ -1316,7 +1437,7 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
                 candles,
                 volumes,
                 d.label,
-                !locked && isSelected,
+                !locked && !d.locked && isSelected,
                 d,
                 isSelected,
               );
@@ -1330,7 +1451,6 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
             ) {
               const preview = draft.hover ? [...draft.anchors, draft.hover] : [...draft.anchors];
               const meta = getDrawingToolMeta(draft.tool);
-              context.setLineDash([4, 3]);
               drawVectorDrawing(
                 context,
                 w,
@@ -1344,6 +1464,7 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
                 volumes,
                 undefined,
                 true,
+                { lineStyle: "dashed" },
               );
             }
           }
@@ -1377,6 +1498,225 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
             context.setLineDash([4, 3]);
             context.strokeRect(zx, zy, zw, zh);
           }
+
+          // Living NESW dotted crosshair lines while a drawing tool (or Shift measure) is active
+          const drawingCrosshair = this.source.getDrawingCrosshair();
+          if (drawingCrosshair) {
+            context.save();
+            context.strokeStyle = drawingCrosshair.color;
+            context.lineWidth = 1;
+            context.setLineDash([4, 4]);
+            const cx = Math.round(drawingCrosshair.x) + 0.5;
+            const cy = Math.round(drawingCrosshair.y) + 0.5;
+            context.beginPath();
+            if (cx >= 0 && cx <= w) {
+              context.moveTo(cx, 0);
+              context.lineTo(cx, h);
+            }
+            if (cy >= 0 && cy <= h) {
+              context.moveTo(0, cy);
+              context.lineTo(w, cy);
+            }
+            context.stroke();
+            context.restore();
+          }
+          context.restore();
+        });
+      },
+    };
+
+    const hexLuminance = (hex: string): number | null => {
+      const cleaned = hex.replace("#", "").trim();
+      if (cleaned.length !== 6) return null;
+      const r = parseInt(cleaned.slice(0, 2), 16);
+      const g = parseInt(cleaned.slice(2, 4), 16);
+      const b = parseInt(cleaned.slice(4, 6), 16);
+      if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return null;
+      return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    };
+
+    const fillRightRoundedRect = (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      radius: number,
+    ) => {
+      const r = Math.min(radius, height / 2, width / 2);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + width - r, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+      ctx.lineTo(x + width, y + height - r);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      ctx.lineTo(x, y + height);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    const formatScalePrice = (price: number, digits: number): string =>
+      price.toLocaleString("en-US", {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
+
+    const priceAxisRenderer: IPrimitivePaneRenderer = {
+      draw: (target) => {
+        const series = this.series;
+        if (!series) return;
+
+        target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+          const pw = mediaSize.width;
+          const ph = mediaSize.height;
+          if (pw <= 0 || ph <= 0) return;
+
+          const candles = this.source.getCandles();
+          const volumes = this.source.getVolumes();
+          const digits = this.source.getPrecisionDigits();
+          const tickFloat = this.source.getOverlayData().tickSizeFloat;
+          const hidden = this.source.getDrawingsHidden();
+          const currentTf = this.source.getTimeframe();
+          const activeBarType = this.source.getBarType();
+
+          context.save();
+
+          // 1. AVP / FRVP VAH, VAL, POC labels on the right price scale
+          if (!hidden && candles.length > 0 && tickFloat > 0) {
+            const lastCandle = candles[candles.length - 1];
+            const lastSec = Number(lastCandle.time);
+            const activeKeys = new Set<string>();
+            for (const d of this.source.getDrawings()) {
+              if (d.hidden) continue;
+              if (d.kind !== "anchored_vp" && d.kind !== "fixed_range_vp") continue;
+              if (d.anchors.length < 1) continue;
+              if (!isTimeframeVisible(currentTf, d.visibility, activeBarType)) continue;
+              const vpCfg =
+                d.kind === "anchored_vp"
+                  ? cloneAvpConfig(d.vpConfig)
+                  : cloneVpConfig(d.vpConfig);
+              if (!vpCfg.showPriceScaleLabels) continue;
+
+              const t1 = d.anchors[0].timeSec;
+              const t2 = d.kind === "anchored_vp" ? lastSec : (d.anchors[1]?.timeSec ?? t1);
+              const cacheKey = `${d.id}:${candles.length}:${lastSec}:${lastCandle.close}:${t1}:${t2}:${vpCfg.rowsLayout}:${vpCfg.rowSize}:${vpCfg.valueAreaPercent}`;
+              activeKeys.add(cacheKey);
+              let levels = this.vpLabelCache.get(cacheKey);
+              if (levels === undefined) {
+                const minSec = Math.min(t1, t2);
+                const maxSec = Math.max(t1, t2);
+                const subset: VpCandleInput[] = [];
+                for (let i = 0; i < candles.length; i++) {
+                  const c = candles[i];
+                  const ct = Number(c.time);
+                  if (ct >= minSec && ct <= maxSec) {
+                    subset.push({
+                      time: ct,
+                      open: c.open,
+                      high: c.high,
+                      low: c.low,
+                      close: c.close,
+                      volume: volumes[i]?.value ?? 1,
+                    });
+                  }
+                }
+                const prof = computeFixedRangeVolumeProfile(subset, tickFloat, vpCfg);
+                levels = prof
+                  ? { vah: prof.vahPrice, val: prof.valPrice, poc: prof.pocPrice }
+                  : null;
+                this.vpLabelCache.set(cacheKey, levels);
+              }
+              if (!levels) continue;
+
+              const badgeLevels: Array<{ price: number; bg: string }> = [];
+              if (vpCfg.showVah) badgeLevels.push({ price: levels.vah, bg: vpCfg.vahColor });
+              if (vpCfg.showVal) badgeLevels.push({ price: levels.val, bg: vpCfg.valColor });
+              if (vpCfg.showPoc) badgeLevels.push({ price: levels.poc, bg: vpCfg.pocColor });
+
+              const badgeW = Math.max(60, pw - 3);
+              const badgeH = 19;
+              context.font = '500 11px -apple-system, BlinkMacSystemFont, "Trebuchet MS", sans-serif';
+              context.textAlign = "left";
+              context.textBaseline = "middle";
+              for (const lvl of badgeLevels) {
+                const coord = series.priceToCoordinate(lvl.price);
+                if (coord === null) continue;
+                const ly = Number(coord);
+                if (ly < 8 || ly > ph - 8) continue;
+                const lum = hexLuminance(lvl.bg);
+                context.fillStyle = lvl.bg;
+                fillRightRoundedRect(context, 0, ly - badgeH / 2, badgeW, badgeH, 2);
+                context.fillStyle = lum !== null && lum > 0.62 ? "#131722" : "#ffffff";
+                context.fillText(formatScalePrice(lvl.price, digits), 6, ly + 0.5);
+              }
+            }
+            if (this.vpLabelCache.size > activeKeys.size + 16) {
+              for (const k of this.vpLabelCache.keys()) {
+                if (!activeKeys.has(k)) this.vpLabelCache.delete(k);
+              }
+            }
+          }
+
+          // 2. Integrated 2-line Price + Candle Countdown badge (TradingView style)
+          const badgeMeta = this.source.getPriceScaleBadgeMeta();
+          if (badgeMeta.showIntegratedCountdown && candles.length > 0) {
+            const lastBar = candles[candles.length - 1];
+            const rawY = series.priceToCoordinate(lastBar.close);
+            if (rawY !== null) {
+              const badgeH = 34;
+              const halfH = badgeH / 2;
+              const cy = Math.max(halfH + 1, Math.min(ph - halfH - 1, Number(rawY)));
+              const badgeW = Math.max(68, pw - 3);
+
+              const rawBg =
+                lastBar.close > lastBar.open
+                  ? badgeMeta.upColor
+                  : lastBar.close < lastBar.open
+                    ? badgeMeta.downColor
+                    : "#787b86";
+              const lum = hexLuminance(rawBg);
+              const bg =
+                !rawBg || rawBg === "transparent" || (lum !== null && lum > 0.52)
+                  ? "#727683"
+                  : rawBg;
+
+              context.fillStyle = bg;
+              fillRightRoundedRect(context, 0, cy - halfH, badgeW, badgeH, 3);
+
+              context.textAlign = "left";
+              context.textBaseline = "middle";
+              context.fillStyle = "#ffffff";
+              context.font = '600 12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", sans-serif';
+              context.fillText(formatScalePrice(lastBar.close, digits), 6, cy - 6.5);
+
+              const countdown = this.source.getCountdownText();
+              if (countdown) {
+                context.fillStyle = "rgba(255, 255, 255, 0.88)";
+                context.font = "500 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+                context.fillText(countdown, 6, cy + 8.5);
+              }
+            }
+          }
+
+          // 3. Living drawing-tool crosshair price label on right price scale
+          const xhair = this.source.getDrawingCrosshair();
+          if (xhair && xhair.y >= 0 && xhair.y <= ph) {
+            const hoverPrice = series.coordinateToPrice(xhair.y);
+            if (hoverPrice !== null && Number.isFinite(Number(hoverPrice))) {
+              const badgeH = 20;
+              const halfH = badgeH / 2;
+              const cy = Math.max(halfH + 1, Math.min(ph - halfH - 1, xhair.y));
+              const badgeW = Math.max(66, pw - 3);
+              context.fillStyle = xhair.labelBg;
+              fillRightRoundedRect(context, 0, cy - halfH, badgeW, badgeH, 3);
+              context.textAlign = "left";
+              context.textBaseline = "middle";
+              context.fillStyle = "#ffffff";
+              context.font = '500 11.5px -apple-system, BlinkMacSystemFont, "IBM Plex Sans", sans-serif';
+              context.fillText(formatScalePrice(Number(hoverPrice), digits), 6, cy + 0.5);
+            }
+          }
+
           context.restore();
         });
       },
@@ -1385,6 +1725,11 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
     this.paneView = {
       zOrder: (): PrimitivePaneViewZOrder => "top",
       renderer: () => renderer,
+    };
+
+    this.priceAxisPaneView = {
+      zOrder: (): PrimitivePaneViewZOrder => "top",
+      renderer: () => priceAxisRenderer,
     };
   }
 
@@ -1406,6 +1751,10 @@ class OrderflowAndDrawingsPrimitive implements ISeriesPrimitive<Time> {
 
   public paneViews(): readonly IPrimitivePaneView[] {
     return [this.paneView];
+  }
+
+  public priceAxisPaneViews(): readonly IPrimitivePaneView[] {
+    return [this.priceAxisPaneView];
   }
 
   public requestUpdate(): void {
@@ -1458,12 +1807,22 @@ export function ChartPanel({
   onClearAllStudies,
   onOpenObjectTree,
   activeOrders = [],
+  alerts: controlledAlerts,
+  onRequestCreateAlert,
+  onEditAlert,
+  onDeleteAlert,
+  onMoveAlert,
   onAlertsCountChange,
+  onDrawingsSnapshotChange,
+  onIndicatorHiddenStateChange,
+  dataWindowActive = false,
+  onDataWindowSnapshot,
   overlayVisibility: controlledOverlayVisibility,
   onToggleOverlayVisibility,
   showVolume: controlledShowVolume,
   onShowVolumeChange,
   dataSource = "paper_sim",
+  marketStreamReady = true,
   onSeriesUpdated,
   showInlineToolbar = false,
 }: ChartPanelProps) {
@@ -1527,21 +1886,65 @@ export function ChartPanel({
     onShowVolumeChange?.(next);
   };
   const [volumeHidden, setVolumeHidden] = useState<boolean>(false);
+  const [volumeSettingsOpen, setVolumeSettingsOpen] = useState(false);
+  const [volumeConfig, setVolumeConfig] = useState<IndicatorConfig>(() => {
+    const defaults: IndicatorConfig = { id: "volume", label: "Volume", period: 20, source: "close",
+      color: "#2962ff", lineWidth: 2, lineStyle: "solid", opacity: 1, showPriceLabel: true,
+      showPriceLine: false, visibility: DEFAULT_TIMEFRAME_VISIBILITY, volume: DEFAULT_VOLUME };
+    try {
+      const saved = JSON.parse(localStorage.getItem("allegedly.volume.settings") ?? "{}");
+      return { ...defaults, ...saved, volume: {
+        ...DEFAULT_VOLUME,
+        upOpacity: saved.volume?.barOpacity ?? DEFAULT_VOLUME.upOpacity,
+        downOpacity: saved.volume?.barOpacity ?? DEFAULT_VOLUME.downOpacity,
+        ...saved.volume,
+      } };
+    } catch {
+      return defaults;
+    }
+  });
+  const volumeConfigRef = useRef(volumeConfig);
+  volumeConfigRef.current = volumeConfig;
+  const volumeRefreshRef = useRef<(() => void) | null>(null);
+  const volumeActive = showVolume && !volumeHidden && isTimeframeVisible(timeframe, volumeConfig.visibility, barType);
+  const volumeActiveRef = useRef(volumeActive);
+  volumeActiveRef.current = volumeActive;
+
   const [hiddenOrderflowLayers, setHiddenOrderflowLayers] = useState<Set<keyof OverlayVisibility>>(
     () => new Set(),
   );
+  const hiddenOrderflowRef = useRef<ReadonlySet<keyof OverlayVisibility>>(hiddenOrderflowLayers);
+  hiddenOrderflowRef.current = hiddenOrderflowLayers;
   const [indicatorsLegendExpanded, setIndicatorsLegendExpanded] = useState<boolean>(true);
   const [contextMenu, setContextMenu] = useState<ChartContextMenuState | null>(null);
   const [lockCursorByTime, setLockCursorByTime] = useState<boolean>(false);
   const [tableViewOpen, setTableViewOpen] = useState<boolean>(false);
-  const [alerts, setAlerts] = useState<Array<{ id: string; symbol: string; price: number }>>([]);
+  const [localAlerts, setLocalAlerts] = useState<ChartAlert[]>([]);
+  const alerts: readonly ChartAlert[] = controlledAlerts ?? localAlerts;
+  const alertsRef = useRef<readonly ChartAlert[]>(alerts);
+  alertsRef.current = alerts;
+  const alertDragRef = useRef<{ id: string; startY: number; moved: boolean; price: number | null } | null>(null);
+  const suppressAlertClickRef = useRef(false);
+  const alertBadgeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const syncAlertBadgePositionsRef = useRef<() => void>(() => {});
+  const dataWindowActiveRef = useRef<boolean>(dataWindowActive);
+  dataWindowActiveRef.current = dataWindowActive;
+  const onDataWindowSnapshotRef = useRef(onDataWindowSnapshot);
+  onDataWindowSnapshotRef.current = onDataWindowSnapshot;
+  const studyOverlaysRef = useRef(studyOverlays);
+  studyOverlaysRef.current = studyOverlays;
+  const hiddenStudyIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const emitDataWindowRef = useRef<() => void>(() => {});
+  const onDrawingsSnapshotChangeRef = useRef(onDrawingsSnapshotChange);
+  onDrawingsSnapshotChangeRef.current = onDrawingsSnapshotChange;
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [countdownText, setCountdownText] = useState<string>("");
+  const countdownTextRef = useRef<string>("");
   const [scaleMenuOpen, setScaleMenuOpen] = useState<boolean>(false);
   const [priceScaleMode, setPriceScaleMode] = useState<PriceScaleMode>(PriceScaleMode.Normal);
   const [invertScale, setInvertScale] = useState<boolean>(false);
   const [localAutoScale, setLocalAutoScale] = useState<boolean>(true);
   const [hiddenStudyIds, setHiddenStudyIds] = useState<Set<string>>(() => new Set());
+  hiddenStudyIdsRef.current = hiddenStudyIds;
 
   const [localTool, setLocalTool] = useState<DrawingToolKind>("cursor");
   const [localMagnet, setLocalMagnet] = useState<boolean>(false);
@@ -1576,9 +1979,9 @@ export function ChartPanel({
   const effectiveLogScale = controlledLogScale ?? priceScaleMode === PriceScaleMode.Logarithmic;
 
   const effectiveOverlayVisibility: OverlayVisibility = {
-    footprint: visibility.footprint && !hiddenOrderflowLayers.has("footprint"),
+    footprint: (visibility.footprint || barType === "volume_footprint") && !hiddenOrderflowLayers.has("footprint"),
     vrvp: visibility.vrvp && !hiddenOrderflowLayers.has("vrvp"),
-    tpo: visibility.tpo && !hiddenOrderflowLayers.has("tpo"),
+    tpo: (visibility.tpo || barType === "tpo") && !hiddenOrderflowLayers.has("tpo"),
     marketStructure:
       Boolean(visibility.marketStructure) && !hiddenOrderflowLayers.has("marketStructure"),
     vwapKeyLevels:
@@ -1647,6 +2050,10 @@ export function ChartPanel({
     });
   }, [effectiveMagnet]);
 
+  useEffect(() => {
+    requestOverlayRedrawRef.current?.();
+  }, [activeTool]);
+
 
   const stayInDrawingModeRef = useRef<boolean>(stayInDrawingMode);
   stayInDrawingModeRef.current = stayInDrawingMode;
@@ -1668,6 +2075,8 @@ export function ChartPanel({
   const chartSettingsRef = useRef<ChartSettings>(effectiveSettings);
   chartSettingsRef.current = effectiveSettings;
 
+  const marketStreamReadyRef = useRef(marketStreamReady);
+  marketStreamReadyRef.current = marketStreamReady;
   const onLivePriceSampleRef = useRef(onLivePriceSample);
   onLivePriceSampleRef.current = onLivePriceSample;
 
@@ -1691,6 +2100,15 @@ export function ChartPanel({
   const tradingSessionsConfigRef = useRef<TradingSessionsConfig>(tradingSessionsConfig);
   tradingSessionsConfigRef.current = tradingSessionsConfig;
   const [tradingSessionsSettingsOpen, setTradingSessionsSettingsOpen] = useState(false);
+  const [tpoSettings, setTpoSettings] = useState(loadTpoSettings);
+  const [tpoSettingsOpen, setTpoSettingsOpen] = useState(false);
+  const [tpoDays, setTpoDays] = useState<number[]>([]);
+  const [tpoMergesBySymbol, setTpoMergesBySymbol] = useState<Record<string, number[]>>({});
+  const tpoMerges = useMemo(() => tpoMergesBySymbol[symbol] ?? loadTpoMerges(symbol), [symbol, tpoMergesBySymbol]);
+  const tpoOptionsRef = useRef({ settings: tpoSettings, merges: tpoMerges });
+  tpoOptionsRef.current = { settings: tpoSettings, merges: tpoMerges };
+  const tpoRef = useRef<SessionTpo | null>(null);
+
   const sessionVpConfigRef = useRef<VolumeProfileConfig>(sessionVpConfig);
   sessionVpConfigRef.current = sessionVpConfig;
 
@@ -1709,16 +2127,20 @@ export function ChartPanel({
   }
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
   const [drawingSettingsOpen, setDrawingSettingsOpen] = useState(false);
-  const [, setDrawingVersion] = useState(0);
+  const [drawingVersion, setDrawingVersion] = useState(0);
   const selectedDrawingIdRef = useRef<string | null>(null);
   selectedDrawingIdRef.current = selectedDrawingId;
   const requestOverlayRedrawRef = useRef<(() => void) | null>(null);
   const chartApiRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const vwapBandSeriesRef = useRef(new Map<string, ISeriesApi<"Line">>());
+  const vwapFillsRef = useRef<VwapFill[]>([]);
+  const volumeHistoryRef = useRef<readonly HistogramData<UTCTimestamp>[]>([]);
   const studyLineSeriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
   const studyPanesRef = useRef<Map<string, IPaneApi<Time>>>(new Map());
   const priceLinesRef = useRef<IPriceLine[]>([]);
+  const alertPriceLinesRef = useRef<Map<string, IPriceLine>>(new Map());
   const latestTimesRef = useRef<UTCTimestamp[]>([]);
   const latestCandlesRef = useRef<CandlestickData<UTCTimestamp>[]>([]);
   const lastCrosshairPriceRef = useRef<number | null>(null);
@@ -1741,13 +2163,15 @@ export function ChartPanel({
 
   const syncHistoryMeta = () => {
     const engine = drawingEngineRef.current!;
+    const list = engine.list(symbol);
     const nextMeta = {
       canUndo: engine.canUndo(),
       canRedo: engine.canRedo(),
-      count: engine.list(symbol).length,
+      count: list.length,
     };
     setHistoryMeta(nextMeta);
     onHistoryMetaChange?.(nextMeta);
+    onDrawingsSnapshotChangeRef.current?.([...list], selectedDrawingIdRef.current);
     if (typeof window !== "undefined" && window.localStorage) {
       try {
         window.localStorage.setItem("allegedly.drawings.toml.v1", engine.toAtAnalysisToml());
@@ -1774,15 +2198,31 @@ export function ChartPanel({
       return;
     }
     drawingEngineRef.current!.clear(symbol);
+    setSelectedDrawingId(null);
+    setDrawingSettingsOpen(false);
     syncHistoryMeta();
   };
 
-  const handleAddAlert = () => {
+  const handleAddAlert = (explicitPrice?: number) => {
     const fallback = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close;
-    const price = lastCrosshairPriceRef.current ?? fallback;
+    const price = explicitPrice ?? lastCrosshairPriceRef.current ?? fallback;
+    if (onRequestCreateAlert) {
+      onRequestCreateAlert(price !== undefined && Number.isFinite(price) ? price : undefined);
+      return;
+    }
     if (price !== undefined && Number.isFinite(price)) {
-      setAlerts((prev) => [...prev, { id: `al-${Date.now()}`, symbol, price }]);
-      showToast(`Alert added on ${symbol} at ${price.toFixed(getSymbolMeta(symbol).decimals)}`);
+      const decimals = getSymbolMeta(symbol).decimals;
+      setLocalAlerts((prev) => [
+        ...prev,
+        createDefaultAlertDraft({
+          symbol,
+          timeframe,
+          price,
+          decimals,
+          color: effectiveSettings.alerts.alertLineColor,
+        }),
+      ]);
+      showToast(`Alert added on ${symbol} at ${price.toFixed(decimals)}`);
     }
   };
 
@@ -1806,6 +2246,16 @@ export function ChartPanel({
     }
   };
 
+  const openOrderflowSettingsByKey = (key: keyof OverlayVisibility) => {
+    if (key === "tpo") {
+      setTpoDays(tpoRef.current?.days() ?? []);
+      setTpoSettingsOpen(true);
+    }
+    if (key === "vrvp") setVpSettingsOpen(true);
+    if (key === "vwapKeyLevels") setVwapKeyLevelsSettingsOpen(true);
+    if (key === "tradingSessions") setTradingSessionsSettingsOpen(true);
+  };
+
   if (historyActionsRef) {
     historyActionsRef.current = {
       undo: handleUndo,
@@ -1814,12 +2264,78 @@ export function ChartPanel({
       addAlert: handleAddAlert,
       takeSnapshot: handleTakeSnapshot,
       resetZoom: () => handleResetView(),
+      getCurrentPrice: () =>
+        latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close ??
+        lastCrosshairPriceRef.current ??
+        undefined,
+      showToast,
+      selectDrawing: (id) => {
+        setSelectedDrawingId(id);
+        setDrawingVersion((v) => v + 1);
+        redrawTriggerRef.current();
+      },
+      updateDrawing: (id, patch) => {
+        const updated = drawingEngineRef.current!.update(id, patch);
+        if (updated) {
+          setDrawingVersion((v) => v + 1);
+          syncHistoryMeta();
+        }
+      },
+      deleteDrawing: (id) => {
+        if (drawingsLockedRef.current) {
+          showToast("Drawings are locked — unlock to remove");
+          return;
+        }
+        if (drawingEngineRef.current!.remove(id)) {
+          if (selectedDrawingIdRef.current === id) {
+            setSelectedDrawingId(null);
+            setDrawingSettingsOpen(false);
+          }
+          setDrawingVersion((v) => v + 1);
+          syncHistoryMeta();
+        }
+      },
+      openDrawingSettings: (id) => {
+        setSelectedDrawingId(id);
+        setDrawingSettingsOpen(true);
+        redrawTriggerRef.current();
+      },
+      reorderDrawing: (id, targetId) => {
+        if (drawingEngineRef.current!.reorder(id, targetId, "before")) {
+          setDrawingVersion((v) => v + 1);
+          syncHistoryMeta();
+        }
+      },
+      toggleStudyHidden: (id) => toggleStudyVisibility(id),
+      toggleOrderflowHidden: (key) => toggleOrderflowLayerHidden(key),
+      openOrderflowSettings: openOrderflowSettingsByKey,
+      toggleVolumeHidden: () => setVolumeHidden((v) => !v),
+      openVolumeSettings: () => setVolumeSettingsOpen(true),
     };
   }
 
   useEffect(() => {
-    onAlertsCountChange?.(alerts.length);
-  }, [alerts.length, onAlertsCountChange]);
+    const activeCount = alerts.filter((a) => a.status === "active").length;
+    onAlertsCountChange?.(activeCount);
+  }, [alerts, onAlertsCountChange]);
+
+  useEffect(() => {
+    onDrawingsSnapshotChangeRef.current?.([...drawingEngineRef.current!.list(symbol)], selectedDrawingId);
+  }, [symbol, selectedDrawingId, drawingVersion]);
+
+  useEffect(() => {
+    onIndicatorHiddenStateChange?.({
+      hiddenStudyIds,
+      hiddenOrderflowLayers,
+      volumeHidden,
+    });
+  }, [hiddenStudyIds, hiddenOrderflowLayers, volumeHidden, onIndicatorHiddenStateChange]);
+
+  useEffect(() => {
+    if (dataWindowActive) {
+      emitDataWindowRef.current();
+    }
+  }, [dataWindowActive, symbol, timeframe, studyOverlays, hiddenStudyIds, visibility, hiddenOrderflowLayers, showVolume, volumeHidden]);
 
   useEffect(() => {
     syncHistoryMeta();
@@ -1828,7 +2344,7 @@ export function ChartPanel({
 
   useEffect(() => {
     redrawTriggerRef.current();
-  }, [visibility, hiddenOrderflowLayers, drawingsHidden, drawingsLocked, sessionVpConfig, vwapKeyLevelsConfig, tradingSessionsConfig]);
+  }, [visibility, hiddenOrderflowLayers, drawingsHidden, drawingsLocked, sessionVpConfig, vwapKeyLevelsConfig, tradingSessionsConfig, tpoSettings, tpoMerges]);
 
   // Sync volume histogram visibility with Status line Volume checkbox
   useEffect(() => {
@@ -1901,6 +2417,7 @@ export function ChartPanel({
         visible: isLeftScale,
         borderVisible: cfg.canvas.scalesLinesVisible,
         borderColor: cfg.canvas.scalesLineColor,
+        minimumWidth: 82,
         autoScale,
         invertScale,
         mode: targetMode,
@@ -1910,6 +2427,7 @@ export function ChartPanel({
         visible: !isLeftScale,
         borderVisible: cfg.canvas.scalesLinesVisible,
         borderColor: cfg.canvas.scalesLineColor,
+        minimumWidth: 82,
         autoScale,
         invertScale,
         mode: targetMode,
@@ -1927,8 +2445,10 @@ export function ChartPanel({
       },
     });
 
+    const showIntegratedCountdown =
+      cfg.scales.countdownToBarClose && cfg.scales.symbolPriceLabel !== "hidden";
     const commonPriceOpts = {
-      lastValueVisible: cfg.scales.symbolPriceLabel !== "hidden",
+      lastValueVisible: cfg.scales.symbolPriceLabel !== "hidden" && !showIntegratedCountdown,
       priceLineVisible: cfg.scales.symbolPriceLabel === "value_line",
       priceFormat: {
         type: "price" as const,
@@ -1977,6 +2497,7 @@ export function ChartPanel({
     } else {
       cs.applyOptions(commonPriceOpts);
     }
+    requestOverlayRedrawRef.current?.();
   }, [effectiveSettings, autoScale, invertScale, priceScaleMode, effectiveLogScale, symbol, barType]);
 
   // Dynamic price lines for alerts, working orders, High/Low, and Bid/Ask
@@ -1992,6 +2513,7 @@ export function ChartPanel({
       }
     }
     priceLinesRef.current = [];
+    alertPriceLinesRef.current.clear();
 
     const cfg = effectiveSettings;
     const candles = latestCandlesRef.current;
@@ -2001,16 +2523,23 @@ export function ChartPanel({
     if (cfg.alerts.alertLines) {
       for (const al of alerts) {
         if (al.symbol !== symbol) continue;
-        added.push(
-          cs.createPriceLine({
-            price: al.price,
-            color: cfg.alerts.alertLineColor,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: "Alert",
-          }),
-        );
+        const alertPrice = getAlertPrimaryPrice(al);
+        if (alertPrice === null) continue;
+        const lineColor =
+          al.status === "active"
+            ? (al.color || cfg.alerts.alertLineColor)
+            : "#6b7280";
+        const drag = alertDragRef.current;
+        const line = cs.createPriceLine({
+          price: drag?.id === al.id && drag.price !== null ? drag.price : alertPrice,
+          color: lineColor,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "",
+        });
+        alertPriceLinesRef.current.set(al.id, line);
+        added.push(line);
       }
     }
 
@@ -2092,12 +2621,14 @@ export function ChartPanel({
     }
 
     priceLinesRef.current = added;
+    syncAlertBadgePositionsRef.current();
   }, [effectiveSettings, alerts, activeOrders, symbol, tickSizeE9]);
 
-  // Countdown to bar close clock
+  // Countdown to bar close clock (rendered inside price-scale badge via primitive, zero React re-renders)
   useEffect(() => {
     if (!effectiveSettings.scales.countdownToBarClose) {
-      setCountdownText("");
+      countdownTextRef.current = "";
+      requestOverlayRedrawRef.current?.();
       return;
     }
     const updateClock = () => {
@@ -2105,7 +2636,8 @@ export function ChartPanel({
       const openSec = alignTimeSecToTimeframe(nowSec, timeframe);
       const closeSec = timeframeBucketCloseSec(openSec, timeframe);
       const rem = Math.max(1, closeSec - nowSec);
-      setCountdownText(formatCountdownClock(rem));
+      countdownTextRef.current = formatCountdownClock(rem);
+      requestOverlayRedrawRef.current?.();
     };
     updateClock();
     const id = window.setInterval(updateClock, 1000);
@@ -2136,15 +2668,7 @@ export function ChartPanel({
         showToast("Chart view reset");
       } else if (e.altKey && !e.shiftKey && !e.metaKey && !e.ctrlKey && key === "a") {
         e.preventDefault();
-        const fallback = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close;
-        const price = lastCrosshairPriceRef.current ?? fallback;
-        if (price !== undefined && Number.isFinite(price)) {
-          setAlerts((prev) => [
-            ...prev,
-            { id: `al-${Date.now()}`, symbol, price },
-          ]);
-          showToast(`Alert added on ${symbol} at ${price.toFixed(getSymbolMeta(symbol).decimals)}`);
-        }
+        handleAddAlert();
       } else if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && key === "s") {
         e.preventDefault();
         const fallback = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close;
@@ -2164,12 +2688,13 @@ export function ChartPanel({
   }, [symbol, onSubmitOrderAtPrice, onOpenOrderTicket]);
 
   useEffect(() => {
-    volumeSeriesRef.current?.applyOptions({ visible: showVolume && !volumeHidden });
+    volumeRefreshRef.current?.();
     if (showVolume && !volumeHidden && volLegendRef.current && lastVolSampleRef.current) {
-      volLegendRef.current.textContent = formatCompactVolume(lastVolSampleRef.current.vol);
-      volLegendRef.current.style.color = lastVolSampleRef.current.isUp ? "#26a69a" : "#ef5350";
+      const { vol, isUp } = lastVolSampleRef.current;
+      volLegendRef.current.textContent = volumeConfig.precision === undefined ? formatCompactVolume(vol) : vol.toFixed(volumeConfig.precision);
+      volLegendRef.current.style.color = isUp ? volumeConfig.volume?.upColor ?? "#26a69a" : volumeConfig.volume?.downColor ?? "#ef5350";
     }
-  }, [showVolume, volumeHidden]);
+  }, [showVolume, volumeHidden, volumeConfig, volumeActive]);
 
   useEffect(() => {
     const chart = chartApiRef.current;
@@ -2256,12 +2781,14 @@ export function ChartPanel({
         visible: initLeftScale,
         borderVisible: initCfg.canvas.scalesLinesVisible,
         borderColor: initCfg.canvas.scalesLineColor,
+        minimumWidth: 82,
         scaleMargins: { top: initTopMargin, bottom: initBottomMargin },
       },
       rightPriceScale: {
         visible: !initLeftScale,
         borderVisible: initCfg.canvas.scalesLinesVisible,
         borderColor: initCfg.canvas.scalesLineColor,
+        minimumWidth: 82,
         scaleMargins: { top: initTopMargin, bottom: initBottomMargin },
       },
       timeScale: {
@@ -2278,8 +2805,10 @@ export function ChartPanel({
       height: Math.max(200, el.clientHeight),
     });
 
+    const initIntegratedCountdown =
+      initCfg.scales.countdownToBarClose && initCfg.scales.symbolPriceLabel !== "hidden";
     const commonInitOpts = {
-      lastValueVisible: initCfg.scales.symbolPriceLabel !== "hidden",
+      lastValueVisible: initCfg.scales.symbolPriceLabel !== "hidden" && !initIntegratedCountdown,
       priceLineVisible: initCfg.scales.symbolPriceLabel === "value_line",
       priceFormat: {
         type: "price" as const,
@@ -2352,20 +2881,52 @@ export function ChartPanel({
 
     const volumeSeries: ISeriesApi<"Histogram"> = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
-      priceScaleId: "",
-      visible: showVolume && !volumeHidden,
+      priceScaleId: "volume",
+      visible: volumeActiveRef.current,
     });
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.85, bottom: 0 },
     });
     volumeSeriesRef.current = volumeSeries;
+    const volumeAverage = chart.addSeries(LineSeries, {
+      priceScaleId: "volume", priceFormat: { type: "volume" }, visible: false,
+      priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    });
 
     chartApiRef.current = chart;
-    const seeded = seedInitialCandles(symbol, timeframe);
+    const seeded = dataSource === "paper_sim"
+      ? seedInitialCandles(symbol, timeframe)
+      : { candles: [], volumes: [], buyVolumes: [], sellVolumes: [] };
     let activeCandles: CandlestickData<UTCTimestamp>[] = [...seeded.candles];
     let activeVolumes: HistogramData<UTCTimestamp>[] = [...seeded.volumes];
     let activeBuyVolumes: number[] = [...seeded.buyVolumes];
     let activeSellVolumes: number[] = [...seeded.sellVolumes];
+
+    const volumeColor = (bar: CandlestickData<UTCTimestamp>, previous?: CandlestickData<UTCTimestamp>) => {
+      const cfg = volumeConfigRef.current.volume ?? DEFAULT_VOLUME;
+      const growing = bar.close >= (cfg.previousClose ? previous?.close ?? bar.open : bar.open);
+      return hexWithOpacity(growing ? cfg.upColor : cfg.downColor, growing ? cfg.upOpacity : cfg.downOpacity);
+    };
+    const refreshVolume = () => {
+      const cfg = volumeConfigRef.current;
+      const style = cfg.volume ?? DEFAULT_VOLUME;
+      const priceFormat = cfg.precision === undefined ? { type: "volume" as const }
+        : { type: "price" as const, precision: cfg.precision, minMove: 10 ** -cfg.precision };
+      volumeSeries.applyOptions({ visible: volumeActiveRef.current && style.showBars, lastValueVisible: cfg.showPriceLabel,
+        priceLineVisible: cfg.showPriceLine, priceFormat });
+      volumeSeries.setData(activeVolumes.map((vol, i) => ({ ...vol, color: volumeColor(activeCandles[i], activeCandles[i - 1]) })));
+      volumeAverage.applyOptions({
+        visible: volumeActiveRef.current && style.showAverage,
+        color: hexWithOpacity(cfg.color, cfg.opacity), lineWidth: cfg.lineWidth,
+        lineStyle: cfg.lineStyle === "dashed" ? LineStyle.Dashed : cfg.lineStyle === "dotted" ? LineStyle.Dotted : LineStyle.Solid,
+      });
+      let sum = 0;
+      volumeAverage.setData(style.showAverage ? activeVolumes.flatMap((bar, i) => {
+        sum += bar.value - (activeVolumes[i - cfg.period]?.value ?? 0);
+        return i + 1 >= cfg.period ? [{ time: bar.time, value: sum / cfg.period }] : [];
+      }) : []);
+    };
+    volumeRefreshRef.current = refreshVolume;
 
     const symMeta = getSymbolMeta(symbol);
     const formatOhlc = (c: CandlestickData<UTCTimestamp>, vol?: number) => {
@@ -2392,11 +2953,24 @@ export function ChartPanel({
 
     const updateVolLegend = (bar?: CandlestickData<UTCTimestamp>, vol?: number) => {
       if (typeof vol === "number" && Number.isFinite(vol)) {
-        const isUp = !bar || bar.close >= bar.open;
+        const cfg = volumeConfigRef.current;
+        let prior = -1;
+        if (bar && cfg.volume?.previousClose) {
+          let low = 0;
+          let high = activeCandles.length;
+          while (low < high) {
+            const middle = (low + high) >>> 1;
+            if (activeCandles[middle].time < bar.time) low = middle + 1;
+            else high = middle;
+          }
+          prior = low;
+        }
+        const reference = cfg.volume?.previousClose && prior > 0 ? activeCandles[prior - 1].close : bar?.open;
+        const isUp = !bar || bar.close >= (reference ?? bar.open);
         lastVolSampleRef.current = { vol, isUp };
         if (volLegendRef.current) {
-          volLegendRef.current.textContent = formatCompactVolume(vol);
-          volLegendRef.current.style.color = isUp ? "#26a69a" : "#ef5350";
+          volLegendRef.current.textContent = cfg.precision === undefined ? formatCompactVolume(vol) : vol.toFixed(cfg.precision);
+          volLegendRef.current.style.color = isUp ? cfg.volume?.upColor ?? "#26a69a" : cfg.volume?.downColor ?? "#ef5350";
         }
       } else if (volLegendRef.current) {
         volLegendRef.current.textContent = "—";
@@ -2407,6 +2981,7 @@ export function ChartPanel({
       const times = activeCandles.map((c) => c.time);
       latestTimesRef.current = times;
       latestCandlesRef.current = activeCandles;
+      volumeHistoryRef.current = activeVolumes;
       const lastBar = activeCandles[activeCandles.length - 1];
       const lastVol = activeVolumes[activeVolumes.length - 1]?.value;
       if (lastBar && ohlcRef.current) {
@@ -2497,7 +3072,7 @@ export function ChartPanel({
     };
 
     applyMainSeriesData(activeCandles, activeVolumes);
-    volumeSeries.setData(activeVolumes);
+    refreshVolume();
     publishSeriesSnapshot();
     chart.timeScale().setVisibleLogicalRange({
       from: Math.max(0, activeCandles.length - 150),
@@ -2509,16 +3084,23 @@ export function ChartPanel({
 
     const tickFloat = Number(tickSizeE9) / 1e9;
     let activeBarTimeSec = Number(activeCandles[activeCandles.length - 1]?.time ?? 0);
-    let footprintCells: FootprintCell[] = [];
+    const footprints = new TradeFootprints(tickSizeE9, timeframe);
     let vpSummary: VolumeProfileSummary | null = null;
     let vpBins: VolumeProfileBin[] = [];
-    let tpoRows: TpoRow128[] = [];
+    const tpo = new SessionTpo(tickFloat);
+    tpoRef.current = tpo;
+    if (dataSource === "paper_sim") {
+      for (const bar of seedInitialCandles(symbol, "30m", 1500).candles) {
+        tpo.add(Number(bar.time), bar.low, bar.high);
+      }
+    }
 
     let pendingBar: CandlestickData<UTCTimestamp> | null = null;
     let liveBucketSec = -1;
     let liveBucketBar: CandlestickData<UTCTimestamp> | null = null;
     let liveBucketBaseVol = 0;
-    const liveBucketSubVols = new Map<number, number>();
+    let liveBucketBaseBuyVol = 0;
+    const liveBucketSubVols = new Map<number, { total: number; buy: number }>();
     let pendingVol: HistogramData<UTCTimestamp> | null = null;
     let pendingBuyVol = 0;
     let pendingSellVol = 0;
@@ -2532,22 +3114,36 @@ export function ChartPanel({
     let rulerPinned = false;
     let rulerDragOrigin: { x: number; y: number } | null = null;
     let zoomBox: { x1: number; y1: number; x2: number; y2: number } | null = null;
+    let drawingCrosshairPx: { x: number; y: number } | null = null;
     let rafId = 0;
     let lastWatchlistNotifyMs = 0;
     let lastStudyRecomputeMs = 0;
     let historicalLoaded = false;
     const backfillAbort = new AbortController();
+    let previousClose: number | null | undefined = dataSource === "paper_sim" ? undefined : null;
+    if (dataSource !== "paper_sim") {
+      void fetchHistoricalOhlc({
+        source: dataSource, symbol, timeframe: "D", limit: 3, signal: backfillAbort.signal,
+      }).then((bars) => {
+        if (backfillAbort.signal.aborted) return;
+        const startOfDay = alignTimeSecToTimeframe(Math.floor(Date.now() / 1000), "D");
+        previousClose = bars.filter((bar) => bar.time < startOfDay).at(-1)?.close ?? null;
+        const current = activeCandles.at(-1);
+        if (current) onLivePriceSampleRef.current?.(symbol, current.close, previousClose);
+      }).catch(() => {});
+    }
 
     const primitive = new OrderflowAndDrawingsPrimitive(overlay, {
       getOverlayData: (): OverlayRenderData => ({
         tickSizeFloat: tickFloat,
-        activeBarTimeSec,
-        footprintCells,
+        footprints,
         vpSummary,
         vpBins,
-        tpoRows,
         visibility: visibilityRef.current,
       }),
+      getTpo: () => tpo,
+      getVwapFills: () => vwapFillsRef.current,
+      getTpoSettings: () => tpoOptionsRef.current,
       getDrawings: (): readonly DrawingObject[] => drawingEngineRef.current!.list(symbol),
       getDrawingsHidden: () => drawingsHiddenRef.current,
       getDrawingsLocked: () => drawingsLockedRef.current,
@@ -2570,6 +3166,26 @@ export function ChartPanel({
       getBarType: () => barType,
       getPnfColumns: () => activePnfColumns,
       getBarStepSec: () => Math.max(60, timeframeToSeconds(timeframe)),
+      getCountdownText: () => countdownTextRef.current,
+      getPriceScaleBadgeMeta: () => {
+        const s = chartSettingsRef.current;
+        return {
+          showIntegratedCountdown:
+            s.scales.countdownToBarClose && s.scales.symbolPriceLabel !== "hidden",
+          upColor: s.symbol.bodyUpColor,
+          downColor: s.symbol.bodyDownColor,
+        };
+      },
+      getDrawingCrosshair: () => {
+        if (!drawingCrosshairPx) return null;
+        if (activeToolRef.current === "cursor" && !shiftPressedRef.current) return null;
+        return {
+          x: drawingCrosshairPx.x,
+          y: drawingCrosshairPx.y,
+          color: chartSettingsRef.current.canvas.crosshairColor,
+          labelBg: "#2b3040",
+        };
+      },
     });
     candleSeries.attachPrimitive(primitive);
 
@@ -2577,6 +3193,8 @@ export function ChartPanel({
     // Strictly skipped in `paper_sim` mode (SV-01 zero network calls at boot).
     let loadingOlderHistory = false;
     let olderHistoryExhausted = false;
+    let hasPagedHistory = false;
+    const historyLimit = 12_000;
     const barSecStep = Math.max(60, timeframeToSeconds(timeframe));
 
     const prependOlderBars = (
@@ -2591,13 +3209,20 @@ export function ChartPanel({
         if (Number(olderCandles[i].time) < firstExistingTime) keepIdx.push(i);
       }
       if (keepIdx.length === 0) return 0;
+      if (timeframe === "30m") {
+        for (const index of keepIdx) {
+          const bar = olderCandles[index];
+          tpo.add(Number(bar.time), bar.low, bar.high);
+        }
+      }
+      hasPagedHistory = true;
       const prevRange = chart.timeScale().getVisibleLogicalRange();
       activeCandles = [...keepIdx.map((i) => olderCandles[i]), ...activeCandles];
       activeVolumes = [...keepIdx.map((i) => olderVolumes[i]), ...activeVolumes];
       activeBuyVolumes = [...keepIdx.map((i) => olderBuy[i]), ...activeBuyVolumes];
       activeSellVolumes = [...keepIdx.map((i) => olderSell[i]), ...activeSellVolumes];
       applyMainSeriesData(activeCandles, activeVolumes);
-      volumeSeries.setData(activeVolumes);
+      refreshVolume();
       publishSeriesSnapshot();
       if (prevRange) {
         chart.timeScale().setVisibleLogicalRange({
@@ -2614,11 +3239,12 @@ export function ChartPanel({
     const handleVisibleLogicalRangeChange = (range: { from: number; to: number } | null) => {
       if (!range || loadingOlderHistory || olderHistoryExhausted) return;
       if (range.from > 25) return;
-      if (activeCandles.length >= 5500 || activeCandles.length === 0) return;
+      const remaining = historyLimit - activeCandles.length;
+      if (remaining <= 0 || activeCandles.length === 0) return;
 
       if (dataSource === "paper_sim") {
         loadingOlderHistory = true;
-        const older = generateOlderSimCandles(symbol, timeframe, activeCandles[0], 500);
+        const older = generateOlderSimCandles(symbol, timeframe, activeCandles[0], Math.min(500, remaining));
         prependOlderBars(older.candles, older.volumes, older.buyVolumes, older.sellVolumes);
         loadingOlderHistory = false;
         return;
@@ -2632,7 +3258,7 @@ export function ChartPanel({
           symbol,
           timeframe,
           limit: 300,
-          endTimeSec: oldestTime - barSecStep,
+          endTimeSec: oldestTime,
           signal: backfillAbort.signal,
         })
           .then((bars) => {
@@ -2641,6 +3267,7 @@ export function ChartPanel({
               olderHistoryExhausted = true;
               return;
             }
+            bars = bars.filter((bar) => bar.time < oldestTime).slice(-remaining);
             const oCandles = bars.map((c) => ({
               time: c.time as UTCTimestamp,
               open: c.open,
@@ -2666,7 +3293,180 @@ export function ChartPanel({
           });
       }
     };
-    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
+    const syncAlertBadgePositions = () => {
+      const containerH = el.clientHeight || 0;
+      const currentAlerts = alertsRef.current;
+      for (const al of currentAlerts) {
+        if (al.symbol !== symbol) continue;
+        const badgeEl = alertBadgeRefs.current.get(al.id);
+        if (!badgeEl) continue;
+        const drag = alertDragRef.current;
+        const price = drag?.id === al.id && drag.price !== null ? drag.price : getAlertPrimaryPrice(al);
+        if (price === null || !chartSettingsRef.current.alerts.alertLines) {
+          badgeEl.style.display = "none";
+          continue;
+        }
+        const y = candleSeries.priceToCoordinate(price);
+        if (y === null || !Number.isFinite(y) || y < 8 || y > Math.max(24, containerH - 28)) {
+          badgeEl.style.display = "none";
+          continue;
+        }
+        badgeEl.style.display = "flex";
+        badgeEl.style.transform = `translate3d(0, ${Math.round(y - 12)}px, 0)`;
+      }
+    };
+    syncAlertBadgePositionsRef.current = syncAlertBadgePositions;
+
+    let lastDataWindowSig = "";
+    const emitDataWindow = (
+      bar?: CandlestickData<UTCTimestamp>,
+      vol?: number,
+      seriesData?: ReadonlyMap<unknown, unknown>,
+    ) => {
+      if (!dataWindowActiveRef.current || !onDataWindowSnapshotRef.current) return;
+      const targetBar = bar ?? activeCandles[activeCandles.length - 1];
+      if (!targetBar || typeof targetBar.open !== "number") return;
+      const barIdx = activeCandles.findIndex((c) => c.time === targetBar.time);
+      const prevBar = barIdx > 0 ? activeCandles[barIdx - 1] : undefined;
+      const resolvedVol =
+        vol ??
+        (barIdx >= 0 ? activeVolumes[barIdx]?.value : activeVolumes[activeVolumes.length - 1]?.value) ??
+        0;
+      const digits = getPrecisionDigits(chartSettingsRef.current, symMeta.decimals);
+      const change = targetBar.close - targetBar.open;
+      const changePct = targetBar.open !== 0 ? (change / targetBar.open) * 100 : 0;
+      const lastDayChange =
+        previousClose !== null && previousClose !== undefined
+          ? targetBar.close - previousClose
+          : prevBar
+            ? targetBar.close - prevBar.close
+            : null;
+      const lastDayChangePct =
+        lastDayChange !== null
+          ? (() => {
+              const ref =
+                previousClose !== null && previousClose !== undefined
+                  ? previousClose
+                  : prevBar?.close ?? 0;
+              return ref !== 0 ? (lastDayChange / ref) * 100 : null;
+            })()
+          : null;
+      const fmtVal = (v: number) =>
+        v.toLocaleString("en-US", {
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+        });
+      const indicators: DataWindowIndicatorValue[] = [];
+      if (volumeActiveRef.current) {
+        const volStr =
+          resolvedVol >= 1_000_000
+            ? `${(resolvedVol / 1_000_000).toFixed(2)}M`
+            : resolvedVol >= 1_000
+              ? `${(resolvedVol / 1_000).toFixed(2)}K`
+              : resolvedVol.toFixed(0);
+        indicators.push({
+          id: "volume",
+          label: "Vol",
+          value: volStr,
+          color: targetBar.close >= targetBar.open ? "#26a69a" : "#ef5350",
+        });
+      }
+      for (const st of studyOverlaysRef.current) {
+        if (hiddenStudyIdsRef.current.has(st.id)) continue;
+        const series = studyLineSeriesRef.current.get(st.id);
+        const pt =
+          series && seriesData
+            ? (seriesData.get(series) as LineData<UTCTimestamp> | undefined)
+            : undefined;
+        const val =
+          pt && typeof pt.value === "number" && Number.isFinite(pt.value)
+            ? pt.value
+            : studyLatestRef.current.get(st.id);
+        indicators.push({
+          id: st.id,
+          label: st.label,
+          value: typeof val === "number" && Number.isFinite(val) ? fmtVal(val) : "∅",
+          color: st.color,
+        });
+      }
+      const vis = visibilityRef.current;
+      const hiddenOf = hiddenOrderflowRef.current;
+      if (vis.vwapKeyLevels && !hiddenOf.has("vwapKeyLevels")) {
+        indicators.push({
+          id: "of:vwapKeyLevels",
+          label: "VWAP Key Levels",
+          value: fmtVal(targetBar.close),
+          color: vwapKeyLevelsConfigRef.current.monthVwapColor,
+        });
+      }
+      if (vis.vrvp && !hiddenOf.has("vrvp")) {
+        indicators.push({
+          id: "of:vrvp",
+          label: "Session Volume Profile",
+          value: "Active",
+          color: "#38bdf8",
+        });
+      }
+      if (vis.footprint && !hiddenOf.has("footprint")) {
+        indicators.push({
+          id: "of:footprint",
+          label: "Footprint Bid/Ask",
+          value: "Active",
+          color: "#34d399",
+        });
+      }
+      if (vis.tpo && !hiddenOf.has("tpo")) {
+        indicators.push({
+          id: "of:tpo",
+          label: "TPO Market Profile",
+          value: "Active",
+          color: "#f59e0b",
+        });
+      }
+      if (vis.marketStructure && !hiddenOf.has("marketStructure")) {
+        indicators.push({
+          id: "of:marketStructure",
+          label: "Market Structure",
+          value: "Active",
+          color: "#089981",
+        });
+      }
+      if (vis.tradingSessions && !hiddenOf.has("tradingSessions")) {
+        indicators.push({
+          id: "of:tradingSessions",
+          label: "Trading Sessions",
+          value: "Active",
+          color: tradingSessionsConfigRef.current.newYorkColor,
+        });
+      }
+      const sig = `${targetBar.time}:${targetBar.close}:${resolvedVol}:${indicators.map((i) => `${i.id}=${i.value}`).join("|")}`;
+      if (sig === lastDataWindowSig) return;
+      lastDataWindowSig = sig;
+      onDataWindowSnapshotRef.current({
+        timeSec: Number(targetBar.time),
+        open: targetBar.open,
+        high: targetBar.high,
+        low: targetBar.low,
+        close: targetBar.close,
+        change,
+        changePct,
+        volume: resolvedVol,
+        lastDayChange,
+        lastDayChangePct,
+        decimals: digits,
+        indicators,
+      });
+    };
+    emitDataWindowRef.current = () => {
+      lastDataWindowSig = "";
+      emitDataWindow();
+    };
+
+    const handleVisibleRangeWithAlerts = (range: { from: number; to: number } | null) => {
+      handleVisibleLogicalRangeChange(range);
+      syncAlertBadgePositions();
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeWithAlerts);
 
     if (dataSource !== "paper_sim") {
       void fetchHistoricalOhlc({
@@ -2695,26 +3495,29 @@ export function ChartPanel({
             Math.max(0, c.volume - activeBuyVolumes[idx]),
           );
           historicalLoaded = true;
+          pendingBar = null;
+          pendingVol = null;
           liveBucketSec = -1;
           liveBucketBar = null;
           liveBucketBaseVol = 0;
+          liveBucketBaseBuyVol = 0;
           liveBucketSubVols.clear();
           const lastBar = activeCandles[activeCandles.length - 1];
           activeBarTimeSec = Number(lastBar.time);
           applyMainSeriesData(activeCandles, activeVolumes);
-          volumeSeries.setData(activeVolumes);
+          refreshVolume();
           publishSeriesSnapshot();
           chart.timeScale().setVisibleLogicalRange({
             from: Math.max(0, activeCandles.length - 150),
             to: activeCandles.length + 24,
           });
-          onLivePriceSampleRef.current?.(symbol, lastBar.close);
+          onLivePriceSampleRef.current?.(symbol, lastBar.close, previousClose);
           onSeriesUpdatedRef.current?.();
           pendingPrimitiveDirty = true;
           scheduleFlush();
         })
         .catch(() => {
-          // Keep seeded fallback bars if historical REST is temporarily unreachable
+          // Continue displaying candles built from the selected live stream.
         });
     }
 
@@ -2723,7 +3526,7 @@ export function ChartPanel({
       rafId = requestAnimationFrame(() => {
         rafId = 0;
         if (pendingBar && pendingVol) {
-          const res = applyBarHysteresis(activeCandles, pendingBar);
+          const res = applyBarHysteresis(activeCandles, pendingBar, hasPagedHistory);
           activeCandles = res.bars;
           activeBarTimeSec = Number(pendingBar.time);
           if (!res.trimmed) {
@@ -2751,7 +3554,8 @@ export function ChartPanel({
             } else {
               applyMainSeriesData(activeCandles, activeVolumes);
             }
-            volumeSeries.update(pendingVol);
+            const previous = activeCandles.at(-2);
+            volumeSeries.update({ ...pendingVol, color: volumeColor(pendingBar, previous) });
             if (
               activeVolumes.length > 0 &&
               activeVolumes[activeVolumes.length - 1].time === pendingVol.time
@@ -2784,13 +3588,18 @@ export function ChartPanel({
             activeSellVolumes = activeVolumes.map((v, idx) =>
               Math.max(0, v.value - activeBuyVolumes[idx]),
             );
-            volumeSeries.setData(activeVolumes);
+            refreshVolume();
           }
 
+          const volumeCfg = volumeConfigRef.current;
+          if (volumeCfg.volume?.showAverage && activeVolumes.length >= volumeCfg.period) {
+            const sum = activeVolumes.slice(-volumeCfg.period).reduce((total, bar) => total + bar.value, 0);
+            volumeAverage.update({ time: pendingVol.time, value: sum / volumeCfg.period });
+          }
           const nowMs = performance.now();
           if (nowMs - lastWatchlistNotifyMs >= 500) {
             lastWatchlistNotifyMs = nowMs;
-            onLivePriceSampleRef.current?.(symbol, pendingBar.close);
+            onLivePriceSampleRef.current?.(symbol, pendingBar.close, previousClose);
           }
           publishSeriesSnapshot();
           if (nowMs - lastStudyRecomputeMs >= 1200) {
@@ -2805,10 +3614,34 @@ export function ChartPanel({
           pendingPrimitiveDirty = false;
           primitive.requestUpdate();
         }
+        syncAlertBadgePositions();
+        emitDataWindow();
       });
     };
 
+    let tpoBackfillRequested = false;
+    const backfillTpo = () => {
+      if (dataSource === "paper_sim" || !visibilityRef.current.tpo || tpoBackfillRequested) return;
+      tpoBackfillRequested = true;
+      void fetchHistoricalOhlc({
+        source: dataSource,
+        symbol,
+        timeframe: "30m",
+        limit: 1500,
+        signal: backfillAbort.signal,
+      }).then((bars) => {
+        if (backfillAbort.signal.aborted) return;
+        for (const bar of bars) tpo.add(bar.time, bar.low, bar.high);
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+      }).catch(() => {
+        tpoBackfillRequested = false;
+      });
+    };
+
+    backfillTpo();
     redrawTriggerRef.current = () => {
+      backfillTpo();
       pendingPrimitiveDirty = true;
       scheduleFlush();
     };
@@ -2861,9 +3694,18 @@ export function ChartPanel({
           });
         }
       }
+      if (dataWindowActiveRef.current) {
+        emitDataWindow(
+          bar && typeof bar.open === "number" ? bar : lastBar,
+          bar && typeof bar.open === "number" ? vPoint?.value : lastVol,
+          param.seriesData,
+        );
+      }
+      syncAlertBadgePositions();
     });
 
     const unsub = transport.subscribeBinary(1, (buf) => {
+      if (!marketStreamReadyRef.current) return;
       try {
         const hdr = decodeFrameHeader(buf);
         if (hdr.frameType === FrameType.LIVE_BAR_UPDATE_BATCH) {
@@ -2879,6 +3721,7 @@ export function ChartPanel({
           const rawClose = Number(latest.closeTick) * tickFloat;
           const subVol = Number(latest.volumeE9) / 1e9;
           const lastCandle = activeCandles[activeCandles.length - 1];
+          if (bucketSec < liveBucketSec || (lastCandle && t < lastCandle.time)) return;
           const lastSeed = lastCandle?.close ?? symMeta.basePrice;
           const ratio =
             !historicalLoaded &&
@@ -2903,6 +3746,7 @@ export function ChartPanel({
               existingSameBucket && activeVolumes.length > 0
                 ? activeVolumes[activeVolumes.length - 1].value
                 : 0;
+            liveBucketBaseBuyVol = existingSameBucket ? (activeBuyVolumes.at(-1) ?? 0) : 0;
             liveBucketBar = existingSameBucket
               ? {
                   time: t,
@@ -2928,10 +3772,13 @@ export function ChartPanel({
             };
           }
 
-          liveBucketSubVols.set(rawSubSec, subVol);
-          let liveAddedVol = 0;
-          for (const v of liveBucketSubVols.values()) liveAddedVol += v;
-          const totalVol = liveBucketBaseVol + liveAddedVol;
+          liveBucketSubVols.set(rawSubSec, { total: subVol, buy: Number(latest.buyVolE9) / 1e9 });
+          let totalVol = liveBucketBaseVol;
+          let totalBuyVol = liveBucketBaseBuyVol;
+          for (const v of liveBucketSubVols.values()) {
+            totalVol += v.total;
+            totalBuyVol += v.buy;
+          }
 
           const barOut = liveBucketBar ?? { time: t, open: inOpen, high: inHigh, low: inLow, close: inClose };
           pendingBar = barOut;
@@ -2940,34 +3787,24 @@ export function ChartPanel({
             value: totalVol,
             color: barOut.close >= barOut.open ? "rgba(130, 142, 165, 0.24)" : "rgba(95, 103, 122, 0.2)",
           };
-          pendingBuyVol = totalVol * (barOut.close >= barOut.open ? 0.62 : 0.38);
+          pendingBuyVol = totalBuyVol;
           pendingSellVol = Math.max(0, totalVol - pendingBuyVol);
           scheduleFlush();
-        } else if (hdr.frameType === FrameType.LIVE_FOOTPRINT_DELTA) {
-          const decoded = decodeFootprintDelta(buf);
-          footprintCells = decoded.cells;
-          let sumBid = 0n;
-          let sumAsk = 0n;
-          for (const c of footprintCells) {
-            sumBid += c.bidVolE9;
-            sumAsk += c.askVolE9;
+        } else if (hdr.frameType === FrameType.LIVE_TRADE_BATCH) {
+          const { trades } = decodeLiveTradeBatch(buf);
+          footprints.add(trades);
+          for (const trade of trades) {
+            const price = Number(trade.priceE9) / 1e9;
+            tpo.add(Number(trade.tsNs / 1_000_000_000n), price, price);
           }
-          if (activeBuyVolumes.length > 0 && (sumBid > 0n || sumAsk > 0n)) {
-            activeBuyVolumes[activeBuyVolumes.length - 1] = Number(sumAsk) / 1e9;
-            activeSellVolumes[activeSellVolumes.length - 1] = Number(sumBid) / 1e9;
-            publishSeriesSnapshot();
+          if (visibilityRef.current.footprint || visibilityRef.current.tpo) {
+            pendingPrimitiveDirty = true;
+            scheduleFlush();
           }
-          pendingPrimitiveDirty = true;
-          scheduleFlush();
         } else if (hdr.frameType === FrameType.VOLUME_PROFILE_SOA) {
           const decoded = decodeVolumeProfile(buf);
           vpSummary = decoded.summary;
           vpBins = decoded.bins;
-          pendingPrimitiveDirty = true;
-          scheduleFlush();
-        } else if (hdr.frameType === FrameType.TPO_PROFILE_BITMASK) {
-          const decoded = decodeTpoProfileBitmask(buf);
-          tpoRows = decoded.rows;
           pendingPrimitiveDirty = true;
           scheduleFlush();
         }
@@ -3252,6 +4089,38 @@ export function ChartPanel({
       const px = ev.clientX - rect.left;
       const py = ev.clientY - rect.top;
 
+      // Keep living NESW dotted crosshair lines active whenever pointerSurface is handling hover
+      const tool = activeToolRef.current;
+      const isDrawingSurfaceActive = tool !== "cursor" || shiftPressedRef.current;
+      if (isDrawingSurfaceActive) {
+        let cx = px;
+        let cy = py;
+        const magnetNow = ev.metaKey || ev.ctrlKey ? !magnetRef.current : magnetRef.current;
+        if (magnetNow && !zoomBox) {
+          const snapped = toAnchorFromPointer(ev.clientX, ev.clientY, {
+            shiftKey: ev.shiftKey,
+            metaKey: ev.metaKey,
+            ctrlKey: ev.ctrlKey,
+            tool,
+            originAnchor: draftAnchors.length > 0 ? draftAnchors[draftAnchors.length - 1] : undefined,
+          });
+          if (snapped) {
+            const sy = candleSeries.priceToCoordinate(Number(snapped.priceTick) * tickFloat);
+            const sx = timeSecToCoordinateExt(chart, activeCandles, snapped.timeSec, barSecStep);
+            if (sy !== null && Number.isFinite(Number(sy))) cy = Number(sy);
+            if (sx !== null && Number.isFinite(sx)) cx = sx;
+          }
+        }
+        drawingCrosshairPx = { x: cx, y: cy };
+        chart.clearCrosshairPosition();
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+      } else if (drawingCrosshairPx !== null) {
+        drawingCrosshairPx = null;
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+      }
+
       if (zoomBox) {
         zoomBox = { ...zoomBox, x2: px, y2: py };
         pendingPrimitiveDirty = true;
@@ -3269,7 +4138,6 @@ export function ChartPanel({
         return;
       }
 
-      const tool = activeToolRef.current;
       if (tool === "cursor" || draftAnchors.length === 0) return;
 
       const meta = getDrawingToolMeta(tool);
@@ -3377,6 +4245,7 @@ export function ChartPanel({
         rulerEnd = null;
         rulerPinned = false;
         zoomBox = null;
+        drawingCrosshairPx = null;
         pendingPrimitiveDirty = true;
         scheduleFlush();
         setActiveTool("cursor");
@@ -3435,6 +4304,11 @@ export function ChartPanel({
         shiftPressedRef.current = false;
         pointerSurface.style.pointerEvents = "";
         pointerSurface.style.cursor = "";
+        if (activeToolRef.current === "cursor" && drawingCrosshairPx !== null) {
+          drawingCrosshairPx = null;
+          pendingPrimitiveDirty = true;
+          scheduleFlush();
+        }
       }
     };
 
@@ -3455,6 +4329,7 @@ export function ChartPanel({
       drawingId: string;
       hitKind: "anchor" | "body";
       anchorIndex: number;
+      rectangleHandle?: RectangleHandle;
       startAnchor: AnchorPoint;
       origAnchors: AnchorPoint[];
       moved: boolean;
@@ -3464,7 +4339,7 @@ export function ChartPanel({
       if (drawingsHiddenRef.current) return [];
       return drawingEngineRef.current!
         .list(symbol)
-        .filter((d) => isTimeframeVisible(timeframe, d.visibility));
+        .filter((d) => !d.hidden && isTimeframeVisible(timeframe, d.visibility, barType));
     };
 
     const onHostPointerDownCapture = (ev: PointerEvent) => {
@@ -3495,6 +4370,7 @@ export function ChartPanel({
         drawingId: hit.drawing.id,
         hitKind: hit.hitKind,
         anchorIndex: hit.anchorIndex,
+        rectangleHandle: hit.rectangleHandle,
         startAnchor,
         origAnchors: hit.drawing.anchors.map((a) => ({ ...a })),
         moved: false,
@@ -3507,7 +4383,9 @@ export function ChartPanel({
       if (!cur) return;
       ev.preventDefault();
       let nextAnchors: AnchorPoint[];
-      if (dragState.hitKind === "anchor" && dragState.anchorIndex >= 0) {
+      if (dragState.rectangleHandle) {
+        nextAnchors = resizeRectangle(dragState.origAnchors, dragState.rectangleHandle, cur);
+      } else if (dragState.hitKind === "anchor" && dragState.anchorIndex >= 0) {
         nextAnchors = dragState.origAnchors.map((a, idx) =>
           idx === dragState!.anchorIndex ? cur : { ...a },
         );
@@ -3582,9 +4460,18 @@ export function ChartPanel({
     window.addEventListener("pointerup", onHostPointerUpWindow);
     window.addEventListener("keydown", onDeleteSelectedKey);
 
+    const onPointerLeave = () => {
+      if (drawingCrosshairPx !== null) {
+        drawingCrosshairPx = null;
+        pendingPrimitiveDirty = true;
+        scheduleFlush();
+      }
+    };
+
     pointerSurface.addEventListener("pointerdown", onPointerDown);
     pointerSurface.addEventListener("pointermove", onPointerMove);
     pointerSurface.addEventListener("pointerup", onPointerUp);
+    pointerSurface.addEventListener("pointerleave", onPointerLeave);
     pointerSurface.addEventListener("dblclick", onDoubleClick);
     window.addEventListener("keydown", onWindowKeyDown);
     window.addEventListener("keyup", onWindowKeyUp);
@@ -3607,6 +4494,7 @@ export function ChartPanel({
       unsub();
       ro.disconnect();
       requestOverlayRedrawRef.current = null;
+      tpoRef.current = null;
       el.removeEventListener("pointerdown", onHostPointerDownCapture, { capture: true });
       el.removeEventListener("dblclick", onHostDoubleClickCapture, { capture: true });
       window.removeEventListener("pointermove", onHostPointerMoveWindow);
@@ -3615,19 +4503,26 @@ export function ChartPanel({
       pointerSurface.removeEventListener("pointerdown", onPointerDown);
       pointerSurface.removeEventListener("pointermove", onPointerMove);
       pointerSurface.removeEventListener("pointerup", onPointerUp);
+      pointerSurface.removeEventListener("pointerleave", onPointerLeave);
       pointerSurface.removeEventListener("dblclick", onDoubleClick);
       window.removeEventListener("keydown", onWindowKeyDown);
       window.removeEventListener("keyup", onWindowKeyUp);
       if (rafId !== 0) cancelAnimationFrame(rafId);
       candleSeries.detachPrimitive(primitive);
       priceLinesRef.current = [];
+      alertPriceLinesRef.current.clear();
       studyLineSeriesRef.current.clear();
+      vwapBandSeriesRef.current.clear();
+      vwapFillsRef.current = [];
       studyPanesRef.current.clear();
       chartApiRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      volumeRefreshRef.current = null;
       overlay.dispose();
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeWithAlerts);
+      syncAlertBadgePositionsRef.current = () => {};
+      emitDataWindowRef.current = () => {};
       chart.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3660,6 +4555,9 @@ export function ChartPanel({
       }
     }
     const times = latestTimesRef.current;
+    const fills: VwapFill[] = [];
+    const wantedBands = new Set<string>();
+    const bandSeries = vwapBandSeriesRef.current;
     const latestMap = new Map<string, number>();
     for (const st of studyOverlays) {
       const isOverlay = st.overlay !== false;
@@ -3706,6 +4604,42 @@ export function ChartPanel({
         }
         map.set(st.id, series);
       }
+      const visible = !hiddenStudyIds.has(st.id) && isTimeframeVisible(timeframe, st.visibility, barType)
+        && !(st.vwap?.hideOnDaily && timeframeToSeconds(timeframe) >= 86_400);
+      const scale = effectiveSettings.scales.scalesPlacement === "left" ? "left" : "right";
+      const vwap = st.vwap;
+      const vwapValues = vwap ? calculateVwap(latestCandlesRef.current, volumeHistoryRef.current, timeframe, st.source ?? "hlc3", vwap) : null;
+      const plotTimes = vwapValues && vwapValues.length > times.length && times.length > 0 ? [...times] : times;
+      while (plotTimes.length > 0 && vwapValues && plotTimes.length < vwapValues.length) {
+        plotTimes.push(timeframeBucketCloseSec(plotTimes[plotTimes.length - 1], timeframe) as UTCTimestamp);
+      }
+      if (vwap && vwapValues && visible && plotTimes.length) {
+        for (const [index, band] of vwap.bands.entries()) {
+          if (!band.enabled) continue;
+          if (band.fill) fills.push({ color: band.fillColor, opacity: band.fillOpacity,
+            points: vwapValues.map((point, i) => point && ({
+              time: plotTimes[i], anchor: point.anchor,
+              lower: point.value - point.distance * band.multiplier,
+              upper: point.value + point.distance * band.multiplier,
+            })) });
+          for (const direction of ["upper", "lower"] as const) {
+            if (!band[direction]) continue;
+            const key = `${st.id}:${index}:${direction}`;
+            wantedBands.add(key);
+            let line = bandSeries.get(key);
+            if (!line) {
+              line = chart.addSeries(LineSeries, { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+              bandSeries.set(key, line);
+            }
+            const style = band[`${direction}Style`];
+            line.applyOptions({ priceScaleId: scale, color: band[`${direction}Color`], lineWidth: 1,
+              lineStyle: style === "dashed" ? LineStyle.Dashed : style === "dotted" ? LineStyle.Dotted : LineStyle.Solid });
+            line.setData(vwapValues.map((point, i) => point ? {
+              time: plotTimes[i], value: point.value + point.distance * band.multiplier * (direction === "upper" ? 1 : -1),
+            } : { time: plotTimes[i] }));
+          }
+        }
+      }
       const lwcLineStyle =
         st.lineStyle === "dashed"
           ? LineStyle.Dashed
@@ -3717,27 +4651,38 @@ export function ChartPanel({
         lineWidth: st.lineWidth ?? 2,
         lineStyle: lwcLineStyle,
         priceLineVisible: st.showPriceLine ?? false,
-        visible: !hiddenStudyIds.has(st.id) && isTimeframeVisible(timeframe, st.visibility),
+        visible: visible && vwap?.showLine !== false,
+        ...(isOverlay ? { priceScaleId: scale } : {}),
+        priceFormat: st.precision === undefined ? { type: "price" } : { type: "price", precision: st.precision, minMove: 10 ** -st.precision },
         lastValueVisible:
           (st.showPriceLabel ?? true) &&
           effectiveSettings.scales.indicatorsLabel === "value",
       });
-      const n = Math.min(times.length, st.values.length);
+      const values = vwapValues ? vwapValues.map((point) => point?.value ?? null) : st.values;
+      const n = Math.min(plotTimes.length, values.length);
       const pts: LineData<UTCTimestamp>[] = [];
       for (let i = 0; i < n; i++) {
-        const v = st.values[i];
+        const v = values[i];
         if (v !== null && Number.isFinite(v)) {
-          pts.push({ time: times[i], value: v });
+          pts.push({ time: plotTimes[i], value: v });
         }
       }
-      const lastNonNull = [...st.values].reverse().find((v): v is number => v !== null && Number.isFinite(v));
+      const lastNonNull = [...values].reverse().find((v): v is number => v !== null && Number.isFinite(v));
       if (lastNonNull !== undefined) {
         latestMap.set(st.id, lastNonNull);
       }
       series.setData(pts);
     }
+    for (const [key, line] of bandSeries) {
+      if (!wantedBands.has(key)) {
+        chart.removeSeries(line);
+        bandSeries.delete(key);
+      }
+    }
+    vwapFillsRef.current = fills;
+    requestOverlayRedrawRef.current?.();
     studyLatestRef.current = latestMap;
-  }, [studyOverlays, hiddenStudyIds, symbol, timeframe, dataSource, barType, effectiveSettings.scales.indicatorsLabel]);
+  }, [studyOverlays, hiddenStudyIds, symbol, timeframe, dataSource, barType, effectiveSettings.scales.indicatorsLabel, effectiveSettings.scales.scalesPlacement]);
 
   const handleToggleVisibility = (key: keyof OverlayVisibility) => {
     if (onToggleOverlayVisibility) {
@@ -3782,6 +4727,7 @@ export function ChartPanel({
     e.preventDefault();
     const el = hostRef.current;
     const cs = candleSeriesRef.current;
+    let tpoMergeDay: number | undefined;
     let price = latestCandlesRef.current[latestCandlesRef.current.length - 1]?.close ?? symMeta.basePrice;
     if (el && cs) {
       const rect = el.getBoundingClientRect();
@@ -3791,8 +4737,33 @@ export function ChartPanel({
         price = computed;
       }
     }
+    const chart = chartApiRef.current;
+    const tpo = tpoRef.current;
+    const { settings, merges } = tpoOptionsRef.current;
+    const range = chart?.timeScale().getVisibleRange();
+    if (el && cs && chart && tpo && visibilityRef.current.tpo &&
+        (!settings.intradayOnly || timeframeToSeconds(timeframe) < 86_400) &&
+        typeof range?.from === "number" && typeof range.to === "number") {
+      const rect = el.getBoundingClientRect();
+      const tickSize = Number(tickSizeE9) / 1e9;
+      const profile = hitTestTpoProfile(
+        tpo.visible(range.from, range.to, merges, settings.valueArea, settings.blockMinutes),
+        {
+          timeToX: (time) => timeSecToCoordinateExt(chart, latestCandlesRef.current, time, timeframeToSeconds(timeframe)),
+          priceToY: (price) => cs.priceToCoordinate(price),
+        },
+        tickSize,
+        chart.timeScale().width(),
+        e.clientX - rect.left - chart.priceScale("left").width(),
+        e.clientY - rect.top,
+      );
+      if (profile) {
+        const day = alignTimeSecToTimeframe(profile.time, "D");
+        if (tpo.days().some((previous) => previous < day)) tpoMergeDay = day;
+      }
+    }
     const menuWidth = 296;
-    const menuHeight = 430;
+    const menuHeight = tpoMergeDay === undefined ? 464 : 498;
     const x = Math.min(e.clientX, Math.max(8, window.innerWidth - menuWidth));
     const y = Math.min(e.clientY, Math.max(8, window.innerHeight - menuHeight));
     setContextMenu({
@@ -3800,7 +4771,13 @@ export function ChartPanel({
       y,
       price,
       formattedPrice: formatPriceValue(price),
+      tpoMergeDay,
     });
+  };
+
+  const updateTpoMerges = (merges: number[]) => {
+    setTpoMergesBySymbol((current) => ({ ...current, [symbol]: merges }));
+    saveTpoPreference(`merges.${symbol}`, merges);
   };
 
   const handleResetView = () => {
@@ -4045,27 +5022,27 @@ export function ChartPanel({
           )}
 
           {showBuySellButtons && (
-            <div className="pointer-events-auto mt-0.5 flex items-center gap-1.5">
-              <button
+            <div data-trade-buttons={new URLSearchParams(window.location.search).get("tradeButtons") || "filled"} className="pointer-events-none mt-0.5 flex items-center gap-1.5">
+              <UiButton variant="ghost" size="xs"
                 type="button"
                 onClick={() => {
                   onSubmitOrderAtPrice?.("sell", "market");
                   showToast(`Sell 1 ${symbol} market submitted`);
                 }}
-                className="rounded border border-rose-500/50 bg-rose-950/70 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-rose-200 hover:bg-rose-900/80"
+                className={"pointer-events-auto " + (new URLSearchParams(window.location.search).get("tradeButtons") === "outline" ? "h-7 rounded-md border border-white/15 bg-[#16181f] px-3 text-[11px] text-[#ef8b8b] hover:bg-white/10" : new URLSearchParams(window.location.search).get("tradeButtons") === "split" ? "h-8 rounded-l-md rounded-r-none border-l-2 border-[#e97777] bg-[#202126] px-3 text-[11px] text-[#f4f4f5] hover:bg-[#303136]" : new URLSearchParams(window.location.search).get("tradeButtons") === "filled" ? "h-8 rounded-md bg-[#ad454b] px-3 text-[11px] text-white hover:bg-[#c4565b]" : "h-8 rounded-md bg-[#ad454b] px-3 text-[11px] text-white hover:bg-[#c4565b]")}
               >
                 SELL MKT
-              </button>
-              <button
+              </UiButton>
+              <UiButton variant="ghost" size="xs"
                 type="button"
                 onClick={() => {
                   onSubmitOrderAtPrice?.("buy", "market");
                   showToast(`Buy 1 ${symbol} market submitted`);
                 }}
-                className="rounded border border-sky-500/50 bg-sky-950/70 px-2.5 py-0.5 font-mono text-[11px] font-semibold text-sky-200 hover:bg-sky-900/80"
+                className={"pointer-events-auto " + (new URLSearchParams(window.location.search).get("tradeButtons") === "outline" ? "h-7 rounded-md border border-white/15 bg-[#16181f] px-3 text-[11px] text-[#7fcbb1] hover:bg-white/10" : new URLSearchParams(window.location.search).get("tradeButtons") === "split" ? "-ml-1.5 h-8 rounded-l-none rounded-r-md border-l border-l-white/10 border-r-2 border-r-[#6dbd9e] bg-[#202126] px-3 text-[11px] text-[#f4f4f5] hover:bg-[#303136]" : new URLSearchParams(window.location.search).get("tradeButtons") === "filled" ? "h-8 rounded-md bg-[#28785f] px-3 text-[11px] text-white hover:bg-[#348e70]" : "h-8 rounded-md bg-[#28785f] px-3 text-[11px] text-white hover:bg-[#348e70]")}
               >
                 BUY MKT
-              </button>
+              </UiButton>
             </div>
           )}
 
@@ -4074,7 +5051,10 @@ export function ChartPanel({
               studyOverlays={studyOverlays}
               hiddenStudyIds={hiddenStudyIds}
               showVolumeRow={showVolume}
-              volumeHidden={volumeHidden}
+              volumeHidden={volumeHidden || !isTimeframeVisible(timeframe, volumeConfig.visibility, barType)}
+              volumeValues={volumeConfig.showStatusValue !== false}
+              volumeLabel={volumeConfig.showStatusInputs !== false && volumeConfig.volume?.showAverage ? `Vol (${volumeConfig.period})` : "Vol"}
+              onOpenVolumeSettings={() => setVolumeSettingsOpen(true)}
               volLegendRef={volLegendRef}
               studyValRefs={studyValRefs}
               activeOrderflowRows={[
@@ -4154,11 +5134,7 @@ export function ChartPanel({
               onRemoveStudy={onRemoveStudy}
               onOpenStudySettings={onOpenStudySettings}
               onToggleOrderflowHidden={toggleOrderflowLayerHidden}
-              onOpenOrderflowSettings={(key) => {
-                if (key === "vrvp") setVpSettingsOpen(true);
-                if (key === "vwapKeyLevels") setVwapKeyLevelsSettingsOpen(true);
-                if (key === "tradingSessions") setTradingSessionsSettingsOpen(true);
-              }}
+              onOpenOrderflowSettings={openOrderflowSettingsByKey}
               onRemoveOrderflow={handleToggleVisibility}
             />
           )}
@@ -4333,6 +5309,26 @@ export function ChartPanel({
           }
         />
 
+        <IndicatorSettingsDialog open={volumeSettingsOpen} onOpenChange={setVolumeSettingsOpen} config={volumeConfig}
+          onSave={(next) => {
+            setVolumeConfig(next);
+            try { localStorage.setItem("allegedly.volume.settings", JSON.stringify(next)); } catch { /* Storage can be unavailable. */ }
+          }} />
+
+        <TpoSettingsDialog
+          key={symbol}
+          open={tpoSettingsOpen}
+          onOpenChange={setTpoSettingsOpen}
+          settings={tpoSettings}
+          onChange={(next) => {
+            setTpoSettings(next);
+            saveTpoPreference("settings", next);
+          }}
+          days={tpoDays}
+          merges={tpoMerges}
+          onMergesChange={updateTpoMerges}
+        />
+
         <VwapKeyLevelsSettingsDialog
           open={vwapKeyLevelsSettingsOpen}
           config={vwapKeyLevelsConfig}
@@ -4486,14 +5482,6 @@ export function ChartPanel({
           )}
 
           <div className="flex items-center justify-end gap-1.5">
-            {effectiveSettings.scales.countdownToBarClose && countdownText && (
-              <span
-                title="Countdown to bar close"
-                className="rounded border border-[#2a2f3d] bg-[#14171f]/90 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[#a5abb8]"
-              >
-                {countdownText}
-              </span>
-            )}
             <button
               type="button"
               aria-label="Price scale settings menu"
@@ -4502,20 +5490,7 @@ export function ChartPanel({
               onClick={() => setScaleMenuOpen((o) => !o)}
               className="flex h-6 w-6 items-center justify-center rounded border border-[#2a2f3d] bg-[#14171f]/90 text-[#9aa1b2] hover:bg-[#222633] hover:text-white"
             >
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 16 16"
-                className="h-3.5 w-3.5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-              >
-                <circle cx="8" cy="8" r="2.2" />
-                <path
-                  d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14M3.8 3.8l1 1M11.2 11.2l1 1M12.2 3.8l-1 1M4.8 11.2l-1 1"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <SettingsCogIcon className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -4570,6 +5545,120 @@ export function ChartPanel({
           </div>
         )}
 
+        {/* Floating Interactive Alert Line Pills (60fps imperative Y-sync) */}
+        {effectiveSettings.alerts.alertLines &&
+          alerts
+            .filter((al) => al.symbol === symbol && getAlertPrimaryPrice(al) !== null)
+            .map((al) => {
+              const digits = getPrecisionDigits(effectiveSettings, symMeta.decimals);
+              const label =
+                al.message.trim() ||
+                formatAlertConditionSummary(al.symbol, al.conditions, digits);
+              const accent =
+                al.status === "active"
+                  ? (al.color || effectiveSettings.alerts.alertLineColor)
+                  : "#787b86";
+              return (
+                <div
+                  key={al.id}
+                  ref={(node) => {
+                    if (node) alertBadgeRefs.current.set(al.id, node);
+                    else alertBadgeRefs.current.delete(al.id);
+                  }}
+                  style={{ display: "none", touchAction: "none" }}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0 || (event.target as HTMLElement).closest('button[aria-label]')) return;
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    alertDragRef.current = { id: al.id, startY: event.clientY, moved: false, price: null };
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = alertDragRef.current;
+                    const container = chartContainerRef.current;
+                    if (!drag || drag.id !== al.id || !container) return;
+                    if (Math.abs(event.clientY - drag.startY) < 3 && !drag.moved) return;
+                    drag.moved = true;
+                    const y = event.clientY - container.getBoundingClientRect().top;
+                    const price = candleSeriesRef.current?.coordinateToPrice(y);
+                    if (price == null || !Number.isFinite(price)) return;
+                    drag.price = price;
+                    alertPriceLinesRef.current.get(al.id)?.applyOptions({ price });
+                    const readout = event.currentTarget.querySelector<HTMLElement>("[data-alert-drag-price]");
+                    if (readout) {
+                      readout.textContent = price.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+                      readout.hidden = false;
+                    }
+                    event.currentTarget.style.transform = `translate3d(0, ${Math.round(y - 12)}px, 0)`;
+                  }}
+                  onPointerUp={(event) => {
+                    const drag = alertDragRef.current;
+                    alertDragRef.current = null;
+                    const readout = event.currentTarget.querySelector<HTMLElement>("[data-alert-drag-price]");
+                    if (readout) readout.hidden = true;
+                    if (!drag?.moved || drag.price === null) return;
+                    suppressAlertClickRef.current = true;
+                    const price = Number(drag.price.toFixed(getPrecisionDigits(effectiveSettings, symMeta.decimals)));
+                    if (onMoveAlert) onMoveAlert(al.id, price);
+                    else setLocalAlerts((previous) => previous.map((item) => {
+                      if (item.id !== al.id) return item;
+                      const index = item.conditions.findIndex((condition) => condition.valueType === "value" && Number.isFinite(condition.value));
+                      return { ...item, conditions: item.conditions.map((condition, i) => i === index ? { ...condition, value: price } : condition) };
+                    }));
+                    event.stopPropagation();
+                  }}
+                  onPointerCancel={(event) => {
+                    alertDragRef.current = null;
+                    const originalPrice = getAlertPrimaryPrice(al);
+                    if (originalPrice !== null) alertPriceLinesRef.current.get(al.id)?.applyOptions({ price: originalPrice });
+                    const readout = event.currentTarget.querySelector<HTMLElement>("[data-alert-drag-price]");
+                    if (readout) readout.hidden = true;
+                    syncAlertBadgePositionsRef.current();
+                  }}
+                  className="group/alertpill pointer-events-auto absolute right-[82px] top-0 z-20 flex min-h-6 cursor-ns-resize items-center gap-1 rounded-md border border-[var(--app-border,#323848)] bg-[var(--app-surface-bg,#1e222d)] px-2 py-0.5 text-[11px] font-medium text-[#e0e3eb] shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-colors hover:border-[#596171]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (suppressAlertClickRef.current) { suppressAlertClickRef.current = false; return; }
+                      onEditAlert?.(al);
+                    }}
+                    title={`Edit alert: ${label}`}
+                    className="flex items-center gap-1.5 text-left hover:text-white focus-visible:outline-none"
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{ backgroundColor: accent }}
+                      className="h-2 w-2 shrink-0 rounded-full"
+                    />
+                    <span className="max-w-[230px] truncate">{label}</span>
+                  </button>
+                  <span data-alert-drag-price hidden className="rounded bg-[var(--app-panel-bg,#181c27)] px-1.5 py-0.5 font-mono tabular-nums text-[#f0f3fa]" />
+                  {onEditAlert && (
+                    <button
+                      type="button"
+                      title="Edit alert"
+                      aria-label={`Edit alert ${label}`}
+                      onClick={() => onEditAlert(al)}
+                      className="hidden h-5 w-5 items-center justify-center rounded-md text-[#a1a7b4] hover:bg-[var(--app-panel-bg,#2a2e39)] hover:text-white group-hover/alertpill:flex focus-visible:flex"
+                    >
+                      <SettingsCogIcon className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                  {onDeleteAlert && (
+                    <button
+                      type="button"
+                      title="Delete alert"
+                      aria-label={`Delete alert ${label}`}
+                      onClick={() => onDeleteAlert(al.id)}
+                      className="hidden h-5 w-5 items-center justify-center rounded-md text-[#a1a7b4] hover:bg-[var(--app-panel-bg,#2a2e39)] hover:text-rose-400 group-hover/alertpill:flex focus-visible:flex"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
         {/* Auto-Hiding Chart Notification Toast */}
         {toastMsg && (
           <div
@@ -4596,10 +5685,13 @@ export function ChartPanel({
             menu={contextMenu}
             symbol={symbol}
             studiesCount={studyOverlays.length}
+            drawingCount={historyMeta.count}
+            onRemoveDrawings={handleClear}
             lockCursorByTime={lockCursorByTime}
             tableViewOpen={tableViewOpen}
             templates={chartTemplates}
             onClose={() => setContextMenu(null)}
+            onMergeTpoProfile={(day) => updateTpoMerges([...new Set([...tpoMerges, day])])}
             onResetView={handleResetView}
             onCopyPrice={(priceText) => {
               if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
@@ -4611,11 +5703,7 @@ export function ChartPanel({
               showToast("Paste ready on chart canvas");
             }}
             onAddAlert={(price) => {
-              setAlerts((prev) => [
-                ...prev,
-                { id: `al-${Date.now()}`, symbol, price },
-              ]);
-              showToast(`Alert added on ${symbol} at ${formatPriceValue(price)}`);
+              handleAddAlert(price);
             }}
             onSellLimit={(price) => {
               onSubmitOrderAtPrice?.("sell", "limit", price);
@@ -4666,6 +5754,7 @@ export function ChartPanel({
           drawing={selectedDrawingId ? drawingEngineRef.current!.getById(selectedDrawingId) : null}
           tickSizeE9={tickSizeE9}
           decimals={symMeta.decimals}
+          barTimes={drawingSettingsOpen ? latestCandlesRef.current.map((c) => Number(c.time)) : undefined}
           onOpenChange={setDrawingSettingsOpen}
           onSave={(id, patch) => {
             drawingEngineRef.current!.update(id, patch);

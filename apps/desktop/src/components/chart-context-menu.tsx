@@ -1,22 +1,25 @@
 import { useState } from "react";
-import type { ChartSettingsTemplate } from "@allegedly/ui-chrome";
+import { SettingsCogIcon, type ChartSettingsTemplate } from "@allegedly/ui-chrome";
 
 export interface ChartContextMenuState {
   x: number;
   y: number;
   price: number;
   formattedPrice: string;
+  tpoMergeDay?: number;
 }
 
 export interface ChartContextMenuProps {
   menu: ChartContextMenuState;
   symbol: string;
   studiesCount: number;
+  drawingCount: number;
   lockCursorByTime: boolean;
   tableViewOpen: boolean;
   templates: readonly ChartSettingsTemplate[];
   onClose: () => void;
   onResetView: () => void;
+  onMergeTpoProfile?: (day: number) => void;
   onCopyPrice: (priceText: string) => void;
   onPaste: () => void;
   onAddAlert: (price: number) => void;
@@ -29,6 +32,7 @@ export interface ChartContextMenuProps {
   onApplyTemplate: (tpl: ChartSettingsTemplate) => void;
   onApplyDefaults: () => void;
   onRemoveIndicators: () => void;
+  onRemoveDrawings: () => void;
   onOpenSettings: () => void;
 }
 
@@ -40,11 +44,13 @@ export function ChartContextMenu({
   menu,
   symbol,
   studiesCount,
+  drawingCount,
   lockCursorByTime,
   tableViewOpen,
   templates,
   onClose,
   onResetView,
+  onMergeTpoProfile,
   onCopyPrice,
   onPaste,
   onAddAlert,
@@ -57,6 +63,7 @@ export function ChartContextMenu({
   onApplyTemplate,
   onApplyDefaults,
   onRemoveIndicators,
+  onRemoveDrawings,
   onOpenSettings,
 }: ChartContextMenuProps) {
   const [tplHover, setTplHover] = useState(false);
@@ -77,6 +84,22 @@ export function ChartContextMenu({
         style={{ left: menu.x, top: menu.y }}
         className="fixed z-50 w-72 rounded-xl border border-[#2a2d38] bg-[#16181f] py-1.5 shadow-2xl select-none"
       >
+        {menu.tpoMergeDay !== undefined && onMergeTpoProfile && (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              className={ITEM_CLS}
+              onClick={() => {
+                onMergeTpoProfile(menu.tpoMergeDay!);
+                onClose();
+              }}
+            >
+              Merge with previous profile
+            </button>
+            <div className={SEP_CLS} />
+          </>
+        )}
         <button
           type="button"
           role="menuitem"
@@ -308,6 +331,20 @@ export function ChartContextMenu({
           )}
         </div>
 
+        <div className={SEP_CLS} />
+        <button
+          type="button"
+          role="menuitem"
+          disabled={drawingCount === 0}
+          onClick={() => {
+            onRemoveDrawings();
+            onClose();
+          }}
+          className={`${ITEM_CLS} disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[#d6dae6]`}
+        >
+          <span className="pl-6">Remove all drawings</span>
+        </button>
+
         {studiesCount > 0 && (
           <>
             <div className={SEP_CLS} />
@@ -339,13 +376,7 @@ export function ChartContextMenu({
           className={ITEM_CLS}
         >
           <span className="flex items-center gap-2.5">
-            <svg aria-hidden="true" viewBox="0 0 18 18" className="h-3.5 w-3.5 text-[#9aa1b2]" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <circle cx="9" cy="9" r="2.5" />
-              <path
-                d="M9 2.2v1.6M9 14.2v1.6M2.2 9h1.6M14.2 9h1.6M4.2 4.2l1.1 1.1M12.7 12.7l1.1 1.1M13.8 4.2l-1.1 1.1M5.3 12.7l-1.1 1.1"
-                strokeLinecap="round"
-              />
-            </svg>
+            <SettingsCogIcon className="h-3.5 w-3.5 text-[#9aa1b2]" />
             <span>Settings...</span>
           </span>
         </button>

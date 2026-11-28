@@ -402,6 +402,10 @@ export function ColorPickerButton({
   const { r, g, b } = hexToRgb(normalizedValue);
   const pureHueHex = hsvToHex({ h: hsv.h, s: 100, v: 100 });
 
+  // Keep the picker inside the parent dialog's focus and outside-press boundary.
+  const portalContainer = typeof document !== "undefined"
+    ? triggerRef.current?.closest('[data-slot="dialog-content"]') ?? document.body
+    : null;
   const popoverNode = open ? (
     <div
       ref={popoverRef}
@@ -820,8 +824,8 @@ export function ColorPickerButton({
           </span>
         )}
       </button>
-      {popoverNode && typeof document !== "undefined"
-        ? createPortal(popoverNode, document.body)
+      {popoverNode && portalContainer
+        ? createPortal(popoverNode, portalContainer)
         : null}
     </>
   );

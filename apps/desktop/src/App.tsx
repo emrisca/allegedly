@@ -1,3 +1,4 @@
+import { DEFAULT_VWAP } from "./indicators/vwap-settings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BookState,
@@ -40,6 +41,8 @@ import {
   type QuickRangePreset,
   applyAppAppearanceToDocument,
   getMarketProviderMeta,
+  getSystemAppAppearance,
+  hasStoredAppAppearance,
   isProviderConfigured,
   loadStoredAppAppearance,
   loadStoredProviderConfigs,
@@ -62,11 +65,31 @@ import {
 } from "./components/indicators-dialog";
 import { LeftDrawingRail } from "./components/left-drawing-rail";
 import { ReplayBar } from "./components/replay-bar";
+import {
+  createDefaultAlertDraft,
+  evaluateAlertsOnPrice,
+  loadStoredAlertLogs,
+  loadStoredAlerts,
+  playAlertChime,
+  saveStoredAlertLogs,
+  saveStoredAlerts,
+  type AlertLogEntry,
+  type ChartAlert,
+} from "./alerts/alert-engine";
+import { AlertDialog } from "./components/alert-dialog";
+import { AlertsPanel } from "./components/alerts-panel";
+import {
+  ObjectTreePanel,
+  type DataWindowSnapshot,
+  type DrawingGroupNode,
+  type ObjectTreeIndicatorItem,
+} from "./components/object-tree-panel";
 import { RightIconRail, type RightDrawerTab } from "./components/right-icon-rail";
 import { getSymbolMeta, WATCHLIST_SYMBOLS } from "./data/symbols";
 import {
   loadStoredFavorites,
   saveStoredFavorites,
+  type DrawingObject,
   type DrawingToolKind,
   type PlacedDrawingKind,
 } from "./drawings/drawing-engine";
@@ -109,7 +132,7 @@ const DEFAULT_REPLAY_STATUS: ReplayStatusSnapshot = {
 const STUDY_COLORS: Record<string, string> = {
   sma: "#38bdf8",
   ema: "#f59e0b",
-  vwap: "#a78bfa",
+  vwap: "#2962ff",
   wilder_rsi: "#34d399",
   cvd: "#22d3ee",
   footprint_delta: "#e879f9",
@@ -118,17 +141,50 @@ const STUDY_COLORS: Record<string, string> = {
 
 const CHART_SETTINGS_STORAGE_KEY = "allegedly.chartSettings.v1";
 const CHART_TEMPLATES_STORAGE_KEY = "allegedly.chartTemplates.v1";
+const RIGHT_DRAWER_WIDTH_STORAGE_KEY = "allegedly.rightDrawerWidth.v1";
+const DEFAULT_RIGHT_DRAWER_WIDTH = 312;
+// Minimum width where all Watchlist columns (Symbol/Provider, Last, Chg, Chg%),
+// flag ribbon, padding, and active symbol detail footer fit without clipping.
+const MIN_RIGHT_DRAWER_WIDTH = 308;
+const MAX_RIGHT_DRAWER_WIDTH = 520;
+
+function getMaxRightDrawerWidth(): number {
+  if (typeof window === "undefined") return MAX_RIGHT_DRAWER_WIDTH;
+  return Math.max(
+    MIN_RIGHT_DRAWER_WIDTH,
+    Math.min(MAX_RIGHT_DRAWER_WIDTH, Math.floor(window.innerWidth * 0.45)),
+  );
+}
+
+function clampRightDrawerWidth(width: number): number {
+  return Math.min(getMaxRightDrawerWidth(), Math.max(MIN_RIGHT_DRAWER_WIDTH, Math.round(width)));
+}
+
+function loadStoredRightDrawerWidth(): number {
+  if (typeof window === "undefined") return DEFAULT_RIGHT_DRAWER_WIDTH;
+  try {
+    const raw = window.localStorage.getItem(RIGHT_DRAWER_WIDTH_STORAGE_KEY);
+    if (!raw) return DEFAULT_RIGHT_DRAWER_WIDTH;
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) return DEFAULT_RIGHT_DRAWER_WIDTH;
+    return clampRightDrawerWidth(parsed);
+  } catch {
+    return DEFAULT_RIGHT_DRAWER_WIDTH;
+  }
+}
 
 function loadStoredChartSettings(): ChartSettings {
   if (typeof window === "undefined") return cloneChartSettings(DEFAULT_CHART_SETTINGS);
   try {
     const raw = window.localStorage.getItem(CHART_SETTINGS_STORAGE_KEY);
+    const bidAskReviewed = window.localStorage.getItem("allegedly.bidAskOptIn.v1") === "1";
+    window.localStorage.setItem("allegedly.bidAskOptIn.v1", "1");
     if (!raw) return cloneChartSettings(DEFAULT_CHART_SETTINGS);
     const parsed = JSON.parse(raw) as Partial<ChartSettings>;
     return {
       symbol: { ...DEFAULT_CHART_SETTINGS.symbol, ...(parsed.symbol ?? {}) },
       statusLine: { ...DEFAULT_CHART_SETTINGS.statusLine, ...(parsed.statusLine ?? {}) },
-      scales: { ...DEFAULT_CHART_SETTINGS.scales, ...(parsed.scales ?? {}) },
+      scales: { ...DEFAULT_CHART_SETTINGS.scales, ...(parsed.scales ?? {}), bidAndAsk: bidAskReviewed ? parsed.scales?.bidAndAsk ?? "hidden" : "hidden" },
       canvas: { ...DEFAULT_CHART_SETTINGS.canvas, ...(parsed.canvas ?? {}) },
       trading: { ...DEFAULT_CHART_SETTINGS.trading, ...(parsed.trading ?? {}) },
       alerts: { ...DEFAULT_CHART_SETTINGS.alerts, ...(parsed.alerts ?? {}) },
@@ -251,11 +307,49 @@ export function App({ transport: providedTransport }: AppProps) {
   const [tabs, setTabs] = useState<Array<{ id: string; symbol: string; timeframe: string }>>([
     { id: "tab-1", symbol: "BTC/USD", timeframe: "D" },
   ]);
+  const sourceRequestRef = useRef(0);
+  const [marketStreamReady, setMarketStreamReady] = useState(true);
   const [dataSource, setDataSource] = useState<MarketDataFeedId>("paper_sim");
   const [dataSourceConnected, setDataSourceConnected] = useState<boolean>(true);
   const [dataSourceError, setDataSourceError] = useState<string | null>(null);
   const [activeTabId, setActiveTabId] = useState<string>("tab-1");
-  const [alertsCount, setAlertsCount] = useState<number>(0);
+  const [alerts, setAlerts] = useState<ChartAlert[]>(() => loadStoredAlerts());
+  const [alertLogs, setAlertLogs] = useState<AlertLogEntry[]>(() => loadStoredAlertLogs());
+  const [alertDialogState, setAlertDialogState] = useState<{
+    open: boolean;
+    mode: "create" | "edit";
+    alert: ChartAlert | null;
+  }>({ open: false, mode: "create", alert: null });
+  const alertsRef = useRef<ChartAlert[]>(alerts);
+  alertsRef.current = alerts;
+  const prevPriceBySymbolRef = useRef<Map<string, number>>(new Map());
+  const [alertsCount, setAlertsCount] = useState<number>(() =>
+    loadStoredAlerts().filter((a) => a.status === "active").length,
+  );
+  const [objectTreeSubTab, setObjectTreeSubTab] = useState<"tree" | "data">("tree");
+  const [drawingGroups, setDrawingGroups] = useState<DrawingGroupNode[]>(() => {
+    if (typeof window === "undefined" || !window.localStorage) return [];
+    try {
+      const raw = window.localStorage.getItem("allegedly.drawing_groups.v1");
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as DrawingGroupNode[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [drawingsSnapshot, setDrawingsSnapshot] = useState<readonly DrawingObject[]>([]);
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
+  const [indicatorHiddenState, setIndicatorHiddenState] = useState<{
+    hiddenStudyIds: ReadonlySet<string>;
+    hiddenOrderflowLayers: ReadonlySet<keyof OverlayVisibility>;
+    volumeHidden: boolean;
+  }>({
+    hiddenStudyIds: new Set(),
+    hiddenOrderflowLayers: new Set(),
+    volumeHidden: false,
+  });
+  const [dataWindowSnapshot, setDataWindowSnapshot] = useState<DataWindowSnapshot | null>(null);
   const [stateRev, setStateRev] = useState<number>(0);
   const [bookState, setBookState] = useState<number>(BookState.Live);
   const [provenanceTier, setProvenanceTier] = useState<number>(ProvenanceTier.ExactTickAggr);
@@ -275,6 +369,66 @@ export function App({ transport: providedTransport }: AppProps) {
   // Institutional layout & chart chrome state
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>("focus");
   const [rightTab, setRightTab] = useState<RightDrawerTab>("watchlist");
+  const [rightDrawerWidth, setRightDrawerWidth] = useState<number>(loadStoredRightDrawerWidth);
+  const [isResizingRightDrawer, setIsResizingRightDrawer] = useState<boolean>(false);
+  const rightResizeDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(RIGHT_DRAWER_WIDTH_STORAGE_KEY, String(rightDrawerWidth));
+    } catch {
+      // ignore storage failures
+    }
+  }, [rightDrawerWidth]);
+
+  useEffect(() => {
+    const handleWindowResize = () => {
+      setRightDrawerWidth((curr) => clampRightDrawerWidth(curr));
+    };
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
+
+  const handleRightResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      rightResizeDragRef.current = { startX: e.clientX, startWidth: rightDrawerWidth };
+      setIsResizingRightDrawer(true);
+    },
+    [rightDrawerWidth],
+  );
+
+  const handleRightResizePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = rightResizeDragRef.current;
+    if (!drag) return;
+    const delta = drag.startX - e.clientX;
+    setRightDrawerWidth(clampRightDrawerWidth(drag.startWidth + delta));
+  }, []);
+
+  const handleRightResizePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!rightResizeDragRef.current) return;
+    rightResizeDragRef.current = null;
+    setIsResizingRightDrawer(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }, []);
+
+  const handleRightResizeKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.shiftKey ? 24 : 12;
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      setRightDrawerWidth((curr) => clampRightDrawerWidth(curr + step));
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      setRightDrawerWidth((curr) => clampRightDrawerWidth(curr - step));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setRightDrawerWidth(DEFAULT_RIGHT_DRAWER_WIDTH);
+    }
+  }, []);
   const [replayOpen, setReplayOpen] = useState<boolean>(false);
   const [chartSettings, setChartSettings] = useState<ChartSettings>(loadStoredChartSettings);
   const [chartTemplates, setChartTemplates] = useState<ChartSettingsTemplate[]>(
@@ -284,6 +438,7 @@ export function App({ transport: providedTransport }: AppProps) {
   const [settingsInitialTab, setSettingsInitialTab] = useState<string>("symbol");
   const [highlightProviderId, setHighlightProviderId] = useState<MarketProviderId | null>(null);
   const [appAppearance, setAppAppearance] = useState<AppAppearanceSettings>(loadStoredAppAppearance);
+  const appearanceIsExplicitRef = useRef(hasStoredAppAppearance());
   const [providerConfigs, setProviderConfigs] = useState<MarketProviderConfigMap>(
     loadStoredProviderConfigs,
   );
@@ -295,8 +450,23 @@ export function App({ transport: providedTransport }: AppProps) {
 
   useEffect(() => {
     applyAppAppearanceToDocument(appAppearance);
-    saveStoredAppAppearance(appAppearance);
   }, [appAppearance]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const syncSystemAppearance = () => {
+      if (!appearanceIsExplicitRef.current) setAppAppearance(getSystemAppAppearance());
+    };
+    media.addEventListener("change", syncSystemAppearance);
+    return () => media.removeEventListener("change", syncSystemAppearance);
+  }, []);
+
+  const handleAppAppearanceChange = useCallback((next: AppAppearanceSettings) => {
+    appearanceIsExplicitRef.current = true;
+    setAppAppearance(next);
+    saveStoredAppAppearance(next);
+  }, []);
 
   const handleProviderConfigsChange = useCallback((next: MarketProviderConfigMap) => {
     setProviderConfigs(next);
@@ -491,6 +661,8 @@ export function App({ transport: providedTransport }: AppProps) {
         );
       }
 
+      const request = ++sourceRequestRef.current;
+      setMarketStreamReady(false);
       setDataSource(nextSource);
       setDataSourceError(null);
       setDataSourceConnected(nextSource === "paper_sim");
@@ -501,11 +673,14 @@ export function App({ transport: providedTransport }: AppProps) {
           symbol: resolvedSymbol,
         })
         .then((st) => {
+          if (request !== sourceRequestRef.current) return;
+          setMarketStreamReady(st.symbol === resolvedSymbol && st.source === nextSource);
           setDataSource(st.source);
           setDataSourceConnected(st.connected);
           setDataSourceError(st.last_error);
         })
         .catch((err: unknown) => {
+          if (request !== sourceRequestRef.current) return;
           setDataSourceConnected(false);
           setDataSourceError(err instanceof Error ? err.message : String(err));
         });
@@ -594,15 +769,65 @@ export function App({ transport: providedTransport }: AppProps) {
     [tabs, activeTabId],
   );
 
-  const handleLivePriceSample = useCallback((sym: string, last: number) => {
+  useEffect(() => {
+    saveStoredAlerts(alerts);
+    setAlertsCount(alerts.filter((a) => a.status === "active").length);
+  }, [alerts]);
+
+  useEffect(() => {
+    saveStoredAlertLogs(alertLogs);
+  }, [alertLogs]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("allegedly.drawing_groups.v1", JSON.stringify(drawingGroups));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [drawingGroups]);
+
+  const handleLivePriceSample = useCallback((sym: string, last: number, previousClose?: number | null) => {
     const meta = getSymbolMeta(sym);
-    const openRef = Math.max(0.01, meta.basePrice - meta.seedChange);
+    const openRef = previousClose === undefined ? Math.max(0.01, meta.basePrice - meta.seedChange) : (previousClose ?? NaN);
     const change = last - openRef;
     const changePct = (change / openRef) * 100;
     setLivePrices((prev) => ({
       ...prev,
       [sym]: { last, change, changePct },
     }));
+
+    const prevPrice = prevPriceBySymbolRef.current.get(sym) ?? null;
+    prevPriceBySymbolRef.current.set(sym, last);
+    if (alertsRef.current.length > 0 && Number.isFinite(last)) {
+      const nowMs = Date.now();
+      const barTimeSec = Math.floor(nowMs / 60_000) * 60;
+      const result = evaluateAlertsOnPrice({
+        alerts: alertsRef.current,
+        symbol: sym,
+        prevPrice,
+        nextPrice: last,
+        barTimeSec,
+        nowMs,
+      });
+      if (result.changed) {
+        setAlerts(result.alerts);
+      }
+      if (result.triggered.length > 0) {
+        setAlertLogs((prev) => [...result.triggered, ...prev].slice(0, 100));
+        const firstLog = result.triggered[0];
+        const firstAlert = result.alerts.find((al) => al.id === firstLog.alertId);
+        if (firstAlert) {
+          if (firstAlert.notifications.toasts) {
+            chartHistoryActionsRef.current?.showToast?.(
+              `Alert triggered: ${firstLog.message}`,
+            );
+          }
+          if (firstAlert.notifications.sound) {
+            playAlertChime();
+          }
+        }
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -762,7 +987,7 @@ export function App({ transport: providedTransport }: AppProps) {
                 label: res.label,
                 builtin: kind,
                 period,
-                source: "close",
+                source: kind === "vwap" ? "hlc3" : "close",
                 luauScript: null,
                 color: STUDY_COLORS[kind] ?? "#38bdf8",
                 lineWidth: 2,
@@ -1079,6 +1304,11 @@ export function App({ transport: providedTransport }: AppProps) {
           showPriceLabel: cfg?.showPriceLabel ?? true,
           showPriceLine: cfg?.showPriceLine ?? false,
           visibility: cfg?.visibility,
+          vwap: s.id.startsWith("vwap-") || cfg?.builtin === "vwap" ? cfg?.vwap ?? DEFAULT_VWAP : undefined,
+          source: cfg?.source,
+          precision: cfg?.precision,
+          showStatusValue: cfg?.showStatusValue,
+          showStatusInputs: cfg?.showStatusInputs,
         };
       }),
     [activeStudies, studyConfigs],
@@ -1102,7 +1332,7 @@ export function App({ transport: providedTransport }: AppProps) {
             minimumFractionDigits: meta.decimals,
             maximumFractionDigits: meta.decimals,
           }),
-          changePct,
+          changePct: Number.isFinite(changePct) ? changePct : undefined,
         };
       }),
     [tabs, livePrices],
@@ -1111,8 +1341,258 @@ export function App({ transport: providedTransport }: AppProps) {
   const symbolMeta = getSymbolMeta(symbol);
   const tickSizeE9 = symbolMeta.tickSizeE9;
 
+  const handleRequestCreateAlert = useCallback(
+    (explicitPrice?: number) => {
+      const fallbackPrice =
+        explicitPrice ??
+        chartHistoryActionsRef.current?.getCurrentPrice?.() ??
+        livePrices[symbol]?.last ??
+        symbolMeta.basePrice;
+      const draft = createDefaultAlertDraft({
+        symbol,
+        timeframe,
+        price: fallbackPrice,
+        decimals: symbolMeta.decimals,
+        color: chartSettings.alerts.alertLineColor,
+      });
+      setAlertDialogState({ open: true, mode: "create", alert: draft });
+    },
+    [symbol, symbolMeta.basePrice, symbolMeta.decimals, livePrices, chartSettings.alerts.alertLineColor],
+  );
+
+  const handleOpenEditAlert = useCallback((al: ChartAlert) => {
+    setAlertDialogState({ open: true, mode: "edit", alert: al });
+  }, []);
+
+  const handleSaveAlert = useCallback((saved: ChartAlert) => {
+    setAlerts((prev) => {
+      const idx = prev.findIndex((a) => a.id === saved.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = saved;
+        return next;
+      }
+      return [saved, ...prev];
+    });
+    setAlertDialogState({ open: false, mode: "create", alert: null });
+    chartHistoryActionsRef.current?.showToast?.(
+      `Alert saved: ${saved.message || saved.symbol}`,
+    );
+  }, []);
+
+  const handleMoveAlert = useCallback((alertId: string, price: number) => {
+    setAlerts((previous) => previous.map((alert) => {
+      if (alert.id !== alertId) return alert;
+      const index = alert.conditions.findIndex((condition) => condition.valueType === "value" && Number.isFinite(condition.value));
+      if (index < 0) return alert;
+      return {
+        ...alert,
+        conditions: alert.conditions.map((condition, i) => i === index ? { ...condition, value: price } : condition),
+      };
+    }));
+  }, []);
+
+  const handleDeleteAlert = useCallback((alertId: string) => {
+    setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    setAlertDialogState((curr) =>
+      curr.alert?.id === alertId ? { open: false, mode: "create", alert: null } : curr,
+    );
+    chartHistoryActionsRef.current?.showToast?.("Alert deleted");
+  }, []);
+
+  const handleTogglePauseAlert = useCallback((alertId: string) => {
+    setAlerts((prev) =>
+      prev.map((a) => {
+        if (a.id !== alertId) return a;
+        const nextStatus = a.status === "active" ? "paused" : "active";
+        return { ...a, status: nextStatus };
+      }),
+    );
+  }, []);
+
+  const handleDrawingsSnapshotChange = useCallback(
+    (drawings: readonly DrawingObject[], selId: string | null) => {
+      setDrawingsSnapshot(drawings);
+      setSelectedDrawingId(selId);
+    },
+    [],
+  );
+
+  const handleCreateDrawingGroup = useCallback(() => {
+    setDrawingGroups((prev) => [
+      ...prev,
+      {
+        id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: `Group ${prev.length + 1}`,
+        hidden: false,
+        locked: false,
+        collapsed: false,
+      },
+    ]);
+  }, []);
+
+  const handleRenameDrawingGroup = useCallback((groupId: string, name: string) => {
+    setDrawingGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, name } : g)),
+    );
+  }, []);
+
+  const handleToggleGroupCollapsed = useCallback((groupId: string) => {
+    setDrawingGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, collapsed: !g.collapsed } : g)),
+    );
+  }, []);
+
+  const handleToggleGroupHidden = useCallback(
+    (groupId: string) => {
+      const target = drawingGroups.find((g) => g.id === groupId);
+      if (!target) return;
+      const nextHidden = !target.hidden;
+      setDrawingGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, hidden: nextHidden } : g)),
+      );
+      for (const d of drawingsSnapshot) {
+        if (d.groupId === groupId) {
+          chartHistoryActionsRef.current?.updateDrawing?.(d.id, { hidden: nextHidden });
+        }
+      }
+    },
+    [drawingGroups, drawingsSnapshot],
+  );
+
+  const handleToggleGroupLocked = useCallback(
+    (groupId: string) => {
+      const target = drawingGroups.find((g) => g.id === groupId);
+      if (!target) return;
+      const nextLocked = !target.locked;
+      setDrawingGroups((prev) =>
+        prev.map((g) => (g.id === groupId ? { ...g, locked: nextLocked } : g)),
+      );
+      for (const d of drawingsSnapshot) {
+        if (d.groupId === groupId) {
+          chartHistoryActionsRef.current?.updateDrawing?.(d.id, { locked: nextLocked });
+        }
+      }
+    },
+    [drawingGroups, drawingsSnapshot],
+  );
+
+  const handleDeleteDrawingGroup = useCallback(
+    (groupId: string) => {
+      for (const d of drawingsSnapshot) {
+        if (d.groupId === groupId) {
+          chartHistoryActionsRef.current?.updateDrawing?.(d.id, { groupId: null });
+        }
+      }
+      setDrawingGroups((prev) => prev.filter((g) => g.id !== groupId));
+    },
+    [drawingsSnapshot],
+  );
+
+  const objectTreeIndicators: ObjectTreeIndicatorItem[] = useMemo(() => {
+    const items: ObjectTreeIndicatorItem[] = [];
+    if (overlayVisibility.vwapKeyLevels) {
+      items.push({
+        id: "vwapKeyLevels",
+        label: "VWAP Key Levels",
+        kind: "orderflow",
+        hidden: indicatorHiddenState.hiddenOrderflowLayers.has("vwapKeyLevels"),
+        color: "#f59e0b",
+      });
+    }
+    if (showVolume) {
+      items.push({
+        id: "volume",
+        label: "Vol",
+        kind: "volume",
+        hidden: indicatorHiddenState.volumeHidden,
+        color: "#26a69a",
+      });
+    }
+    if (overlayVisibility.vrvp) {
+      items.push({
+        id: "vrvp",
+        label: "Session Volume Profile",
+        kind: "orderflow",
+        hidden: indicatorHiddenState.hiddenOrderflowLayers.has("vrvp"),
+        color: "#38bdf8",
+      });
+    }
+    if (overlayVisibility.footprint) {
+      items.push({
+        id: "footprint",
+        label: "Footprint Bid/Ask",
+        kind: "orderflow",
+        hidden: indicatorHiddenState.hiddenOrderflowLayers.has("footprint"),
+        color: "#34d399",
+      });
+    }
+    if (overlayVisibility.tpo) {
+      items.push({
+        id: "tpo",
+        label: "TPO Market Profile",
+        kind: "orderflow",
+        hidden: indicatorHiddenState.hiddenOrderflowLayers.has("tpo"),
+        color: "#f59e0b",
+      });
+    }
+    if (overlayVisibility.marketStructure) {
+      items.push({
+        id: "marketStructure",
+        label: "Market Structure",
+        kind: "orderflow",
+        hidden: indicatorHiddenState.hiddenOrderflowLayers.has("marketStructure"),
+        color: "#089981",
+      });
+    }
+    if (overlayVisibility.tradingSessions) {
+      items.push({
+        id: "tradingSessions",
+        label: "Trading Sessions",
+        kind: "orderflow",
+        hidden: indicatorHiddenState.hiddenOrderflowLayers.has("tradingSessions"),
+        color: "#60a5fa",
+      });
+    }
+    for (const st of activeStudies) {
+      items.push({
+        id: st.id,
+        label: st.label,
+        kind: "study",
+        hidden: indicatorHiddenState.hiddenStudyIds.has(st.id),
+        color: studyConfigs[st.id]?.color ?? "#2962ff",
+      });
+    }
+    return items;
+  }, [overlayVisibility, showVolume, activeStudies, studyConfigs, indicatorHiddenState]);
+
+  const activeAlertSourceLabels = useMemo(
+    () => objectTreeIndicators.map((it) => it.label),
+    [objectTreeIndicators],
+  );
+
+  const statusBarNode = (
+    <StatusBar
+      transportKind={transport.kind}
+      bootConfig={bootConfig}
+      bookState={bookState}
+      provenanceTier={provenanceTier}
+      stateRev={stateRev}
+      droppedTotal={droppedTotal}
+      showProvenance={showProvenanceOverlay}
+      activeRange={activeRange}
+      onSelectRange={setActiveRange}
+      autoScale={autoScale}
+      onToggleAutoScale={() => setAutoScale((v) => !v)}
+      logScale={logScale}
+      onToggleLogScale={() => setLogScale((v) => !v)}
+    />
+  );
+
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--app-chrome-bg,#131722)] text-[#d1d4dc]">
+    <div
+      className={`flex h-screen w-screen flex-col overflow-hidden bg-[var(--app-chrome-bg,#131722)] text-[#d1d4dc] ${isResizingRightDrawer ? "select-none cursor-col-resize" : ""}`}
+    >
       <ChromeToolbar
         symbol={symbol}
         timeframe={timeframe}
@@ -1125,7 +1605,7 @@ export function App({ transport: providedTransport }: AppProps) {
         onAddTab={handleAddTab}
         onCloseTab={handleCloseTab}
         alertsCount={alertsCount}
-        onAddAlert={() => chartHistoryActionsRef.current?.addAlert?.()}
+        onAddAlert={() => handleRequestCreateAlert()}
         onTakeSnapshot={() => chartHistoryActionsRef.current?.takeSnapshot?.()}
         onOpenProvenance={() => {
           setLayoutMode("focus");
@@ -1196,7 +1676,7 @@ export function App({ transport: providedTransport }: AppProps) {
           setSymbolSearchOpen(true);
         }}
         appAppearance={appAppearance}
-        onAppAppearanceChange={setAppAppearance}
+        onAppAppearanceChange={handleAppAppearanceChange}
         providerConfigs={providerConfigs}
         onProviderConfigsChange={handleProviderConfigsChange}
         settingsInitialTab={settingsInitialTab}
@@ -1230,11 +1710,12 @@ export function App({ transport: providedTransport }: AppProps) {
               onClearDrawings={() => chartHistoryActionsRef.current?.clear()}
             />
 
-            <div
-              style={{ backgroundColor: chartSettings.canvas.backgroundColor }}
-              className="relative min-w-0 flex-1 overflow-hidden"
-            >
-              <ChartPanel
+            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              <div
+                style={{ backgroundColor: chartSettings.canvas.backgroundColor }}
+                className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
+              >
+                <ChartPanel
                 transport={transport}
                 symbol={symbol}
                 timeframe={timeframe}
@@ -1277,10 +1758,20 @@ export function App({ transport: providedTransport }: AppProps) {
                 onClearAllStudies={handleClearStudies}
                 onOpenObjectTree={() => {
                   setLayoutMode("focus");
-                  setRightTab("studies");
+                  setRightTab("object_tree");
+                  setObjectTreeSubTab("tree");
                 }}
                 activeOrders={account.orders}
+                alerts={alerts}
+                onRequestCreateAlert={handleRequestCreateAlert}
+                onEditAlert={handleOpenEditAlert}
+                onDeleteAlert={handleDeleteAlert}
+                onMoveAlert={handleMoveAlert}
                 onAlertsCountChange={setAlertsCount}
+                onDrawingsSnapshotChange={handleDrawingsSnapshotChange}
+                onIndicatorHiddenStateChange={setIndicatorHiddenState}
+                dataWindowActive={rightTab === "object_tree" && objectTreeSubTab === "data"}
+                onDataWindowSnapshot={setDataWindowSnapshot}
                 overlayVisibility={overlayVisibility}
                 onToggleOverlayVisibility={(key) =>
                   setOverlayVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -1288,12 +1779,45 @@ export function App({ transport: providedTransport }: AppProps) {
                 showVolume={showVolume}
                 onShowVolumeChange={setShowVolume}
                 dataSource={dataSource}
+                marketStreamReady={marketStreamReady}
                 onSeriesUpdated={handleSeriesUpdated}
               />
+              </div>
+
+              {statusBarNode}
             </div>
 
             {rightTab !== null && (
-              <div className="flex w-[312px] shrink-0 flex-col border-l border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)]">
+              <div
+                style={{ width: `${rightDrawerWidth}px` }}
+                className="relative flex shrink-0 flex-col border-l border-[var(--app-border,#2a2e39)] bg-[var(--app-chrome-bg,#131722)]"
+              >
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize side panel"
+                  aria-valuemin={MIN_RIGHT_DRAWER_WIDTH}
+                  aria-valuemax={MAX_RIGHT_DRAWER_WIDTH}
+                  aria-valuenow={rightDrawerWidth}
+                  tabIndex={0}
+                  title="Drag to resize panel (double-click to reset)"
+                  onPointerDown={handleRightResizePointerDown}
+                  onPointerMove={handleRightResizePointerMove}
+                  onPointerUp={handleRightResizePointerUp}
+                  onPointerCancel={handleRightResizePointerUp}
+                  onDoubleClick={() => setRightDrawerWidth(DEFAULT_RIGHT_DRAWER_WIDTH)}
+                  onKeyDown={handleRightResizeKeyDown}
+                  className="group/resize absolute inset-y-0 -left-[3px] z-30 flex w-[6px] cursor-col-resize items-stretch justify-center focus:outline-none"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-full w-[2px] transition-colors ${
+                      isResizingRightDrawer
+                        ? "bg-[#2962ff]"
+                        : "bg-transparent group-hover/resize:bg-[#2962ff]/80 group-focus-visible/resize:bg-[#2962ff]"
+                    }`}
+                  />
+                </div>
                 {rightTab === "watchlist" && (
                   <WatchlistPanel
                     items={watchlistItems}
@@ -1313,12 +1837,114 @@ export function App({ transport: providedTransport }: AppProps) {
                     onCollapse={() => setRightTab(null)}
                   />
                 )}
+                {rightTab === "alerts" && (
+                  <AlertsPanel
+                    activeSymbol={symbol}
+                    alerts={alerts}
+                    logs={alertLogs}
+                    onCreateAlert={() => handleRequestCreateAlert()}
+                    onEditAlert={handleOpenEditAlert}
+                    onTogglePauseAlert={handleTogglePauseAlert}
+                    onDeleteAlert={handleDeleteAlert}
+                    onClearLogs={() => setAlertLogs([])}
+                    onSelectSymbol={(sym) =>
+                      handleSelectSymbolWithProvider(sym, activeProviderId)
+                    }
+                    onCollapse={() => setRightTab(null)}
+                  />
+                )}
+                {rightTab === "object_tree" && (
+                  <ObjectTreePanel
+                    symbol={symbol}
+                    providerTag={getMarketProviderMeta(activeProviderId).shortTag}
+                    timeframe={timeframe}
+                    activeSubTab={objectTreeSubTab}
+                    onSubTabChange={setObjectTreeSubTab}
+                    indicators={objectTreeIndicators}
+                    drawings={drawingsSnapshot}
+                    groups={drawingGroups}
+                    selectedDrawingId={selectedDrawingId}
+                    allDrawingsHidden={drawingsHidden}
+                    dataWindow={dataWindowSnapshot}
+                    onToggleAllDrawingsHidden={() => setDrawingsHidden((v) => !v)}
+                    onCreateGroup={handleCreateDrawingGroup}
+                    onRenameGroup={handleRenameDrawingGroup}
+                    onToggleGroupCollapsed={handleToggleGroupCollapsed}
+                    onToggleGroupHidden={handleToggleGroupHidden}
+                    onToggleGroupLocked={handleToggleGroupLocked}
+                    onDeleteGroup={handleDeleteDrawingGroup}
+                    onToggleIndicatorHidden={(item) => {
+                      if (item.kind === "volume") {
+                        chartHistoryActionsRef.current?.toggleVolumeHidden?.();
+                      } else if (item.kind === "orderflow") {
+                        chartHistoryActionsRef.current?.toggleOrderflowHidden?.(
+                          item.id as keyof OverlayVisibility,
+                        );
+                      } else {
+                        chartHistoryActionsRef.current?.toggleStudyHidden?.(item.id);
+                      }
+                    }}
+                    onOpenIndicatorSettings={(item) => {
+                      if (item.kind === "volume") {
+                        chartHistoryActionsRef.current?.openVolumeSettings?.();
+                      } else if (item.kind === "orderflow") {
+                        chartHistoryActionsRef.current?.openOrderflowSettings?.(
+                          item.id as keyof OverlayVisibility,
+                        );
+                      } else {
+                        setEditingStudyId(item.id);
+                      }
+                    }}
+                    onRemoveIndicator={(item) => {
+                      if (item.kind === "volume") {
+                        setShowVolume(false);
+                      } else if (item.kind === "orderflow") {
+                        const key = item.id as keyof OverlayVisibility;
+                        setOverlayVisibility((prev) => ({ ...prev, [key]: false }));
+                      } else {
+                        handleRemoveStudy(item.id);
+                      }
+                    }}
+                    onSelectDrawing={(id) =>
+                      chartHistoryActionsRef.current?.selectDrawing?.(id)
+                    }
+                    onToggleDrawingHidden={(id) => {
+                      const d = drawingsSnapshot.find((item) => item.id === id);
+                      if (d) {
+                        chartHistoryActionsRef.current?.updateDrawing?.(id, {
+                          hidden: !d.hidden,
+                        });
+                      }
+                    }}
+                    onToggleDrawingLocked={(id) => {
+                      const d = drawingsSnapshot.find((item) => item.id === id);
+                      if (d) {
+                        chartHistoryActionsRef.current?.updateDrawing?.(id, {
+                          locked: !d.locked,
+                        });
+                      }
+                    }}
+                    onOpenDrawingSettings={(id) =>
+                      chartHistoryActionsRef.current?.openDrawingSettings?.(id)
+                    }
+                    onRemoveDrawing={(id) =>
+                      chartHistoryActionsRef.current?.deleteDrawing?.(id)
+                    }
+                    onAssignDrawingGroup={(drawingId, groupId) =>
+                      chartHistoryActionsRef.current?.updateDrawing?.(drawingId, { groupId })
+                    }
+                    onReorderDrawing={(drawingId, targetId) =>
+                      chartHistoryActionsRef.current?.reorderDrawing?.(drawingId, targetId)
+                    }
+                    onCollapse={() => setRightTab(null)}
+                  />
+                )}
                 {rightTab === "dom" && (
-                  <div className="flex h-full flex-col">
-                    <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a2e39] px-3">
+                  <div data-order-book-panel className="flex h-full flex-col">
+                    <div className="flex h-11 shrink-0 items-center justify-between border-b border-white/[0.06] px-3">
                       <div className="flex items-center gap-2">
                         <span className="text-[13px] font-semibold text-[#f0f3fa]">{symbol}</span>
-                        <span className="rounded bg-[#2a2e39] px-1.5 py-0.5 text-[10px] font-semibold text-[#9598a1]">
+                        <span className="rounded bg-white/[0.10] px-1.5 py-0.5 text-[10px] font-semibold text-[#9598a1]">
                           DOM
                         </span>
                       </div>
@@ -1326,7 +1952,7 @@ export function App({ transport: providedTransport }: AppProps) {
                         type="button"
                         aria-label="Close right drawer"
                         onClick={() => setRightTab(null)}
-                        className="flex h-6 w-6 items-center justify-center rounded text-[#787b86] hover:bg-[#2a2e39] hover:text-[#f0f3fa]"
+                        className="flex h-6 w-6 items-center justify-center rounded text-[#9ca3af] hover:bg-white/[0.06] hover:text-[#f0f3fa]"
                       >
                         <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
                           <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
@@ -1334,17 +1960,17 @@ export function App({ transport: providedTransport }: AppProps) {
                       </button>
                     </div>
                     <div className="shrink-0 px-3 pt-2.5 pb-2">
-                      <div className="grid grid-cols-2 rounded-lg bg-[#1e222d] p-0.5">
+                      <div className="grid grid-cols-2 rounded-lg bg-white/[0.04] p-0.5">
                         <button
                           type="button"
                           onClick={() => setRightTab("trade")}
-                          className="h-7 rounded-md text-[12px] font-medium text-[#787b86] transition-colors hover:text-[#d1d4dc]"
+                          className="h-7 rounded-md text-[12px] font-medium text-[#9ca3af] transition-colors hover:bg-white/[0.06] hover:text-[#f4f4f5] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/50"
                         >
                           Order
                         </button>
                         <button
                           type="button"
-                          className="h-7 rounded-md bg-[#2a2e39] text-[12px] font-medium text-[#f0f3fa] shadow-sm"
+                          className="h-7 rounded-md bg-white/[0.10] text-[12px] font-medium text-[#f4f4f5] shadow-sm"
                         >
                           DOM
                         </button>
@@ -1404,6 +2030,7 @@ export function App({ transport: providedTransport }: AppProps) {
               onSelectTab={handleToggleRightTab}
               studiesCount={activeStudies.length}
               openOrdersCount={account.orders.length}
+              alertsCount={alertsCount}
             />
           </div>
         ) : (
@@ -1456,10 +2083,20 @@ export function App({ transport: providedTransport }: AppProps) {
                   onClearAllStudies={handleClearStudies}
                   onOpenObjectTree={() => {
                     setLayoutMode("focus");
-                    setRightTab("studies");
+                    setRightTab("object_tree");
+                    setObjectTreeSubTab("tree");
                   }}
                   activeOrders={account.orders}
+                  alerts={alerts}
+                  onRequestCreateAlert={handleRequestCreateAlert}
+                  onEditAlert={handleOpenEditAlert}
+                  onDeleteAlert={handleDeleteAlert}
+                  onMoveAlert={handleMoveAlert}
                   onAlertsCountChange={setAlertsCount}
+                  onDrawingsSnapshotChange={handleDrawingsSnapshotChange}
+                  onIndicatorHiddenStateChange={setIndicatorHiddenState}
+                  dataWindowActive={false}
+                  onDataWindowSnapshot={setDataWindowSnapshot}
                   overlayVisibility={overlayVisibility}
                   onToggleOverlayVisibility={(key) =>
                     setOverlayVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -1467,6 +2104,7 @@ export function App({ transport: providedTransport }: AppProps) {
                   showVolume={showVolume}
                   onShowVolumeChange={setShowVolume}
                   dataSource={dataSource}
+                  marketStreamReady={marketStreamReady}
                   onSeriesUpdated={handleSeriesUpdated}
                 />
               ),
@@ -1585,21 +2223,22 @@ export function App({ transport: providedTransport }: AppProps) {
         onConfigureProvider={(pid) => openSettingsAtTab("providers", pid)}
       />
 
-      <StatusBar
-        transportKind={transport.kind}
-        bootConfig={bootConfig}
-        bookState={bookState}
-        provenanceTier={provenanceTier}
-        stateRev={stateRev}
-        droppedTotal={droppedTotal}
-        showProvenance={showProvenanceOverlay}
-        activeRange={activeRange}
-        onSelectRange={setActiveRange}
-        autoScale={autoScale}
-        onToggleAutoScale={() => setAutoScale((v) => !v)}
-        logScale={logScale}
-        onToggleLogScale={() => setLogScale((v) => !v)}
+      <AlertDialog
+        open={alertDialogState.open}
+        mode={alertDialogState.mode}
+        initialAlert={alertDialogState.alert}
+        availableSymbols={watchlistItems.map((it) => it.symbol)}
+        availableSources={activeAlertSourceLabels}
+        decimals={symbolMeta.decimals}
+        onOpenChange={(open) => {
+          if (!open) setAlertDialogState((curr) => ({ ...curr, open: false }));
+        }}
+        onSave={handleSaveAlert}
+        onDelete={handleDeleteAlert}
       />
+
+      {layoutMode !== "focus" && statusBarNode}
+
     </div>
   );
 }

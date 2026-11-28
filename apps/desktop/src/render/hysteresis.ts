@@ -8,6 +8,7 @@ export const TRIM_TARGET_BARS = 5_000;
 export function applyBarHysteresis<T extends { time: number }>(
   bars: T[],
   incoming: T,
+  preserveHistory = false,
 ): { trimmed: boolean; bars: T[] } {
   const last = bars[bars.length - 1];
   if (last && last.time === incoming.time) {
@@ -15,7 +16,7 @@ export function applyBarHysteresis<T extends { time: number }>(
     return { trimmed: false, bars };
   }
   bars.push(incoming);
-  if (bars.length > MAX_ACTIVE_BARS) {
+  if (!preserveHistory && bars.length > MAX_ACTIVE_BARS) {
     const start = bars.length - TRIM_TARGET_BARS;
     return { trimmed: true, bars: bars.slice(start) };
   }

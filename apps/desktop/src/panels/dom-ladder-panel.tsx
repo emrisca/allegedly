@@ -66,20 +66,21 @@ export function DomLadderPanel({
         canvas.style.height = `${h}px`;
       }
 
+      const light = document.documentElement.dataset.theme === "light";
       ctx.save();
       ctx.scale(dpr, dpr);
-      ctx.fillStyle = "#101217";
+      ctx.fillStyle = light ? "#ffffff" : "#12141a";
       ctx.fillRect(0, 0, w, h);
 
       // Header bar
-      ctx.fillStyle = "#161922";
+      ctx.fillStyle = light ? "#f1f3f7" : "#16181f";
       ctx.fillRect(0, 0, w, 28);
-      ctx.fillStyle = "#232733";
+      ctx.fillStyle = light ? "#d4d4d8" : "#292b32";
       ctx.fillRect(0, 27, w, 1);
       ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
-      ctx.fillStyle = "#e6e8ee";
+      ctx.fillStyle = light ? "#27272a" : "#e6e8ee";
       ctx.fillText(`DOM · ${symbol}`, 10, 18);
-      ctx.fillStyle = "#868c9b";
+      ctx.fillStyle = light ? "#52525b" : "#9ca3af";
       ctx.fillText("SIZE", w - 64, 18);
 
       const rowH = compactRef.current ? 17 : 22;
@@ -100,15 +101,15 @@ export function DomLadderPanel({
         const barW = Number((lvl.qtyE9 * BigInt(Math.floor(w - 20))) / maxQty);
         ctx.fillStyle = "rgba(242, 54, 69, 0.16)";
         ctx.fillRect(w - 10 - barW, y, barW, rowH - 2);
-        ctx.fillStyle = "#f87171";
+        ctx.fillStyle = light ? "#b42332" : "#f87171";
         ctx.fillText(formatFixedE9(lvl.priceE9, 2), 10, y + 12);
-        ctx.fillStyle = "#cfd4e0";
+        ctx.fillStyle = light ? "#27272a" : "#e4e4e7";
         ctx.fillText(formatFixedE9(lvl.qtyE9, 3), w - 72, y + 12);
         y += rowH;
       }
 
       // Spread divider
-      ctx.fillStyle = "#232733";
+      ctx.fillStyle = light ? "#d4d4d8" : "#292b32";
       ctx.fillRect(8, y + 2, w - 16, 1);
       y += 8;
 
@@ -117,21 +118,21 @@ export function DomLadderPanel({
         const barW = Number((lvl.qtyE9 * BigInt(Math.floor(w - 20))) / maxQty);
         ctx.fillStyle = "rgba(8, 153, 129, 0.18)";
         ctx.fillRect(w - 10 - barW, y, barW, rowH - 2);
-        ctx.fillStyle = "#34d399";
+        ctx.fillStyle = light ? "#08705f" : "#34d399";
         ctx.fillText(formatFixedE9(lvl.priceE9, 2), 10, y + 12);
-        ctx.fillStyle = "#cfd4e0";
+        ctx.fillStyle = light ? "#27272a" : "#e4e4e7";
         ctx.fillText(formatFixedE9(lvl.qtyE9, 3), w - 72, y + 12);
         y += rowH;
       }
 
       // Time & Sales tape footer section
       y += 6;
-      ctx.fillStyle = "#161922";
+      ctx.fillStyle = light ? "#f1f3f7" : "#16181f";
       ctx.fillRect(0, y, w, 22);
-      ctx.fillStyle = "#232733";
+      ctx.fillStyle = light ? "#d4d4d8" : "#292b32";
       ctx.fillRect(0, y, w, 1);
       ctx.fillRect(0, y + 21, w, 1);
-      ctx.fillStyle = "#8c93a4";
+      ctx.fillStyle = light ? "#52525b" : "#9ca3af";
       ctx.fillText("TIME & SALES (ALG2)", 10, y + 15);
       y += 26;
 
@@ -141,11 +142,11 @@ export function DomLadderPanel({
         const t = tape[i];
         const { side } = unpackTradeFlags(t.flags);
         const isBuy = side === 1;
-        ctx.fillStyle = isBuy ? "#22c55e" : "#ef4444";
+        ctx.fillStyle = light ? (isBuy ? "#08705f" : "#b42332") : (isBuy ? "#22c55e" : "#ef4444");
         ctx.fillText(isBuy ? "BUY " : "SELL", 10, y + 11);
-        ctx.fillStyle = "#e6e8ee";
+        ctx.fillStyle = light ? "#27272a" : "#e6e8ee";
         ctx.fillText(formatFixedE9(t.priceE9, 2), 52, y + 11);
-        ctx.fillStyle = "#8c93a4";
+        ctx.fillStyle = light ? "#52525b" : "#9ca3af";
         ctx.fillText(formatFixedE9(t.qtyE9, 3), w - 72, y + 11);
         y += tapeRowH;
       }
@@ -182,6 +183,8 @@ export function DomLadderPanel({
       }
     });
 
+    const themeObserver = new MutationObserver(schedulePaint);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const ro = new ResizeObserver(schedulePaint);
     ro.observe(host);
     schedulePaint();
@@ -189,12 +192,13 @@ export function DomLadderPanel({
     return () => {
       unsub();
       ro.disconnect();
+      themeObserver.disconnect();
       if (rafId !== 0) cancelAnimationFrame(rafId);
     };
   }, [transport, symbol]);
 
   return (
-    <div ref={hostRef} className="h-full w-full overflow-hidden bg-[#131722]">
+    <div ref={hostRef} className="h-full w-full overflow-hidden bg-[var(--app-panel-bg,#12141a)]">
       <canvas
         ref={canvasRef}
         aria-label={`DOM Ladder and Time and Sales for ${symbol}`}

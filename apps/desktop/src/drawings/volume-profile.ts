@@ -1,18 +1,20 @@
 export type VpRowsLayout = "number_of_rows" | "ticks_per_row";
 export type VpVolumeMode = "up_down" | "total" | "delta";
 export type VpPlacement = "left" | "right";
+export type VpLineStyle = "solid" | "dashed" | "dotted";
 
 export interface VolumeProfileConfig {
-  // Inputs tab (exact TradingView FRVP layout from TW_VPST.png)
+  // Inputs tab (exact TradingView FRVP / AVP layout)
   rowsLayout: VpRowsLayout;
   rowSize: number;
   volumeMode: VpVolumeMode;
   valueAreaPercent: number;
   extendRight: boolean;
 
-  // Style tab (exact TradingView FRVP layout from TW_VPST1.png)
+  // Style tab (exact TradingView FRVP / AVP layout)
   showProfile: boolean;
   showValues: boolean;
+  valuesColor: string;
   widthPercent: number;
   placement: VpPlacement;
 
@@ -28,12 +30,15 @@ export interface VolumeProfileConfig {
   showVah: boolean;
   vahColor: string;
   vahWidth: 1 | 2 | 3 | 4;
+  vahLineStyle?: VpLineStyle;
   showVal: boolean;
   valColor: string;
   valWidth: 1 | 2 | 3 | 4;
+  valLineStyle?: VpLineStyle;
   showPoc: boolean;
   pocColor: string;
   pocWidth: 1 | 2 | 3 | 4;
+  pocLineStyle?: VpLineStyle;
 
   showDevelopingPoc: boolean;
   developingPocColor: string;
@@ -43,6 +48,8 @@ export interface VolumeProfileConfig {
   showHistogramBox: boolean;
   histogramBoxColor: string;
   histogramBoxOpacity: number;
+
+  showPriceScaleLabels: boolean;
 
   // AMT HVN / LVN highlighting (from 03Volume Profile.md)
   showHvnLvn: boolean;
@@ -61,6 +68,7 @@ export const DEFAULT_VOLUME_PROFILE_CONFIG: VolumeProfileConfig = {
 
   showProfile: true,
   showValues: false,
+  valuesColor: "#d1d4dc",
   widthPercent: 35,
   placement: "left",
 
@@ -76,12 +84,15 @@ export const DEFAULT_VOLUME_PROFILE_CONFIG: VolumeProfileConfig = {
   showVah: true,
   vahColor: "#ffffff",
   vahWidth: 2,
+  vahLineStyle: "solid",
   showVal: true,
   valColor: "#ffffff",
   valWidth: 2,
+  valLineStyle: "solid",
   showPoc: true,
   pocColor: "#f13545",
   pocWidth: 2,
+  pocLineStyle: "solid",
 
   showDevelopingPoc: false,
   developingPocColor: "#f13545",
@@ -92,15 +103,78 @@ export const DEFAULT_VOLUME_PROFILE_CONFIG: VolumeProfileConfig = {
   histogramBoxColor: "#162629",
   histogramBoxOpacity: 0.45,
 
+  showPriceScaleLabels: false,
+  showHvnLvn: false,
+};
+
+/**
+ * Default Anchored Volume Profile (AVP) settings — always lives on the right edge
+ * against the price scale with VAH/VAL/POC price-scale badges.
+ */
+export const DEFAULT_ANCHORED_VP_CONFIG: VolumeProfileConfig = {
+  rowsLayout: "number_of_rows",
+  rowSize: 500,
+  volumeMode: "up_down",
+  valueAreaPercent: 68,
+  extendRight: true,
+
+  showProfile: true,
+  showValues: false,
+  valuesColor: "#d1d4dc",
+  widthPercent: 25,
+  placement: "right",
+
+  upVolumeColor: "#787b86",
+  upVolumeOpacity: 0.45,
+  downVolumeColor: "#2a2e39",
+  downVolumeOpacity: 0.5,
+  valueAreaUpColor: "#5d606b",
+  valueAreaUpOpacity: 0.65,
+  valueAreaDownColor: "#14171f",
+  valueAreaDownOpacity: 0.85,
+
+  showVah: true,
+  vahColor: "#2962ff",
+  vahWidth: 1,
+  vahLineStyle: "solid",
+  showVal: true,
+  valColor: "#2962ff",
+  valWidth: 1,
+  valLineStyle: "solid",
+  showPoc: true,
+  pocColor: "#b22833",
+  pocWidth: 1,
+  pocLineStyle: "solid",
+
+  showDevelopingPoc: false,
+  developingPocColor: "#f13545",
+  showDevelopingVa: false,
+  developingVaColor: "#217b89",
+
+  showHistogramBox: false,
+  histogramBoxColor: "#162629",
+  histogramBoxOpacity: 0.25,
+
+  showPriceScaleLabels: true,
   showHvnLvn: false,
 };
 
 export const FRVP_DEFAULTS_STORAGE_KEY = "allegedly.frvp_defaults.v1";
+export const AVP_DEFAULTS_STORAGE_KEY = "allegedly.avp_defaults.v1";
 
 export function cloneVpConfig(cfg?: Partial<VolumeProfileConfig>): VolumeProfileConfig {
   return {
     ...DEFAULT_VOLUME_PROFILE_CONFIG,
     ...(cfg ?? {}),
+  };
+}
+
+export function cloneAvpConfig(cfg?: Partial<VolumeProfileConfig>): VolumeProfileConfig {
+  return {
+    ...DEFAULT_ANCHORED_VP_CONFIG,
+    ...(cfg ?? {}),
+    extendRight: true,
+    placement: cfg?.placement ?? "right",
   };
 }
 
@@ -122,6 +196,29 @@ export function saveStoredVpDefaults(cfg: VolumeProfileConfig): void {
   if (typeof window === "undefined" || !window.localStorage) return;
   try {
     window.localStorage.setItem(FRVP_DEFAULTS_STORAGE_KEY, JSON.stringify(cfg));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function loadStoredAvpDefaults(): VolumeProfileConfig {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return cloneAvpConfig();
+  }
+  try {
+    const raw = window.localStorage.getItem(AVP_DEFAULTS_STORAGE_KEY);
+    if (!raw) return cloneAvpConfig();
+    const parsed = JSON.parse(raw) as Partial<VolumeProfileConfig>;
+    return cloneAvpConfig(parsed);
+  } catch {
+    return cloneAvpConfig();
+  }
+}
+
+export function saveStoredAvpDefaults(cfg: VolumeProfileConfig): void {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(AVP_DEFAULTS_STORAGE_KEY, JSON.stringify(cloneAvpConfig(cfg)));
   } catch {
     // ignore storage errors
   }

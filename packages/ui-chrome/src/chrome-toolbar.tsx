@@ -1,3 +1,4 @@
+import { UiSelect } from "./primitives";
 import { useEffect, useState } from "react";
 import type { BootConfig } from "@allegedly/ipc-client";
 import { Button } from "@ui-sdk/react/button";
@@ -803,7 +804,7 @@ export function ChromeToolbar({
                           autoFocus
                           className="h-7 w-16 rounded-md border border-[#323642] bg-[#181b24] px-2 font-mono text-[12px] text-white focus:border-[#2962ff] focus:outline-none"
                         />
-                        <select
+                        <UiSelect
                           aria-label="Custom interval unit"
                           value={customTfUnit}
                           onChange={(e) => setCustomTfUnit(e.target.value as CustomIntervalUnit)}
@@ -816,7 +817,7 @@ export function ChromeToolbar({
                           <option value="D">Days</option>
                           <option value="W">Weeks</option>
                           <option value="M">Months</option>
-                        </select>
+                        </UiSelect>
                       </div>
                       <div className="flex items-center justify-end gap-1.5">
                         <button

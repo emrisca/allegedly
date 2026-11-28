@@ -423,13 +423,13 @@ export function IndicatorsDialog({
   };
 
   const sidebarTabCls =
-    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-[#b8becd] transition-colors hover:bg-[#1e222d] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff] data-selected:bg-[#2b2f3a] data-selected:font-medium data-selected:text-[#f4f6fa]";
+    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-[#b8becd] transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50 data-selected:bg-[#2b2f3a] data-selected:font-medium data-selected:text-[#f4f6fa]";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
 
-      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(580px,84vh)] w-[min(840px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
+      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(580px,84vh)] w-[min(840px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[10px] border border-white/[0.10] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
         {/* Header */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#23262f] px-5">
           <div>
@@ -443,7 +443,7 @@ export function IndicatorsDialog({
           </div>
           <DialogClose
             aria-label="Close indicators dialog"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9aa1b2] hover:bg-[#23262f] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9aa1b2] hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
           >
             <svg
               aria-hidden="true"
@@ -492,7 +492,7 @@ export function IndicatorsDialog({
                 type="button"
                 aria-label="Clear indicator search"
                 onClick={() => setQuery("")}
-                className="rounded px-1 text-xs text-[#7d8496] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                className="rounded px-1 text-xs text-[#7d8496] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
               >
                 ×
               </button>
@@ -609,7 +609,7 @@ export function IndicatorsDialog({
                         return (
                           <li
                             key={entry.id}
-                            className="group grid grid-cols-[1fr_110px_100px] items-center px-5 py-2 text-[13px] transition-colors hover:bg-[#1e222d]"
+                            className="group grid grid-cols-[1fr_110px_100px] items-center px-5 py-2 text-[13px] transition-colors hover:bg-white/[0.06]"
                           >
                             <div className="flex min-w-0 items-center gap-2.5 pr-2">
                               <button
@@ -623,8 +623,8 @@ export function IndicatorsDialog({
                                 onClick={() => toggleFavorite(entry.id)}
                                 className={
                                   isFav
-                                    ? "shrink-0 rounded p-0.5 text-[#f1f3f8] hover:text-amber-300 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
-                                    : "shrink-0 rounded p-0.5 text-[#5c6374] opacity-75 hover:text-[#e6e8ee] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                                    ? "shrink-0 rounded p-0.5 text-[#f1f3f8] hover:text-amber-300 focus-visible:outline-2 focus-visible:outline-white/50"
+                                    : "shrink-0 rounded p-0.5 text-[#5c6374] opacity-75 hover:text-[#e6e8ee] group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-white/50"
                                 }
                               >
                                 <StarIcon filled={isFav} />
@@ -633,7 +633,7 @@ export function IndicatorsDialog({
                               <button
                                 type="button"
                                 onClick={() => handleActivateEntry(entry)}
-                                className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                                className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus-visible:outline-2 focus-visible:outline-white/50"
                               >
                                 <span
                                   aria-hidden="true"
@@ -661,7 +661,7 @@ export function IndicatorsDialog({
                                 <button
                                   type="button"
                                   onClick={() => handleActivateEntry(entry)}
-                                  className="rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[10px] font-medium text-sky-300 ring-1 ring-sky-500/40 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-500/40 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                                  className="rounded bg-sky-500/20 px-2 py-0.5 font-mono text-[10px] font-medium text-sky-300 ring-1 ring-sky-500/40 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-500/40 focus-visible:outline-2 focus-visible:outline-white/50"
                                 >
                                   Active
                                 </button>
@@ -701,7 +701,7 @@ export function IndicatorsDialog({
                     return (
                       <li
                         key={s.id}
-                        className="grid grid-cols-[1fr_110px_130px] items-center px-5 py-2 text-[13px] hover:bg-[#1e222d]"
+                        className="grid grid-cols-[1fr_110px_130px] items-center px-5 py-2 text-[13px] hover:bg-white/[0.06]"
                       >
                         <div className="flex min-w-0 items-center gap-2.5 pr-2">
                           <button
@@ -728,7 +728,7 @@ export function IndicatorsDialog({
                                 ? onRemoveStudy(s.id)
                                 : onRunLuauStudy(s.script, s.id, s.name)
                             }
-                            className="truncate text-left text-[#d4d8e2] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                            className="truncate text-left text-[#d4d8e2] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
                           >
                             {s.name}
                           </button>
@@ -893,7 +893,7 @@ export function IndicatorsDialog({
               <button
                 type="button"
                 onClick={onClearStudies}
-                className="text-[11px] text-rose-300 hover:text-rose-200 focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+                className="text-[11px] text-rose-300 hover:text-rose-200 focus-visible:outline-2 focus-visible:outline-white/50"
               >
                 Clear studies ({activeStudies.length})
               </button>
@@ -901,7 +901,7 @@ export function IndicatorsDialog({
           </div>
           <Button
             onClick={() => onOpenChange(false)}
-            className="h-7 rounded-md bg-[#2b2f3a] px-3.5 text-xs font-medium text-[#f1f3f8] hover:bg-[#383d4b] focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+            className="h-7 rounded-md bg-[#2b2f3a] px-3.5 text-xs font-medium text-[#f1f3f8] hover:bg-[#383d4b] focus-visible:outline-2 focus-visible:outline-white/50"
           >
             Done
           </Button>

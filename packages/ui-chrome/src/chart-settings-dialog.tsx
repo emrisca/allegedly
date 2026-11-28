@@ -10,12 +10,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@ui-sdk/react/dialog";
-import { SettingsCogIcon, UiSettingRow, UiSwitch } from "./primitives";
+import { SettingsCogIcon, UiSettingRow, UiSwitch, UiSelect } from "./primitives";
 import { ColorPickerButton } from "./color-picker";
 import {
   APP_THEME_PRESETS,
   cloneAppAppearance,
   DEFAULT_APP_APPEARANCE,
+  getAppAppearanceForMode,
   type AppAppearanceSettings,
 } from "./app-appearance";
 import {
@@ -72,13 +73,13 @@ export interface ChartSettingsDialogProps {
 }
 
 const SELECT_CLS =
-  "h-8 rounded-md border border-[#2c303a] bg-[#181a20] px-2.5 text-xs text-[#e6e8ee] outline-none focus:border-sky-500";
+  "h-[30px] rounded-[6px] border border-white/[0.09] bg-[#0d0f14] px-2.5 text-xs text-[#f4f4f5] outline-none focus:border-white/30";
 const INPUT_NUM_CLS =
-  "h-8 w-24 rounded-md border border-[#2c303a] bg-[#181a20] px-2.5 font-mono text-xs tabular-nums text-[#e6e8ee] outline-none focus:border-sky-500";
+  "h-[30px] w-24 rounded-[6px] border border-white/[0.09] bg-[#0d0f14] px-2.5 font-mono text-xs tabular-nums text-[#f4f4f5] outline-none focus:border-white/30";
 const CHECKBOX_CLS =
   "h-4 w-4 cursor-pointer rounded border border-[#3c414f] bg-[#181a20] accent-[#f1f3f8]";
 const SECTION_HDR_CLS =
-  "mb-2.5 mt-4 first:mt-0 text-[10px] font-semibold uppercase tracking-wider text-[#787e8d]";
+  "pt-3 first:pt-0 text-[12px] font-medium text-[#9ca3af]";
 
 function ColorSwatch({
   value,
@@ -108,7 +109,7 @@ function VisibilitySelect({
   onChange: (next: VisibilityMode) => void;
 }) {
   return (
-    <select
+    <UiSelect
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as VisibilityMode)}
@@ -117,7 +118,7 @@ function VisibilitySelect({
       <option value="hover">Visible on mouse over</option>
       <option value="always">Always visible</option>
       <option value="never">Always invisible</option>
-    </select>
+    </UiSelect>
   );
 }
 
@@ -198,14 +199,7 @@ export function ChartSettingsDialog({
     onOpenChange(false);
   };
 
-  const updateAppearance = (patch: Partial<AppAppearanceSettings>) => {
-    if (!onAppAppearanceChange) return;
-    onAppAppearanceChange({
-      ...appAppearance,
-      ...patch,
-      preset: patch.preset ?? "custom",
-    });
-  };
+
 
   const getDraftForProvider = (id: MarketProviderId): StoredProviderConfig => {
     return (
@@ -271,23 +265,23 @@ export function ChartSettingsDialog({
   };
 
   const tabCls =
-    "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-[#9598a1] hover:bg-[#2a2e39]/60 hover:text-[#f0f3fa] data-selected:bg-[#2962ff]/18 data-selected:font-medium data-selected:text-[#ffffff] focus-visible:outline-2 focus-visible:outline-[#2962ff]";
+    "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] text-[#9598a1] hover:bg-white/[0.06] hover:text-[#f0f3fa] data-selected:bg-white/[0.10] data-selected:font-medium data-selected:text-[#ffffff] focus-visible:outline-2 focus-visible:outline-white/50";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
         aria-label="Settings"
         title="Chart & Terminal Settings"
-        className="flex h-7 w-7 items-center justify-center rounded-md text-[#959baa] hover:bg-[#1c1f28] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+        className="flex h-7 w-7 items-center justify-center rounded-md text-[#959baa] hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
       >
         <SettingsCogIcon className="h-[17px] w-[17px]" />
       </DialogTrigger>
 
-      <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
+      <DialogBackdrop className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px]" />
 
-      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(620px,86vh)] w-[min(720px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.72)]">
+      <DialogContent className="fixed left-1/2 top-1/2 z-50 flex h-[min(620px,86vh)] w-[min(720px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[10px] border border-white/[0.10] bg-[var(--app-surface-bg,#1e222d)] text-[#d1d4dc] shadow-[0_20px_50px_rgba(0,0,0,0.65)]">
         {/* Header */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#23262f] px-5">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] px-5">
           <div>
             <DialogTitle className="text-[17px] font-semibold tracking-tight text-[#f1f3f8]">
               Settings
@@ -298,7 +292,7 @@ export function ChartSettingsDialog({
           </div>
           <DialogClose
             aria-label="Done"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9aa1b2] hover:bg-[#23262f] hover:text-white focus-visible:outline-2 focus-visible:outline-sky-400"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#9aa1b2] hover:bg-white/[0.06] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
           >
             <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
               <path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" strokeLinecap="round" />
@@ -395,7 +389,7 @@ export function ChartSettingsDialog({
           </TabsList>
 
           {/* Right Form Container */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 text-[13px]">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6 text-[13px]">
             {/* 1. SYMBOL */}
             <TabsPanel value="symbol" className="space-y-3">
               <div className={SECTION_HDR_CLS}>Candles</div>
@@ -512,7 +506,7 @@ export function ChartSettingsDialog({
                 <label htmlFor="cfg-precision" className="text-[#c8cdd9]">
                   Precision
                 </label>
-                <select
+                <UiSelect
                   id="cfg-precision"
                   value={settings.symbol.precision}
                   onChange={(e) =>
@@ -524,14 +518,14 @@ export function ChartSettingsDialog({
                   <option value="1/100">1/100</option>
                   <option value="1/1000">1/1000</option>
                   <option value="1/10000">1/10000</option>
-                </select>
+                </UiSelect>
               </div>
 
               <div className="grid grid-cols-[160px_1fr] items-center gap-2">
                 <label htmlFor="cfg-timezone" className="text-[#c8cdd9]">
                   Timezone
                 </label>
-                <select
+                <UiSelect
                   id="cfg-timezone"
                   value={settings.symbol.timezone}
                   onChange={(e) => update("symbol", { timezone: e.target.value })}
@@ -542,7 +536,7 @@ export function ChartSettingsDialog({
                       {tz.label}
                     </option>
                   ))}
-                </select>
+                </UiSelect>
               </div>
             </TabsPanel>
 
@@ -570,7 +564,7 @@ export function ChartSettingsDialog({
                   />
                   <span>Title</span>
                 </label>
-                <select
+                <UiSelect
                   aria-label="Status line title format"
                   value={settings.statusLine.titleMode}
                   onChange={(e) =>
@@ -581,7 +575,7 @@ export function ChartSettingsDialog({
                   <option value="symbol_and_name">Symbol and name</option>
                   <option value="symbol">Ticker only</option>
                   <option value="description">Description only</option>
-                </select>
+                </UiSelect>
               </div>
 
               <label className="flex items-center gap-2.5 text-[#d4d8e2]">
@@ -704,7 +698,7 @@ export function ChartSettingsDialog({
                       backgroundOpacity: Number.parseInt(e.target.value, 10) || 0,
                     })
                   }
-                  className="h-1.5 w-44 cursor-pointer accent-sky-400"
+                  className="h-1.5 w-44 cursor-pointer accent-[#e4e4e7]"
                 />
               </div>
             </TabsPanel>
@@ -760,7 +754,7 @@ export function ChartSettingsDialog({
                 <label htmlFor="cfg-scales-placement" className="text-[#c8cdd9]">
                   Scales placement
                 </label>
-                <select
+                <UiSelect
                   id="cfg-scales-placement"
                   value={settings.scales.scalesPlacement}
                   onChange={(e) =>
@@ -773,7 +767,7 @@ export function ChartSettingsDialog({
                   <option value="auto">Auto</option>
                   <option value="left">Left</option>
                   <option value="right">Right</option>
-                </select>
+                </UiSelect>
               </div>
 
               <div className={SECTION_HDR_CLS}>Price Labels &amp; Lines</div>
@@ -811,7 +805,7 @@ export function ChartSettingsDialog({
               <div className="grid grid-cols-[190px_1fr] items-start gap-2">
                 <span className="pt-1.5 text-[#c8cdd9]">Symbol</span>
                 <div className="space-y-1.5">
-                  <select
+                  <UiSelect
                     aria-label="Symbol price label mode"
                     value={settings.scales.symbolPriceLabel}
                     onChange={(e) =>
@@ -824,8 +818,8 @@ export function ChartSettingsDialog({
                     <option value="value_line">Value, line</option>
                     <option value="value">Value</option>
                     <option value="hidden">Hidden</option>
-                  </select>
-                  <select
+                  </UiSelect>
+                  <UiSelect
                     aria-label="Symbol price value mode"
                     value={settings.scales.symbolPriceMode}
                     onChange={(e) =>
@@ -837,13 +831,13 @@ export function ChartSettingsDialog({
                   >
                     <option value="according_to_scale">Value according to scale</option>
                     <option value="last_value">Last value</option>
-                  </select>
+                  </UiSelect>
                 </div>
               </div>
 
               <div className="grid grid-cols-[190px_1fr] items-center gap-2">
                 <span className="text-[#c8cdd9]">Indicators and financials</span>
-                <select
+                <UiSelect
                   aria-label="Indicators and financials price label"
                   value={settings.scales.indicatorsLabel}
                   onChange={(e) =>
@@ -855,12 +849,12 @@ export function ChartSettingsDialog({
                 >
                   <option value="value">Value</option>
                   <option value="hidden">Hidden</option>
-                </select>
+                </UiSelect>
               </div>
 
               <div className="grid grid-cols-[190px_1fr] items-center gap-2">
                 <span className="text-[#c8cdd9]">High and low</span>
-                <select
+                <UiSelect
                   aria-label="High and low price labels"
                   value={settings.scales.highAndLow}
                   onChange={(e) =>
@@ -871,13 +865,13 @@ export function ChartSettingsDialog({
                   <option value="hidden">Hidden</option>
                   <option value="value_line">Value, line</option>
                   <option value="value">Value</option>
-                </select>
+                </UiSelect>
               </div>
 
               <div className="grid grid-cols-[190px_1fr] items-center gap-2">
                 <span className="text-[#c8cdd9]">Bid and ask</span>
                 <div className="flex items-center gap-2">
-                  <select
+                  <UiSelect
                     aria-label="Bid and ask lines"
                     value={settings.scales.bidAndAsk}
                     onChange={(e) =>
@@ -887,7 +881,7 @@ export function ChartSettingsDialog({
                   >
                     <option value="hidden">Hidden</option>
                     <option value="lines_and_labels">Lines &amp; labels</option>
-                  </select>
+                  </UiSelect>
                   <ColorSwatch
                     label="Bid line color"
                     value={settings.scales.bidColor}
@@ -917,7 +911,7 @@ export function ChartSettingsDialog({
                 <label htmlFor="cfg-date-format" className="text-[#c8cdd9]">
                   Date format
                 </label>
-                <select
+                <UiSelect
                   id="cfg-date-format"
                   value={settings.scales.dateFormat}
                   onChange={(e) =>
@@ -929,7 +923,7 @@ export function ChartSettingsDialog({
                   <option value="yyyy-MM-dd">1997-09-29</option>
                   <option value="MM/dd/yyyy">09/29/1997</option>
                   <option value="dd MMM 'yy">29 Sep '97</option>
-                </select>
+                </UiSelect>
               </div>
             </TabsPanel>
 
@@ -940,7 +934,7 @@ export function ChartSettingsDialog({
               <div className="grid grid-cols-[175px_1fr] items-center gap-2">
                 <span className="text-[#c8cdd9]">Background</span>
                 <div className="flex items-center gap-2">
-                  <select
+                  <UiSelect
                     aria-label="Canvas background type"
                     value={settings.canvas.backgroundType}
                     onChange={(e) =>
@@ -952,7 +946,7 @@ export function ChartSettingsDialog({
                   >
                     <option value="solid">Solid</option>
                     <option value="gradient">Gradient</option>
-                  </select>
+                  </UiSelect>
                   <ColorSwatch
                     label="Canvas background color"
                     value={settings.canvas.backgroundColor}
@@ -1017,7 +1011,7 @@ export function ChartSettingsDialog({
                 <label htmlFor="cfg-watermark" className="text-[#c8cdd9]">
                   Watermark
                 </label>
-                <select
+                <UiSelect
                   id="cfg-watermark"
                   value={settings.canvas.watermark}
                   onChange={(e) =>
@@ -1028,7 +1022,7 @@ export function ChartSettingsDialog({
                   <option value="replay">Replay mode</option>
                   <option value="always">Always</option>
                   <option value="none">None</option>
-                </select>
+                </UiSelect>
               </div>
 
               <div className={SECTION_HDR_CLS}>Scales</div>
@@ -1041,7 +1035,7 @@ export function ChartSettingsDialog({
                     value={settings.canvas.scalesTextColor}
                     onChange={(scalesTextColor) => update("canvas", { scalesTextColor })}
                   />
-                  <select
+                  <UiSelect
                     aria-label="Scales font size"
                     value={settings.canvas.scalesFontSize}
                     onChange={(e) =>
@@ -1056,7 +1050,7 @@ export function ChartSettingsDialog({
                         {sz}
                       </option>
                     ))}
-                  </select>
+                  </UiSelect>
                 </div>
               </div>
 
@@ -1229,9 +1223,9 @@ export function ChartSettingsDialog({
                         executionSoundVolume: Number.parseInt(e.target.value, 10) || 0,
                       })
                     }
-                    className="h-1.5 w-48 cursor-pointer accent-sky-400 disabled:opacity-40"
+                    className="h-1.5 w-48 cursor-pointer accent-[#e4e4e7] disabled:opacity-40"
                   />
-                  <select
+                  <UiSelect
                     aria-label="Execution sound tone"
                     disabled={!settings.trading.executionSound}
                     value={settings.trading.executionSoundName}
@@ -1242,7 +1236,7 @@ export function ChartSettingsDialog({
                     <option value="Soft Chime">Soft Chime</option>
                     <option value="Tick Click">Tick Click</option>
                     <option value="Desk Ping">Desk Ping</option>
-                  </select>
+                  </UiSelect>
                 </div>
               </div>
 
@@ -1290,7 +1284,7 @@ export function ChartSettingsDialog({
 
                 <div className="grid grid-cols-[150px_1fr] items-center gap-2">
                   <span className="text-[#c8cdd9]">Trading controls</span>
-                  <select
+                  <UiSelect
                     aria-label="Trading controls visibility"
                     value={settings.trading.tradingControls}
                     onChange={(e) =>
@@ -1302,7 +1296,7 @@ export function ChartSettingsDialog({
                   >
                     <option value="hover">Visible on mouse over</option>
                     <option value="always">Always visible</option>
-                  </select>
+                  </UiSelect>
                 </div>
               </div>
 
@@ -1336,7 +1330,7 @@ export function ChartSettingsDialog({
               <div className="pl-6 space-y-2">
                 <div className="grid grid-cols-[150px_1fr] items-center gap-2">
                   <span className="text-[#c8cdd9]">Positions</span>
-                  <select
+                  <UiSelect
                     aria-label="Positions P&L unit"
                     value={settings.trading.pnlPositionsMode}
                     onChange={(e) =>
@@ -1349,11 +1343,11 @@ export function ChartSettingsDialog({
                     <option value="money">Money</option>
                     <option value="ticks">Ticks</option>
                     <option value="percent">Percent</option>
-                  </select>
+                  </UiSelect>
                 </div>
                 <div className="grid grid-cols-[150px_1fr] items-center gap-2">
                   <span className="text-[#c8cdd9]">Brackets</span>
-                  <select
+                  <UiSelect
                     aria-label="Brackets P&L unit"
                     value={settings.trading.pnlBracketsMode}
                     onChange={(e) =>
@@ -1366,7 +1360,7 @@ export function ChartSettingsDialog({
                     <option value="money">Money</option>
                     <option value="ticks">Ticks</option>
                     <option value="percent">Percent</option>
-                  </select>
+                  </UiSelect>
                 </div>
               </div>
 
@@ -1439,7 +1433,7 @@ export function ChartSettingsDialog({
                   />
                   <span>Ideas</span>
                 </label>
-                <select
+                <UiSelect
                   aria-label="Ideas filter"
                   disabled={!settings.events.ideas}
                   value={settings.events.ideasFilter}
@@ -1453,7 +1447,7 @@ export function ChartSettingsDialog({
                   <option value="all">All ideas</option>
                   <option value="following">Following</option>
                   <option value="mine">Mine</option>
-                </select>
+                </UiSelect>
               </div>
 
               <label className="flex items-center gap-2.5 text-[#d4d8e2]">
@@ -1499,34 +1493,33 @@ export function ChartSettingsDialog({
               </label>
             </TabsPanel>
 
-            {/* 7b. APPEARANCE (App shell/chrome outside the chart canvas) */}
+            {/* 7b. APPEARANCE (Single Theme: Dark / Light mode) */}
             <TabsPanel value="appearance" className="space-y-4">
               <div>
-                <div className={SECTION_HDR_CLS}>App Chrome Theme (Outside Chart)</div>
+                <div className={SECTION_HDR_CLS}>Appearance</div>
                 <p className="mb-3 text-[12px] leading-relaxed text-[#9598a1]">
-                  Customize the top bar, sidebars, watchlist, modals, and panels independently from the chart canvas.
+                  Switch between dark and light mode across the app workspace.
                 </p>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div role="radiogroup" aria-label="Theme mode" className="grid grid-cols-2 gap-2.5">
                   {APP_THEME_PRESETS.map((preset) => {
-                    const active = appAppearance.preset === preset.id;
+                    const active = (appAppearance.mode ?? appAppearance.preset) === preset.id;
                     return (
                       <button
                         key={preset.id}
                         type="button"
+                        role="radio"
+                        aria-checked={active}
                         onClick={() =>
-                          onAppAppearanceChange?.({
-                            preset: preset.id,
-                            ...preset.colors,
-                          })
+                          onAppAppearanceChange?.(getAppAppearanceForMode(preset.id))
                         }
                         className={
                           active
-                            ? "flex flex-col gap-2 rounded-lg border border-[#2962ff] bg-[#2962ff]/12 p-3 text-left transition-colors"
-                            : "flex flex-col gap-2 rounded-lg border border-[#2a2e39] bg-[#181a20] p-3 text-left transition-colors hover:border-[#3e4556]"
+                            ? "flex flex-col gap-2 rounded-lg border border-white/30 bg-white/[0.08] p-3 text-left transition-colors"
+                            : "flex flex-col gap-2 rounded-lg border border-white/[0.08] bg-[#16181f] p-3 text-left transition-colors hover:border-white/20"
                         }
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[12px] font-semibold text-[#f0f3fa]">
+                          <span className="text-[12px] font-medium text-[#f4f4f5]">
                             {preset.name}
                           </span>
                           <div className="flex items-center gap-1">
@@ -1538,90 +1531,12 @@ export function ChartSettingsDialog({
                               className="h-3.5 w-3.5 rounded-full border border-white/15"
                               style={{ backgroundColor: preset.colors.panelBg }}
                             />
-                            <span
-                              className="h-3.5 w-3.5 rounded-full border border-white/15"
-                              style={{ backgroundColor: preset.colors.accentColor }}
-                            />
                           </div>
                         </div>
-                        <span className="text-[11px] text-[#868993]">{preset.description}</span>
+                        <span className="text-[11px] text-[#8b8f9c]">{preset.description}</span>
                       </button>
                     );
                   })}
-                </div>
-              </div>
-
-              <div>
-                <div className={SECTION_HDR_CLS}>Custom Shell Colors</div>
-                <div className="space-y-2.5 rounded-lg border border-[#2a2e39] bg-[#181a20] p-3.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[12px] font-medium text-[#e6e8ee]">App Shell Background</div>
-                      <div className="text-[11px] text-[#787e8d]">Top bar, left rail, watchlist &amp; bottom bar</div>
-                    </div>
-                    <ColorSwatch
-                      label="App shell background color"
-                      value={appAppearance.chromeBg}
-                      onChange={(chromeBg) => updateAppearance({ chromeBg })}
-                    />
-                  </div>
-                  <div className="h-px bg-[#262a34]" />
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[12px] font-medium text-[#e6e8ee]">Secondary Panels &amp; Sidebars</div>
-                      <div className="text-[11px] text-[#787e8d]">Settings sidebar, inspector drawers &amp; cards</div>
-                    </div>
-                    <ColorSwatch
-                      label="Secondary panel background color"
-                      value={appAppearance.panelBg}
-                      onChange={(panelBg) => updateAppearance({ panelBg })}
-                    />
-                  </div>
-                  <div className="h-px bg-[#262a34]" />
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[12px] font-medium text-[#e6e8ee]">Modals &amp; Popovers</div>
-                      <div className="text-[11px] text-[#787e8d]">Symbol search, menus &amp; settings dialogs</div>
-                    </div>
-                    <ColorSwatch
-                      label="Modal and popover surface color"
-                      value={appAppearance.surfaceBg}
-                      onChange={(surfaceBg) => updateAppearance({ surfaceBg })}
-                    />
-                  </div>
-                  <div className="h-px bg-[#262a34]" />
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[12px] font-medium text-[#e6e8ee]">Borders &amp; Dividers</div>
-                      <div className="text-[11px] text-[#787e8d]">Hairline panel edges across the chrome</div>
-                    </div>
-                    <ColorSwatch
-                      label="App chrome border color"
-                      value={appAppearance.borderColor}
-                      onChange={(borderColor) => updateAppearance({ borderColor })}
-                    />
-                  </div>
-                  <div className="h-px bg-[#262a34]" />
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[12px] font-medium text-[#e6e8ee]">Accent Color</div>
-                      <div className="text-[11px] text-[#787e8d]">Active highlights, badges &amp; primary actions</div>
-                    </div>
-                    <ColorSwatch
-                      label="App accent color"
-                      value={appAppearance.accentColor}
-                      onChange={(accentColor) => updateAppearance({ accentColor })}
-                    />
-                  </div>
-                </div>
-                <div className="mt-2.5 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => onAppAppearanceChange?.(cloneAppAppearance(DEFAULT_APP_APPEARANCE))}
-                    className="rounded-md border border-[#323642] bg-[#181a20] px-3 py-1.5 text-[11px] font-medium text-[#d1d4dc] hover:bg-[#23262f] hover:text-white"
-                  >
-                    Reset App Appearance
-                  </button>
                 </div>
               </div>
             </TabsPanel>
@@ -1634,7 +1549,7 @@ export function ChartSettingsDialog({
                   {MARKET_DATA_PROVIDERS.filter((p) => p.category === "builtin").map((prov) => (
                     <div
                       key={prov.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-[#2a2e39] bg-[#181a20] px-3 py-2.5"
+                      className="flex items-center justify-between gap-3 rounded-[6px] border border-white/[0.08] bg-white/[0.02] px-3 py-2.5"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -1643,13 +1558,13 @@ export function ChartSettingsDialog({
                             style={{ backgroundColor: prov.badgeColor }}
                           />
                           <span className="text-[13px] font-medium text-[#f0f3fa]">{prov.name}</span>
-                          <span className="rounded bg-[#252a36] px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
+                          <span className="text-[10px] text-[#6b7280]">
                             {prov.shortTag}
                           </span>
                         </div>
                         <p className="mt-0.5 text-[11px] text-[#868993]">{prov.subscriptionNote}</p>
                       </div>
-                      <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
+                      <span className="shrink-0 text-[11px] font-medium text-emerald-400">
                         Free · Ready
                       </span>
                     </div>
@@ -1673,15 +1588,15 @@ export function ChartSettingsDialog({
                         key={prov.id}
                         className={
                           isOpen
-                            ? "rounded-lg border border-[#2962ff]/70 bg-[#181a20]"
-                            : "rounded-lg border border-[#2a2e39] bg-[#181a20]"
+                            ? "rounded-[6px] border border-white/[0.15] bg-white/[0.03]"
+                            : "rounded-[6px] border border-white/[0.08] bg-white/[0.02]"
                         }
                       >
                         <button
                           type="button"
                           onClick={() => setExpandedProvider(isOpen ? null : prov.id)}
                           aria-expanded={isOpen}
-                          className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+                          className="flex w-full items-center justify-between gap-2 rounded-[6px] px-3 py-2.5 text-left transition-colors hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/50"
                         >
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1690,7 +1605,7 @@ export function ChartSettingsDialog({
                                 style={{ backgroundColor: prov.badgeColor }}
                               />
                               <span className="text-[13px] font-medium text-[#f0f3fa]">{prov.name}</span>
-                              <span className="rounded bg-[#252a36] px-1.5 py-0.5 font-mono text-[10px] text-[#9aa1b2]">
+                              <span className="text-[10px] text-[#6b7280]">
                                 {prov.shortTag}
                               </span>
                               <span className="text-[10px] text-[#787e8d]">
@@ -1700,11 +1615,11 @@ export function ChartSettingsDialog({
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             {configured ? (
-                              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                              <span className="text-[10px] font-medium text-emerald-400">
                                 Configured
                               </span>
                             ) : (
-                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                              <span className="text-[10px] text-[#9ca3af]">
                                 Subscription required
                               </span>
                             )}
@@ -1713,7 +1628,7 @@ export function ChartSettingsDialog({
                         </button>
 
                         {isOpen && (
-                          <div className="space-y-2.5 border-t border-[#262a34] px-3 pb-3 pt-2.5">
+                          <div className="space-y-2.5 border-t border-white/[0.06] px-3 pb-3 pt-2.5">
                             <p className="text-[11px] leading-relaxed text-[#9598a1]">
                               {prov.subscriptionNote}
                             </p>
@@ -1730,7 +1645,7 @@ export function ChartSettingsDialog({
                                     placeholder={field.placeholder}
                                     value={String(draft[field.key] ?? "")}
                                     onChange={(e) => setDraftField(prov.id, field.key, e.target.value)}
-                                    className="h-8 w-full rounded-md border border-[#323642] bg-[#111318] px-2.5 font-mono text-[12px] text-[#f0f3fa] placeholder:text-[#5c6270] focus:border-[#2962ff] focus:outline-none"
+                                    className="h-[30px] w-full rounded-[6px] border border-white/[0.09] bg-[#0d0f14] px-2.5 font-mono text-[12px] text-[#f0f3fa] placeholder:text-[#5c6270] focus:border-white/30 focus:outline-none"
                                   />
                                 </label>
                               ))}
@@ -1752,7 +1667,7 @@ export function ChartSettingsDialog({
                                 <button
                                   type="button"
                                   onClick={() => handleSaveProvider(prov.id)}
-                                  className="h-7 rounded-md bg-[#2962ff] px-3 text-[11px] font-semibold text-white hover:bg-[#1e53e5]"
+                                  className="h-7 rounded-md bg-[#ededed] px-3 text-[11px] font-semibold text-[#0d0f12] hover:bg-white"
                                 >
                                   Save {prov.shortTag}
                                 </button>
@@ -1768,8 +1683,8 @@ export function ChartSettingsDialog({
             </TabsPanel>
 
             {/* 8. WORKSPACE DISPLAY (uses shadcn.io/ui-patterned UiSwitch over @ui-sdk/react) */}
-            <TabsPanel value="display" className="space-y-2.5">
-              <div className={SECTION_HDR_CLS}>Workspace Display</div>
+            <TabsPanel value="display" className="space-y-0">
+              <div className={`${SECTION_HDR_CLS} pb-2`}>Workspace Display</div>
               <UiSettingRow
                 labelId="compact-density-label"
                 label="Compact Orderflow Table Density"
@@ -1827,7 +1742,7 @@ export function ChartSettingsDialog({
                 setSaveAsOpen(false);
               }}
               aria-expanded={templateMenuOpen}
-              className="flex h-8 items-center gap-2 rounded-lg border border-[#323642] bg-[#181a20] px-3 text-xs font-medium text-[#e6e8ee] hover:bg-[#23262f] focus-visible:outline-2 focus-visible:outline-sky-400"
+              className="flex h-8 items-center gap-2 rounded-lg border border-[#323642] bg-[#181a20] px-3 text-xs font-medium text-[#e6e8ee] hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-white/50"
             >
               <span>Template</span>
               <span className="text-[10px] text-[#9aa1b2]">{templateMenuOpen ? "▴" : "▾"}</span>
@@ -1879,7 +1794,7 @@ export function ChartSettingsDialog({
                       <button
                         type="button"
                         onClick={handleSaveTemplateSubmit}
-                        className="h-7 rounded bg-[#2962ff] px-2 text-[11px] font-semibold text-white hover:bg-[#1e53e5]"
+                        className="h-7 rounded bg-[#ededed] px-2 text-[11px] font-semibold text-[#0d0f12] hover:bg-white"
                       >
                         Save
                       </button>
@@ -1915,11 +1830,11 @@ export function ChartSettingsDialog({
             <Button
               type="button"
               onClick={handleCancel}
-              className="flex h-8 items-center justify-center rounded-md border border-[#363a45] bg-transparent px-4 text-xs font-medium text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-[#2962ff]"
+              className="flex h-8 items-center justify-center rounded-md border border-[#363a45] bg-transparent px-4 text-xs font-medium text-[#d1d4dc] hover:bg-[#2a2e39] hover:text-white focus-visible:outline-2 focus-visible:outline-white/50"
             >
               Cancel
             </Button>
-            <DialogClose className="flex h-8 items-center justify-center rounded-md bg-[#2962ff] px-5 text-xs font-semibold text-white hover:bg-[#1e53e5] focus-visible:outline-2 focus-visible:outline-[#2962ff]">
+            <DialogClose className="flex h-8 items-center justify-center rounded-md bg-[#ededed] px-5 text-xs font-semibold text-[#0d0f12] hover:bg-white focus-visible:outline-2 focus-visible:outline-white/50">
               Ok
             </DialogClose>
           </div>

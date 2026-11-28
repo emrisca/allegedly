@@ -1,4 +1,6 @@
-import type { ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { Children, isValidElement, useRef } from "react";
+import type { ChangeEvent, ComponentProps, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui-sdk/react/select";
 import { Button } from "@ui-sdk/react/button";
 import { Switch, SwitchThumb } from "@ui-sdk/react/switch";
 
@@ -25,16 +27,13 @@ export function UiSwitch({
   checked,
   onCheckedChange,
   disabled = false,
-  size = "default",
+  size: _size = "default",
   id,
   className = "",
   ...aria
 }: UiSwitchProps) {
-  const isSm = size === "sm";
-  const trackSize = isSm ? "h-[18px] w-[32px]" : "h-[20px] w-[36px]";
-  const thumbSize = isSm
-    ? "h-[14px] w-[14px] data-checked:translate-x-[14px]"
-    : "h-[16px] w-[16px] data-checked:translate-x-[16px]";
+  const trackSize = "h-[17px] w-[30px]";
+  const thumbSize = "h-[13px] w-[13px] data-checked:translate-x-[13px]";
 
   return (
     <Switch
@@ -45,8 +44,8 @@ export function UiSwitch({
       {...aria}
       className={[
         "relative inline-flex shrink-0 cursor-pointer items-center rounded-full p-[2px] transition-colors duration-150",
-        "bg-[#2d3240] hover:bg-[#383e4f] data-checked:bg-[var(--app-accent,#2962ff)] data-checked:hover:bg-[#1e53e5]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent,#2962ff)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-surface-bg,#1e222d)]",
+        "bg-white/[0.12] hover:bg-white/[0.18] data-checked:bg-[#e4e4e7] data-checked:hover:bg-white",
+        "focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/50",
         "disabled:cursor-not-allowed disabled:opacity-50",
         trackSize,
         className,
@@ -56,7 +55,7 @@ export function UiSwitch({
     >
       <SwitchThumb
         className={[
-          "pointer-events-none block rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.45)] transition-transform duration-150 translate-x-0",
+          "pointer-events-none block rounded-full bg-[#a1a1aa] data-checked:bg-[#0e1014] transition-transform duration-150 translate-x-0",
           thumbSize,
         ].join(" ")}
       />
@@ -74,21 +73,21 @@ export type UiButtonProps = ComponentProps<typeof Button> & {
 
 const BUTTON_VARIANT_CLS: Record<UiButtonVariant, string> = {
   default:
-    "bg-[var(--app-accent,#2962ff)] text-white hover:bg-[#1e53e5] shadow-xs",
+    "bg-[#ededed] text-[#0d0f12] hover:bg-white",
   secondary:
-    "bg-[#252a36] text-[#f0f3fa] hover:bg-[#303645]",
+    "border border-white/[0.09] bg-white/[0.05] text-[#e4e4e7] hover:border-white/[0.16] hover:bg-white/[0.09]",
   outline:
-    "border border-[var(--app-border,#323642)] bg-[var(--app-panel-bg,#181a20)] text-[#d1d4dc] hover:bg-[#23262f] hover:text-white",
+    "border border-white/[0.09] bg-white/[0.05] text-[#e4e4e7] hover:border-white/[0.16] hover:bg-white/[0.09]",
   ghost:
-    "bg-transparent text-[#b2b5be] hover:bg-[#2a2e39] hover:text-white",
+    "bg-transparent text-[#8b8f9c] hover:bg-white/[0.06] hover:text-[#f4f4f5]",
   destructive:
     "border border-[#47252c] bg-[#2a151a] text-[#f27983] hover:bg-[#3b1c23] hover:text-[#fda4af]",
 };
 
 const BUTTON_SIZE_CLS: Record<UiButtonSize, string> = {
   xs: "h-7 px-2.5 text-[11px] rounded-md",
-  sm: "h-8 px-3 text-[12px] rounded-md",
-  md: "h-9 px-4 text-[13px] rounded-lg",
+  sm: "h-7 px-3 text-[12px] rounded-[6px]",
+  md: "h-[30px] px-3 text-[12px] rounded-[6px]",
   icon: "h-8 w-8 rounded-md p-0",
   "icon-sm": "h-7 w-7 rounded-md p-0",
 };
@@ -103,10 +102,11 @@ export function UiButton({
   return (
     <Button
       type={type}
+      data-ui-variant={variant}
       {...rest}
       className={[
-        "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent,#2962ff)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--app-surface-bg,#1e222d)]",
+        "inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 font-medium whitespace-nowrap transition-[color,background-color,border-color,transform] active:scale-[0.99]",
+        "focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/50",
         "disabled:pointer-events-none disabled:opacity-45",
         BUTTON_VARIANT_CLS[variant],
         BUTTON_SIZE_CLS[size],
@@ -123,9 +123,9 @@ export function UiInput({ className = "", ...rest }: InputHTMLAttributes<HTMLInp
     <input
       {...rest}
       className={[
-        "h-8 w-full rounded-md border border-[var(--app-border,#323642)] bg-[#111318] px-2.5 text-[12px] text-[#f0f3fa]",
+        "h-[30px] w-full rounded-[6px] border border-white/[0.09] bg-[#0d0f14] px-2.5 text-[12px] text-[#f4f4f5] tabular-nums",
         "placeholder:text-[#5c6270] transition-colors",
-        "focus:border-[var(--app-accent,#2962ff)] focus:outline-none focus:ring-1 focus:ring-[var(--app-accent,#2962ff)]/40",
+        "focus:border-white/30 focus:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
       ]
@@ -135,19 +135,44 @@ export function UiInput({ className = "", ...rest }: InputHTMLAttributes<HTMLInp
   );
 }
 
-export function UiSelect({ className = "", ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function UiSelect({ className = "", children, value, defaultValue, onChange, disabled, id, name, required, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const options = Children.toArray(children).filter(isValidElement<{ value?: string | number; disabled?: boolean; children?: ReactNode }>);
+  const items = options.map((option) => ({
+    value: String(option.props.value ?? option.props.children ?? ""),
+    label: String(option.props.children ?? option.props.value ?? ""),
+    disabled: option.props.disabled,
+  }));
   return (
-    <select
-      {...rest}
-      className={[
-        "h-8 rounded-md border border-[var(--app-border,#323642)] bg-[#111318] px-2.5 text-[12px] text-[#f0f3fa]",
-        "transition-colors focus:border-[var(--app-accent,#2962ff)] focus:outline-none focus:ring-1 focus:ring-[var(--app-accent,#2962ff)]/40",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    />
+    <Select
+      items={items}
+      value={value === undefined ? undefined : String(value)}
+      defaultValue={defaultValue === undefined ? undefined : String(defaultValue)}
+      disabled={disabled}
+      required={required}
+      onValueChange={(next) => {
+        const select = selectRef.current;
+        if (!select || next === null) return;
+        select.value = String(next);
+        onChange?.({ target: select, currentTarget: select } as ChangeEvent<HTMLSelectElement>);
+      }}
+    >
+      <select ref={selectRef} name={name} tabIndex={-1} aria-hidden="true" hidden defaultValue={value ?? defaultValue}>
+        {children}
+      </select>
+      <SelectTrigger
+        id={id}
+        aria-label={rest["aria-label"]}
+        aria-labelledby={rest["aria-labelledby"]}
+        className={`inline-flex h-[30px] min-w-0 items-center justify-between gap-2 rounded-[6px] border border-white/[0.09] bg-[#0d0f14] px-2.5 text-left text-[12px] text-[#f4f4f5] focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/50 disabled:opacity-50 ${className}`}
+      >
+        <SelectValue className="min-w-0 flex-1 truncate" />
+        <span aria-hidden="true" className="shrink-0 text-[#9ca3af]">▾</span>
+      </SelectTrigger>
+      <SelectContent className="z-[100] max-h-64 min-w-[var(--anchor-width)] overflow-y-auto rounded-[6px] border border-white/[0.10] bg-[var(--app-surface-bg,#16181f)] p-1 text-[12px] text-[#f4f4f5] shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
+        {items.map((item) => <SelectItem key={item.value} value={item.value} disabled={item.disabled} className="flex min-h-7 cursor-pointer items-center rounded px-2 data-highlighted:bg-white/[0.08] data-selected:bg-white/[0.10] data-disabled:opacity-40">{item.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -163,7 +188,7 @@ export function UiSettingRow({
   control: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-[var(--app-border,#262a34)] bg-[var(--app-panel-bg,#181a20)] px-3.5 py-2.5">
+    <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-3.5 py-2.5 hover:bg-white/[0.03]">
       <div className="min-w-0">
         <div id={labelId} className="text-[12.5px] font-medium text-[#e6e8ee]">
           {label}

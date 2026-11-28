@@ -4,6 +4,8 @@ import {
   DRAWING_SLOTS,
   DrawingEngine,
   hitTestDrawing,
+  rectangleHandles,
+  resizeRectangle,
   computeRulerMetrics,
   snapTickToMagnet,
   type PlacedDrawingKind,
@@ -221,19 +223,52 @@ describe("Clean-room Drawing Engine (E06 / SV-17)", () => {
     expect(miss).toBeNull();
   });
 
-  it("selects and deletes anchored_vp when clicking its histogram band (not swallowed by 1-anchor badge check)", () => {
+  it("selects and deletes anchored_vp when clicking its right-side histogram band or anchor line", () => {
     const engine = new DrawingEngine();
     const vp = engine.add("anchored_vp", "BTC/USD", [{ timeSec: 1_700_000_000, priceTick: 9500000n }]);
-    const hit = hitTestDrawing(
+    expect(vp.vpConfig?.placement).toBe("right");
+    expect(vp.vpConfig?.extendRight).toBe(true);
+    // Click inside right-side histogram band near canvas right edge (w = 900)
+    const hitRight = hitTestDrawing(
       engine.list("BTC/USD"),
-      120,
+      820,
       300,
       () => ({ x: 40, y: 100 }),
       900,
       600,
     );
-    expect(hit?.drawing.id).toBe(vp.id);
+    expect(hitRight?.drawing.id).toBe(vp.id);
+    // Click on anchor line also selects
+    const hitAnchor = hitTestDrawing(
+      engine.list("BTC/USD"),
+      40,
+      300,
+      () => ({ x: 40, y: 100 }),
+      900,
+      600,
+    );
+    expect(hitAnchor?.drawing.id).toBe(vp.id);
     expect(engine.remove(vp.id)).toBe(true);
     expect(engine.list("BTC/USD")).toHaveLength(0);
   });
+});
+
+it("resizes all rectangle handles while preserving the opposite sides", () => {
+  const engine = new DrawingEngine();
+  const anchors = [{ timeSec: 100, priceTick: 200n }, { timeSec: 340, priceTick: 80n }];
+  engine.add("box_zone", "BTC/USD", anchors);
+  const toPixel = (anchor: (typeof anchors)[number]) => ({ x: anchor.timeSec, y: 240 - Number(anchor.priceTick) });
+  const handles = rectangleHandles(toPixel(anchors[0]), toPixel(anchors[1]));
+  expect(new Set(handles.map(({ x, y }) => `${x}:${y}`)).size).toBe(8);
+  for (const handle of handles) {
+    const hit = hitTestDrawing(engine.list("BTC/USD"), handle.x, handle.y, toPixel, 500, 500);
+    expect(hit?.rectangleHandle).toEqual(handle);
+    const resized = resizeRectangle(anchors, hit!.rectangleHandle!, { timeSec: 400, priceTick: 50n });
+    for (const [index, anchor] of anchors.entries()) {
+      expect(resized[index]).toEqual({
+        timeSec: index === handle.timeAnchor ? 400 : anchor.timeSec,
+        priceTick: index === handle.priceAnchor ? 50n : anchor.priceTick,
+      });
+    }
+  }
 });

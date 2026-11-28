@@ -1,9 +1,12 @@
+import { formatFixedE9 } from "@allegedly/ipc-client";
+import { computePositionStatLines, DEFAULT_POSITION_SETTINGS, positionDistances } from "./position-settings";
 import type { CandlestickData, HistogramData, UTCTimestamp } from "lightweight-charts";
 import type { CoordinateBridge } from "../render/webgl2-orderflow-overlay";
 import {
   FIB_EXT_LEVELS,
   FIB_LEVELS,
   computeRulerMetrics,
+  rectangleHandles,
   type AnchorPoint,
   type DrawingObject,
   type PlacedDrawingKind,
@@ -11,9 +14,11 @@ import {
   type VolumeProfileConfig,
 } from "./drawing-engine";
 import {
+  cloneAvpConfig,
   computeFixedRangeVolumeProfile,
   detectMarketStructure,
   type VpCandleInput,
+  type VpLineStyle,
 } from "./volume-profile";
 
 function colorWithAlpha(hex: string, alpha: number): string {
@@ -238,8 +243,8 @@ export function drawVolumeHistogram(
             ? `${(bin.totalVol / 1000).toFixed(1)}K`
             : Math.round(bin.totalVol).toString();
         ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
-        ctx.fillStyle = "#d1d4dc";
-        const tx = anchorRight ? rightAnchorX - maxBarW - 34 : originX + 3;
+        ctx.fillStyle = cfg.valuesColor || "#d1d4dc";
+        const tx = anchorRight ? Math.max(4, rightAnchorX - maxBarW - 34) : originX + 3;
         ctx.fillText(labelVal, tx, top + rawH * 0.72);
       }
     }
@@ -312,16 +317,25 @@ export function drawVolumeHistogram(
   }
 
   // 5. Key AMT Levels: VAH, VAL, POC
-  const drawLevelLine = (price: number, stroke: string, widthPx: number, tag: string) => {
+  const drawLevelLine = (
+    price: number,
+    stroke: string,
+    widthPx: number,
+    tag: string,
+    lineStyle?: VpLineStyle,
+  ) => {
     const ly = bridge.priceToY(price);
     if (ly === null) return;
     ctx.strokeStyle = stroke;
     ctx.lineWidth = widthPx;
-    ctx.setLineDash([]);
+    ctx.setLineDash(
+      lineStyle === "dashed" ? [6, 4] : lineStyle === "dotted" ? [2, 3] : [],
+    );
     ctx.beginPath();
     ctx.moveTo(originX, ly);
     ctx.lineTo(boxEndX, ly);
     ctx.stroke();
+    ctx.setLineDash([]);
     if (isSelected) {
       ctx.font = "bold 9px ui-monospace, SFMono-Regular, Menlo, monospace";
       ctx.fillStyle = stroke;
@@ -329,9 +343,9 @@ export function drawVolumeHistogram(
     }
   };
 
-  if (cfg.showVah) drawLevelLine(profile.vahPrice, cfg.vahColor, cfg.vahWidth, "VAH");
-  if (cfg.showVal) drawLevelLine(profile.valPrice, cfg.valColor, cfg.valWidth, "VAL");
-  if (cfg.showPoc) drawLevelLine(profile.pocPrice, cfg.pocColor, cfg.pocWidth, "POC");
+  if (cfg.showVah) drawLevelLine(profile.vahPrice, cfg.vahColor, cfg.vahWidth, "VAH", cfg.vahLineStyle);
+  if (cfg.showVal) drawLevelLine(profile.valPrice, cfg.valColor, cfg.valWidth, "VAL", cfg.valLineStyle);
+  if (cfg.showPoc) drawLevelLine(profile.pocPrice, cfg.pocColor, cfg.pocWidth, "POC", cfg.pocLineStyle);
 
   ctx.restore();
 }
@@ -421,11 +435,7 @@ export function drawVectorDrawing(
   ctx.strokeStyle = color;
   ctx.fillStyle = style?.fillColor ?? color;
   ctx.lineWidth = style?.lineWidth ?? 1.5;
-  if (style?.lineStyle === "dashed") {
-    ctx.setLineDash([6, 4]);
-  } else if (style?.lineStyle === "dotted") {
-    ctx.setLineDash([2, 3]);
-  }
+  ctx.setLineDash(style?.lineStyle === "dashed" ? [6, 4] : style?.lineStyle === "dotted" ? [2, 3] : []);
   const fontSize = style?.fontSize ?? 12;
   const textColor = style?.textColor ?? color;
 
@@ -436,7 +446,7 @@ export function drawVectorDrawing(
 
   switch (kind) {
     case "horizontal_line":
-      if (p0?.y !== null) {
+      if (p0?.y != null) {
         ctx.beginPath();
         ctx.moveTo(0, p0.y);
         ctx.lineTo(w, p0.y);
@@ -453,7 +463,7 @@ export function drawVectorDrawing(
       break;
 
     case "horizontal_ray":
-      if (p0?.y !== null) {
+      if (p0?.y != null) {
         const startX = p0.x ?? 0;
         ctx.beginPath();
         ctx.moveTo(startX, p0.y);
@@ -463,7 +473,7 @@ export function drawVectorDrawing(
       break;
 
     case "vertical_line":
-      if (p0?.x !== null) {
+      if (p0?.x != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, 0);
         ctx.lineTo(p0.x, h);
@@ -472,7 +482,7 @@ export function drawVectorDrawing(
       break;
 
     case "crossline":
-      if (p0?.x !== null && p0.y !== null) {
+      if (p0?.x != null && p0.y !== null) {
         ctx.beginPath();
         ctx.moveTo(0, p0.y);
         ctx.lineTo(w, p0.y);
@@ -483,7 +493,7 @@ export function drawVectorDrawing(
       break;
 
     case "trendline":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const dx = p1.x - p0.x;
         const dy = p1.y - p0.y;
         const len = Math.hypot(dx, dy);
@@ -508,7 +518,7 @@ export function drawVectorDrawing(
       break;
 
     case "ray":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const dx = p1.x - p0.x;
         const dy = p1.y - p0.y;
         const len = Math.hypot(dx, dy);
@@ -523,7 +533,7 @@ export function drawVectorDrawing(
       break;
 
     case "extended_line":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const dx = p1.x - p0.x;
         const dy = p1.y - p0.y;
         const len = Math.hypot(dx, dy);
@@ -538,7 +548,7 @@ export function drawVectorDrawing(
       break;
 
     case "info_line":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
@@ -559,7 +569,7 @@ export function drawVectorDrawing(
       break;
 
     case "trend_angle":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
@@ -582,7 +592,7 @@ export function drawVectorDrawing(
       break;
 
     case "fib_retracement":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const leftX = Math.min(p0.x, p1.x);
         const rightX = Math.max(p0.x, p1.x, leftX + 90);
         ctx.save();
@@ -602,8 +612,8 @@ export function drawVectorDrawing(
       break;
 
     case "fib_extension":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
-        const baseAnchor = p2?.y !== null && p2?.x !== null ? p2 : p1;
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
+        const baseAnchor = p2?.y != null && p2?.x != null ? p2 : p1;
         const leftX = Math.min(p0.x, p1.x, baseAnchor.x ?? p1.x);
         const rightX = Math.max(p0.x, p1.x, baseAnchor.x ?? p1.x, leftX + 110);
         const span = p1.y - p0.y;
@@ -612,7 +622,7 @@ export function drawVectorDrawing(
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
-        if (p2?.x !== null && p2?.y !== null) ctx.lineTo(p2.x, p2.y);
+        if (p2?.x != null && p2?.y != null) ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
         ctx.restore();
         ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -629,8 +639,8 @@ export function drawVectorDrawing(
       break;
 
     case "fib_channel":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
-        const offset = p2?.y !== null ? p2.y - p0.y : 60;
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
+        const offset = p2?.y != null ? p2.y - p0.y : 60;
         for (const lvl of [0, 0.382, 0.5, 0.618, 1]) {
           const dy = offset * lvl;
           ctx.beginPath();
@@ -643,7 +653,7 @@ export function drawVectorDrawing(
 
     case "fib_time_zone":
     case "fib_trend_time":
-      if (p0?.x !== null && p1?.x !== null) {
+      if (p0?.x != null && p1?.x != null) {
         const unit = Math.max(12, Math.abs(p1.x - p0.x));
         const dir = p1.x >= p0.x ? 1 : -1;
         ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -661,7 +671,7 @@ export function drawVectorDrawing(
 
     case "fib_fan":
     case "pitchfan":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const rightX = w;
         const dx = p1.x - p0.x || 1;
         for (const ratio of [0.25, 0.382, 0.5, 0.618, 0.786, 1]) {
@@ -677,7 +687,7 @@ export function drawVectorDrawing(
 
     case "fib_circles":
     case "fib_arcs":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const radius = Math.max(8, Math.hypot(p1.x - p0.x, p1.y - p0.y));
         for (const lvl of [0.382, 0.5, 0.618, 1, 1.618]) {
           ctx.beginPath();
@@ -693,7 +703,7 @@ export function drawVectorDrawing(
 
     case "fib_spiral":
     case "fib_wedge":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const baseR = Math.max(10, Math.hypot(p1.x - p0.x, p1.y - p0.y));
         ctx.beginPath();
         for (let t = 0; t <= Math.PI * 4; t += 0.15) {
@@ -758,7 +768,7 @@ export function drawVectorDrawing(
     }
 
     case "cyclic_lines":
-      if (p0?.x !== null && p1?.x !== null) {
+      if (p0?.x != null && p1?.x != null) {
         const period = Math.max(18, Math.abs(p1.x - p0.x));
         for (let x = p0.x % period; x < w; x += period) {
           ctx.beginPath();
@@ -770,7 +780,7 @@ export function drawVectorDrawing(
       break;
 
     case "time_cycles":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null) {
         const r = Math.max(14, Math.abs(p1.x - p0.x) / 2);
         const startX = Math.min(p0.x, p1.x);
         for (let x = startX + r; x < w + r; x += r * 2) {
@@ -782,7 +792,7 @@ export function drawVectorDrawing(
       break;
 
     case "sine_line":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const halfPeriod = Math.max(20, Math.abs(p1.x - p0.x));
         const amp = Math.max(12, Math.abs(p1.y - p0.y));
         ctx.beginPath();
@@ -799,51 +809,90 @@ export function drawVectorDrawing(
     case "long_position":
     case "short_position":
     case "position_forecast":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const isShort = kind === "short_position";
+        const direction = isShort ? -1n : 1n;
+        const position = { ...DEFAULT_POSITION_SETTINGS, ...style?.position };
+        const entryTick = p0.anchor.priceTick;
+        const { targetTicks, stopTicks } = positionDistances(entryTick, p1.anchor.priceTick, position, style?.rrRatio);
+        const target = entryTick + direction * targetTicks;
+        const stop = entryTick - direction * stopTicks;
+        const tpY = bridge.priceToY(Number(target) * tickFloat);
+        const slY = bridge.priceToY(Number(stop) * tickFloat);
+        if (tpY === null || slY === null) break;
         const rx = Math.min(p0.x, p1.x);
-        const rw = Math.max(110, Math.abs(p1.x - p0.x));
+        const rw = Math.max(36, Math.abs(p1.x - p0.x));
         const entryY = p0.y;
-        const rr = Math.max(0.25, Math.min(20, style?.rrRatio ?? 2));
-        const dist = Math.max(24, Math.abs(p1.y - p0.y));
-        const tpY = isShort ? entryY + dist : entryY - dist;
-        const slY = isShort ? entryY - dist / rr : entryY + dist / rr;
 
-        // Profit zone (teal/emerald)
-        ctx.fillStyle = "rgba(38, 166, 154, 0.22)";
-        ctx.fillRect(rx, Math.min(entryY, tpY), rw, Math.abs(tpY - entryY));
-        ctx.strokeStyle = "#26a69a";
-        ctx.strokeRect(rx, Math.min(entryY, tpY), rw, Math.abs(tpY - entryY));
+        for (const zone of [
+          { y: tpY, fill: position.targetColor, opacity: position.targetOpacity },
+          { y: slY, fill: position.stopColor, opacity: position.stopOpacity },
+        ]) {
+          const top = Math.min(entryY, zone.y);
+          const height = Math.abs(zone.y - entryY);
+          ctx.fillStyle = colorWithAlpha(zone.fill, zone.opacity);
+          ctx.fillRect(rx, top, rw, height);
+          ctx.strokeStyle = style?.color ?? color;
+          ctx.strokeRect(rx, top, rw, height);
+        }
 
-        // Risk zone (coral/rose)
-        ctx.fillStyle = "rgba(239, 83, 80, 0.22)";
-        ctx.fillRect(rx, Math.min(entryY, slY), rw, Math.abs(slY - entryY));
-        ctx.strokeStyle = "#ef5350";
-        ctx.strokeRect(rx, Math.min(entryY, slY), rw, Math.abs(slY - entryY));
-
-        // Entry divider
-        ctx.strokeStyle = "#e6e8ee";
-        ctx.beginPath();
-        ctx.moveTo(rx, entryY);
-        ctx.lineTo(rx + rw, entryY);
-        ctx.stroke();
-
-        ctx.font = "bold 10px ui-monospace, SFMono-Regular, Menlo, monospace";
-        ctx.fillStyle = "#e6e8ee";
-        const entryPrice = Number(p0.anchor.priceTick) * tickFloat;
-        const targetPrice = Number(p1.anchor.priceTick) * tickFloat;
-        const targetPct = entryPrice > 0 ? (Math.abs(targetPrice - entryPrice) / entryPrice) * 100 : 0;
-        ctx.fillText(
-          `${isShort ? "SHORT" : "LONG"}  R:R ${rr.toFixed(2)}  (${targetPct.toFixed(2)}%)`,
-          rx + 6,
-          entryY - 5,
-        );
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+        ctx.fillStyle = textColor;
+        const tickSizeE9 = BigInt(Math.round(tickFloat * 1e9));
+        const digits = Math.max(2, Math.min(9, tickFloat.toString().split(".")[1]?.length ?? 0));
+        if (position.priceLabels) {
+          for (const [tick, y] of [[target, tpY], [entryTick, entryY], [stop, slY]] as const) {
+            ctx.fillText(formatFixedE9(tick * tickSizeE9, digits), rx + rw + 5, y + 4);
+          }
+        }
+        if (selected || position.alwaysShowStats) {
+          const lastCandle = candles[candles.length - 1];
+          const currentPriceE9 =
+            lastCandle && Number.isFinite(lastCandle.close)
+              ? BigInt(Math.round(lastCandle.close * 1e9))
+              : null;
+          const lines = computePositionStatLines({
+            isShort,
+            entryTick,
+            targetTicks,
+            stopTicks,
+            tickSizeE9,
+            digits,
+            settings: position,
+            currentPriceE9,
+          });
+          const sep = position.compact ? "  " : " · ";
+          const drawStatPill = (text: string, xPos: number, yPos: number, bg: string) => {
+            if (!text) return;
+            const padX = 5;
+            const tw = ctx.measureText(text).width;
+            const ph = fontSize + 5;
+            ctx.fillStyle = bg;
+            ctx.fillRect(xPos, yPos - ph + 3, tw + padX * 2, ph);
+            ctx.fillStyle = textColor;
+            ctx.fillText(text, xPos + padX, yPos);
+          };
+          if (lines.tp.length > 0) {
+            const tpLabelY = isShort ? tpY + fontSize + 5 : tpY - 5;
+            drawStatPill(lines.tp.join(sep), rx + 4, tpLabelY, colorWithAlpha(position.targetColor, 0.85));
+          }
+          if (lines.center.length > 0) {
+            drawStatPill(lines.center.join(sep), rx + 4, entryY - 5, "rgba(30, 34, 45, 0.92)");
+          }
+          if (lines.sl.length > 0) {
+            const slLabelY = isShort ? slY - 5 : slY + fontSize + 5;
+            drawStatPill(lines.sl.join(sep), rx + 4, slLabelY, colorWithAlpha(position.stopColor, 0.85));
+          }
+        }
+        ctx.restore();
       }
       break;
 
     case "bars_pattern":
     case "ghost_feed":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const rx = Math.min(p0.x, p1.x);
         const rw = Math.max(60, Math.abs(p1.x - p0.x));
         ctx.save();
@@ -861,10 +910,10 @@ export function drawVectorDrawing(
       break;
 
     case "sector":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const radius = Math.max(20, Math.hypot(p1.x - p0.x, p1.y - p0.y));
         const a1 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
-        const a2 = p2?.x !== null && p2?.y !== null ? Math.atan2(p2.y - p0.y, p2.x - p0.x) : a1 + 0.7;
+        const a2 = p2?.x != null && p2?.y != null ? Math.atan2(p2.y - p0.y, p2.x - p0.x) : a1 + 0.7;
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.arc(p0.x, p0.y, radius, a1, a2);
@@ -951,7 +1000,7 @@ export function drawVectorDrawing(
       break;
 
     case "fixed_range_vp":
-      if (p0?.x !== null && p1?.x !== null) {
+      if (p0?.x != null && p1?.x != null) {
         drawVolumeHistogram(
           ctx,
           w,
@@ -970,30 +1019,44 @@ export function drawVectorDrawing(
       break;
 
     case "anchored_vp":
-      if (p0?.x !== null) {
+      if (p0) {
         const lastSec = Number(candles[candles.length - 1]?.time ?? p0.anchor.timeSec);
-        const lastX = bridge.timeToX(lastSec) ?? Math.min(w - 64, p0.x + 180);
-        drawVolumeHistogram(
-          ctx,
-          w,
-          p0.x,
-          Math.max(p0.x + 80, lastX),
-          candles,
-          volumes,
-          p0.anchor.timeSec,
-          lastSec,
-          bridge,
-          tickFloat,
-          style?.vpConfig,
-          selected,
-        );
+        if (p0.anchor.timeSec <= lastSec) {
+          const avpCfg = cloneAvpConfig(style?.vpConfig);
+          const startX = p0.x !== null ? Math.max(0, Math.min(w - 1, p0.x)) : 0;
+          drawVolumeHistogram(
+            ctx,
+            w,
+            startX,
+            w,
+            candles,
+            volumes,
+            p0.anchor.timeSec,
+            lastSec,
+            bridge,
+            tickFloat,
+            { ...avpCfg, extendRight: true },
+            selected,
+          );
+          if (selected && p0.x !== null && p0.x >= 0 && p0.x <= w) {
+            ctx.save();
+            ctx.strokeStyle = "rgba(41, 98, 255, 0.7)";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(p0.x, 0);
+            ctx.lineTo(p0.x, h);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
       }
       break;
 
     case "price_range":
     case "date_range":
     case "date_price_range":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const rx = Math.min(p0.x, p1.x);
         const ry = Math.min(p0.y, p1.y);
         const rw = Math.abs(p1.x - p0.x);
@@ -1047,7 +1110,7 @@ export function drawVectorDrawing(
 
     case "arrow":
     case "arrow_marker":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         ctx.lineWidth = kind === "arrow_marker" ? 3 : 1.6;
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
@@ -1058,7 +1121,7 @@ export function drawVectorDrawing(
       break;
 
     case "arrow_mark_up":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y - 10);
         ctx.lineTo(p0.x + 8, p0.y + 2);
@@ -1073,7 +1136,7 @@ export function drawVectorDrawing(
       break;
 
     case "arrow_mark_down":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y + 10);
         ctx.lineTo(p0.x + 8, p0.y - 2);
@@ -1088,7 +1151,7 @@ export function drawVectorDrawing(
       break;
 
     case "box_zone":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const baseLeft = Math.min(p0.x, p1.x);
         const baseRight = Math.max(p0.x, p1.x);
         const rx = style?.extendLeft ? 0 : baseLeft;
@@ -1129,13 +1192,13 @@ export function drawVectorDrawing(
       break;
 
     case "rotated_rectangle":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const dx = p1.x - p0.x;
         const dy = p1.y - p0.y;
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len;
         const ny = dx / len;
-        const hProj = p2?.x !== null && p2?.y !== null ? (p2.x - p0.x) * nx + (p2.y - p0.y) * ny : 45;
+        const hProj = p2?.x != null && p2?.y != null ? (p2.x - p0.x) * nx + (p2.y - p0.y) * ny : 45;
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
@@ -1177,7 +1240,7 @@ export function drawVectorDrawing(
     }
 
     case "circle":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const r = Math.hypot(p1.x - p0.x, p1.y - p0.y);
         ctx.beginPath();
         ctx.arc(p0.x, p0.y, r, 0, Math.PI * 2);
@@ -1190,7 +1253,7 @@ export function drawVectorDrawing(
       break;
 
     case "ellipse":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const cx = (p0.x + p1.x) / 2;
         const cy = (p0.y + p1.y) / 2;
         const rx = Math.max(4, Math.abs(p1.x - p0.x) / 2);
@@ -1206,11 +1269,11 @@ export function drawVectorDrawing(
       break;
 
     case "triangle":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p1.x, p1.y);
-        if (p2?.x !== null && p2?.y !== null) {
+        if (p2?.x != null && p2?.y != null) {
           ctx.lineTo(p2.x, p2.y);
           ctx.closePath();
           ctx.save();
@@ -1224,7 +1287,7 @@ export function drawVectorDrawing(
 
     case "arc":
     case "curve":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const ctrlX = p2?.x ?? (p0.x + p1.x) / 2;
         const ctrlY = p2?.y ?? Math.min(p0.y, p1.y) - 40;
         ctx.beginPath();
@@ -1235,7 +1298,7 @@ export function drawVectorDrawing(
       break;
 
     case "double_curve":
-      if (p0?.x !== null && p0?.y !== null && p1?.x !== null && p1?.y !== null) {
+      if (p0?.x != null && p0?.y != null && p1?.x != null && p1?.y != null) {
         const c1x = p2?.x ?? (p0.x + p1.x) / 2;
         const c1y = p2?.y ?? p0.y;
         const c2x = p3?.x ?? (p0.x + p1.x) / 2;
@@ -1248,7 +1311,7 @@ export function drawVectorDrawing(
       break;
 
     case "text":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
         ctx.fillStyle = textColor;
         ctx.fillText(label || "Text", p0.x, p0.y);
@@ -1261,7 +1324,7 @@ export function drawVectorDrawing(
     case "image_annotation":
     case "post_annotation":
     case "idea_annotation":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         const prefix =
           kind === "idea_annotation"
             ? "💡 "
@@ -1278,7 +1341,7 @@ export function drawVectorDrawing(
 
     case "price_note":
     case "callout":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         const tx = p1?.x ?? p0.x + 36;
         const ty = p1?.y ?? p0.y - 28;
         ctx.beginPath();
@@ -1295,14 +1358,14 @@ export function drawVectorDrawing(
       break;
 
     case "price_label":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         const priceStr = (Number(p0.anchor.priceTick) * tickFloat).toFixed(2);
         drawBadge(ctx, p0.x + 8, p0.y, priceStr, color, "#1e3a8a", "#ffffff");
       }
       break;
 
     case "pin":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         ctx.beginPath();
         ctx.arc(p0.x, p0.y - 10, 6, 0, Math.PI * 2);
         ctx.fill();
@@ -1314,7 +1377,7 @@ export function drawVectorDrawing(
       break;
 
     case "flag_mark":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         ctx.beginPath();
         ctx.moveTo(p0.x, p0.y);
         ctx.lineTo(p0.x, p0.y - 18);
@@ -1326,7 +1389,7 @@ export function drawVectorDrawing(
       break;
 
     case "table":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         drawRoundedRectPath(ctx, p0.x, p0.y, 128, 52, 4);
         ctx.fillStyle = "rgba(18, 21, 29, 0.94)";
         ctx.fill();
@@ -1341,7 +1404,7 @@ export function drawVectorDrawing(
       break;
 
     case "icon_stamp":
-      if (p0?.x !== null && p0?.y !== null) {
+      if (p0?.x != null && p0?.y != null) {
         ctx.font = "18px -apple-system, BlinkMacSystemFont, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -1353,7 +1416,8 @@ export function drawVectorDrawing(
   if (showHandles) {
     ctx.setLineDash([]);
     const radius = selected ? 4.5 : 2.5;
-    for (const p of pts) {
+    const handles = kind === "box_zone" && selected ? rectangleHandles(p0, p1) : pts;
+    for (const p of handles) {
       if (p.x !== null && p.y !== null) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);

@@ -25,6 +25,19 @@ describe("historical-ohlc", () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("keeps the immediately preceding Coinbase candle and excludes the current page", async () => {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = new URL(String(input));
+      expect(url.searchParams.get("end")).toBe(new Date(540_000).toISOString());
+      return Response.json([[600, 10, 12, 10, 11, 3], [540, 9, 11, 9, 10, 2]]);
+    };
+    const bars = await fetchHistoricalOhlc({
+      source: "coinbase_ws", symbol: "BTC/USD", timeframe: "1m",
+      endTimeSec: 600, limit: 300, fetchImpl,
+    });
+    expect(bars.map((bar) => bar.time)).toEqual([540]);
+  });
+
   it("maps symbols and timeframes accurately for Kraken and Coinbase", () => {
     expect(mapSymbolToKrakenRestPair("BTC/USD")).toBe("XBTUSD");
     expect(mapSymbolToKrakenRestPair("ETH/USD")).toBe("ETHUSD");

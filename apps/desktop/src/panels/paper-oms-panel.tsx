@@ -1,3 +1,4 @@
+import { UiSelect } from "@allegedly/ui-chrome";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@ui-sdk/react/button";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@ui-sdk/react/tabs";
@@ -233,7 +234,7 @@ export function PaperOmsPanel({
   return (
     <section
       aria-label="Paper execution, studies, provenance, and settings"
-      className="flex h-full w-full flex-col bg-[#131722] text-xs text-[#d1d4dc] select-none"
+      className="flex h-full w-full flex-col bg-[var(--app-panel-bg,#12141a)] text-xs text-[#d1d4dc] select-none"
     >
       {/* Clean TradingView / Tradovate Panel Header */}
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-[#2a2e39] px-3">
@@ -277,7 +278,7 @@ export function PaperOmsPanel({
       {/* Order | DOM Segmented Switch (matches TradingView & MotiveWave right panel) */}
       {isTradeView && onSwitchToDom && (
         <div className="shrink-0 px-3 pt-2.5 pb-1">
-          <div className="grid grid-cols-2 rounded-lg bg-[#1e222d] p-0.5">
+          <div className="grid grid-cols-2 rounded-lg bg-white/[0.04] p-0.5">
             <button
               type="button"
               onClick={() => setActiveTab("ticket")}
@@ -378,18 +379,19 @@ export function PaperOmsPanel({
             <div className="relative grid grid-cols-2 overflow-hidden rounded-lg border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)]">
               <button
                 type="button"
+                data-quote-side="sell"
                 aria-pressed={side === "sell"}
                 onClick={() => {
                   setSide("sell");
                   setPriceText(bidPrice.toFixed(decimals));
                 }}
-                className={`flex flex-col items-start px-3 py-2 text-left transition-colors ${
+                className={`flex flex-col items-start rounded-l-[7px] px-3 py-2 text-left transition-colors ${
                   side === "sell"
-                    ? "bg-[#f23645]/16 ring-1 ring-inset ring-[#f23645]/75"
-                    : "hover:bg-[#1e222d]"
+                    ? "bg-[#ad454b]/25 ring-1 ring-inset ring-[#ad454b]/70"
+                    : "hover:bg-white/[0.04]"
                 }`}
               >
-                <span className={`text-[11px] font-medium ${side === "sell" ? "text-[#ff6b77]" : "text-[#9598a1]"}`}>
+                <span className={`text-[11px] font-medium ${side === "sell" ? "text-[#efaaa9]" : "text-[#9598a1]"}`}>
                   Sell
                 </span>
                 <span className="mt-0.5 font-mono text-[14px] font-semibold tabular-nums text-[#f0f3fa]">
@@ -399,18 +401,19 @@ export function PaperOmsPanel({
 
               <button
                 type="button"
+                data-quote-side="buy"
                 aria-pressed={side === "buy"}
                 onClick={() => {
                   setSide("buy");
                   setPriceText(askPrice.toFixed(decimals));
                 }}
-                className={`flex flex-col items-end border-l border-[#2a2e39] px-3 py-2 text-right transition-colors ${
+                className={`flex flex-col items-end rounded-r-[7px] border-l border-[#2a2e39] px-3 py-2 text-right transition-colors ${
                   side === "buy"
-                    ? "bg-[#2962ff]/18 ring-1 ring-inset ring-[#2962ff]/80"
-                    : "hover:bg-[#1e222d]"
+                    ? "bg-[#28785f]/25 ring-1 ring-inset ring-[#28785f]/70"
+                    : "hover:bg-white/[0.04]"
                 }`}
               >
-                <span className={`text-[11px] font-medium ${side === "buy" ? "text-[#6fa1ff]" : "text-[#9598a1]"}`}>
+                <span className={`text-[11px] font-medium ${side === "buy" ? "text-[#92d6bd]" : "text-[#9598a1]"}`}>
                   Buy
                 </span>
                 <span className="mt-0.5 font-mono text-[14px] font-semibold tabular-nums text-[#f0f3fa]">
@@ -418,7 +421,7 @@ export function PaperOmsPanel({
                 </span>
               </button>
 
-              <span className="pointer-events-none absolute left-1/2 top-1.5 -translate-x-1/2 rounded bg-[#131722] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[#9598a1] ring-1 ring-[#2a2e39]">
+              <span className="pointer-events-none absolute left-1/2 top-1.5 -translate-x-1/2 rounded bg-[var(--app-panel-bg,#12141a)] px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-[#9598a1] ring-1 ring-[#2a2e39]">
                 {spread.toFixed(decimals)}
               </span>
             </div>
@@ -470,7 +473,7 @@ export function PaperOmsPanel({
                     Snap to {side === "buy" ? "Ask" : "Bid"}
                   </button>
                 </div>
-                <div className="flex h-9 items-center rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 focus-within:border-[#2962ff]">
+                <div className="flex h-9 items-center rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 focus-within:border-white/30">
                   <input
                     id="order-price-input"
                     type="text"
@@ -494,7 +497,7 @@ export function PaperOmsPanel({
                   ≈ ${formatMoney(notionalUsd, 2)} USD
                 </span>
               </div>
-              <div className="flex h-9 items-center rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 focus-within:border-[#2962ff]">
+              <div className="flex h-9 items-center rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 focus-within:border-white/30">
                 <input
                   id="order-qty-input"
                   type="text"
@@ -515,7 +518,7 @@ export function PaperOmsPanel({
                     onClick={() => setQtyText(preset)}
                     className={`h-6 rounded border font-mono text-[10.5px] tabular-nums transition-colors ${
                       qtyText === preset
-                        ? "border-[#2962ff] bg-[#2962ff]/18 text-[#f0f3fa]"
+                        ? "border-white/20 bg-white/[0.10] text-[#f0f3fa]"
                         : "border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] text-[#9598a1] hover:border-[#363a45] hover:text-[#f0f3fa]"
                     }`}
                   >
@@ -597,6 +600,7 @@ export function PaperOmsPanel({
                       </button>
                     </div>
                     <div
+                      data-exit-field={tpEnabled ? "enabled" : "disabled"}
                       className={`flex h-8 items-center justify-between rounded-md border px-2.5 font-mono text-[12px] tabular-nums ${
                         tpEnabled
                           ? "border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] text-[#f0f3fa]"
@@ -641,6 +645,7 @@ export function PaperOmsPanel({
                       </button>
                     </div>
                     <div
+                      data-exit-field={slEnabled ? "enabled" : "disabled"}
                       className={`flex h-8 items-center justify-between rounded-md border px-2.5 font-mono text-[12px] tabular-nums ${
                         slEnabled
                           ? "border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] text-[#f0f3fa]"
@@ -691,28 +696,29 @@ export function PaperOmsPanel({
                   <label htmlFor="order-tif-select" className="text-[11px] text-[#9598a1]">
                     Time in force
                   </label>
-                  <select
+                  <UiSelect
                     id="order-tif-select"
                     value={tif}
                     onChange={(e) => setTif(e.target.value as "GTC" | "DAY" | "IOC" | "FOK")}
-                    className="h-8 w-full rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 text-[12px] text-[#f0f3fa] outline-none focus:border-[#2962ff]"
+                    className="h-8 w-full rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2.5 text-[12px] text-[#f0f3fa] outline-none focus:border-white/30"
                   >
                     <option value="GTC">Good til canceled (GTC)</option>
                     <option value="DAY">Day</option>
                     <option value="IOC">Immediate or cancel (IOC)</option>
                     <option value="FOK">Fill or kill (FOK)</option>
-                  </select>
+                  </UiSelect>
                 </div>
               )}
             </div>
 
             {/* Full-Width Primary Order Execution CTA */}
             <Button
+              data-ticket-side={side}
               onClick={handlePlaceTicketOrder}
               className={`flex h-10 w-full items-center justify-center rounded-lg text-[13px] font-semibold text-white transition-colors ${
                 side === "buy"
-                  ? "bg-[#2962ff] hover:bg-[#1e53e5]"
-                  : "bg-[#f23645] hover:bg-[#d92b3a]"
+                  ? "bg-[#28785f] hover:bg-[#348e70]"
+                  : "bg-[#ad454b] hover:bg-[#c4565b]"
               }`}
             >
               {side === "buy" ? "Buy" : "Sell"} {parsedQty.toFixed(2)} {symbol.split("/")[0]} @{" "}
@@ -782,7 +788,7 @@ export function PaperOmsPanel({
                   key={row.tier}
                   className={
                     active
-                      ? "flex items-center justify-between rounded-md border border-[#2962ff]/60 bg-[#2962ff]/12 px-2.5 py-1.5 text-[10px]"
+                      ? "flex items-center justify-between rounded-md border border-white/20 bg-white/[0.06] px-2.5 py-1.5 text-[10px]"
                       : "flex items-center justify-between rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)]/70 px-2.5 py-1.5 text-[10px] text-[#787b86]"
                   }
                 >
@@ -792,7 +798,7 @@ export function PaperOmsPanel({
                     </div>
                     <div className="text-[9.5px] text-[#787b86]">{row.desc}</div>
                   </div>
-                  <span className="rounded bg-[#131722] px-1.5 py-0.5 text-[9px] text-[#d1d4dc]">
+                  <span className="rounded bg-[var(--app-panel-bg,#12141a)] px-1.5 py-0.5 text-[9px] text-[#d1d4dc]">
                     {active ? "ACTIVE" : row.absorptionAllowed ? "SV-10 OK" : "GATED"}
                   </span>
                 </li>
@@ -806,37 +812,37 @@ export function PaperOmsPanel({
           <div className="flex flex-wrap gap-1">
             <Button
               onClick={() => onRunBuiltinStudy?.("sma", 20)}
-              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-white/30 hover:text-white"
             >
               + SMA(20)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("ema", 9)}
-              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-white/30 hover:text-white"
             >
               + EMA(9)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("vwap", 1)}
-              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-white/30 hover:text-white"
             >
               + VWAP
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("wilder_rsi", 14)}
-              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-white/30 hover:text-white"
             >
               + RSI(14)
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("cvd", 1)}
-              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-white/30 hover:text-white"
             >
               + CVD
             </Button>
             <Button
               onClick={() => onRunBuiltinStudy?.("footprint_delta", 1)}
-              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-[#2962ff] hover:text-white"
+              className="rounded border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] px-2 py-1 text-[10px] text-[#d1d4dc] hover:border-white/30 hover:text-white"
             >
               + FP Delta
             </Button>
@@ -864,11 +870,11 @@ export function PaperOmsPanel({
               value={luauDraft}
               onChange={(e) => setLuauDraft(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] p-2 font-mono text-[10px] text-[#d1d4dc] focus:border-[#2962ff] focus:outline-none"
+              className="w-full rounded-md border border-[var(--app-border,#2a2e39)] bg-[var(--app-panel-bg,#181c27)] p-2 font-mono text-[10px] text-[#d1d4dc] focus:border-white/30 focus:outline-none"
             />
             <Button
               onClick={() => onRunLuauStudy?.(luauDraft)}
-              className="rounded-md bg-[#2962ff] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#1e53e5]"
+              className="rounded-md bg-[#ededed] px-3 py-1.5 text-[11px] font-semibold text-[#0d0f12] hover:bg-white"
             >
               Run Luau Study
             </Button>
@@ -940,11 +946,11 @@ export function PaperOmsPanel({
                             if (e.key === "Enter") commitEditSetting(s.key);
                             if (e.key === "Escape") setEditingSettingKey(null);
                           }}
-                          className="w-20 rounded border border-[#2962ff] bg-[#131722] px-1.5 py-0.5 font-mono text-[10px] text-[#f0f3fa] focus:outline-none"
+                          className="w-20 rounded border border-white/30 bg-[var(--app-panel-bg,#12141a)] px-1.5 py-0.5 font-mono text-[10px] text-[#f0f3fa] focus:outline-none"
                         />
                         <Button
                           onClick={() => commitEditSetting(s.key)}
-                          className="rounded bg-[#2962ff] px-1.5 py-0.5 text-[9.5px] font-semibold text-white hover:bg-[#1e53e5]"
+                          className="rounded bg-[#ededed] px-1.5 py-0.5 text-[9.5px] font-semibold text-[#0d0f12] hover:bg-white"
                         >
                           Save
                         </Button>

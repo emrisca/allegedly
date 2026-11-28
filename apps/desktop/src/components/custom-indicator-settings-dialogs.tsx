@@ -108,7 +108,7 @@ export function VwapKeyLevelsSettingsDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} closeOnOutsidePress={false}>
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
       <DialogContent className="fixed left-1/2 top-1/2 z-50 flex max-h-[86vh] w-[min(430px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#16181f)] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.75)]">
         {/* Header */}
@@ -412,7 +412,7 @@ export function TradingSessionsSettingsDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange} closeOnOutsidePress={false}>
       <DialogBackdrop className="fixed inset-0 z-50 bg-black/65 backdrop-blur-[2px]" />
       <DialogContent className="fixed left-1/2 top-1/2 z-50 flex max-h-[86vh] w-[min(450px,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--app-border,#2a2e39)] bg-[var(--app-surface-bg,#16181f)] text-[#d1d4dc] shadow-[0_24px_64px_rgba(0,0,0,0.75)]">
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--app-border,#262a34)] px-5">

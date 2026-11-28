@@ -154,6 +154,24 @@
     font-size: inherit;
   }
 
+  [data-slot="select-trigger"] {
+    min-width: 0;
+    margin: 0;
+    font: inherit;
+    box-shadow: none;
+  }
+
+  [data-slot="select-content"] {
+    margin: 0;
+    font: inherit;
+  }
+
+  [data-slot="select-item"] {
+    margin: 0;
+    border: 0;
+    font: inherit;
+  }
+
   [data-slot="switch"],
   [data-slot="switch"][data-checked] {
     width: auto;
@@ -211,23 +229,31 @@
   }
 }
 
-:root {
+:root,
+:root[data-theme="dark"] {
   color-scheme: dark;
-  --tv-bg: #131722;
-  --tv-chrome: #131722;
-  --tv-surface: #181c27;
-  --tv-elevated: #1e222d;
-  --tv-hover: #2a2e39;
-  --tv-active: #2a2e39;
-  --tv-border: #2a2e39;
-  --tv-text: #d1d4dc;
-  --tv-text-strong: #f0f3fa;
-  --tv-muted: #787b86;
-  --tv-accent: #2962ff;
-  --tv-accent-hover: #1e53e5;
+  --app-chrome-bg: #0e1014;
+  --app-panel-bg: #12141a;
+  --app-surface-bg: #16181f;
+  --app-border: #252830;
+  --app-accent: #ededed;
+  --app-text: #d4d4d8;
+  --app-text-strong: #f4f4f5;
+  --app-muted: #71717a;
+  --tv-bg: var(--app-chrome-bg);
+  --tv-chrome: var(--app-chrome-bg);
+  --tv-surface: var(--app-panel-bg);
+  --tv-elevated: var(--app-surface-bg);
+  --tv-hover: #1f222a;
+  --tv-active: #262933;
+  --tv-border: var(--app-border);
+  --tv-text: var(--app-text);
+  --tv-text-strong: var(--app-text-strong);
+  --tv-muted: var(--app-muted);
+  --tv-accent: var(--app-accent);
+  --tv-accent-hover: #ffffff;
   --tv-up: #089981;
   --tv-down: #f23645;
-  /* Legacy aliases mapped to the single unified TradingView palette */
   --allegedly-bg: var(--tv-bg);
   --allegedly-chrome: var(--tv-chrome);
   --allegedly-canvas: var(--tv-bg);
@@ -237,6 +263,30 @@
   --allegedly-border: var(--tv-border);
   --allegedly-text: var(--tv-text);
   --allegedly-muted: var(--tv-muted);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-chrome-bg: #f8f9fb;
+  --app-panel-bg: #ffffff;
+  --app-surface-bg: #f1f3f7;
+  --app-border: #e2e5ec;
+  --app-accent: #111318;
+  --app-text: #27272a;
+  --app-text-strong: #09090b;
+  --app-muted: #71717a;
+  --tv-bg: var(--app-chrome-bg);
+  --tv-chrome: var(--app-chrome-bg);
+  --tv-surface: var(--app-panel-bg);
+  --tv-elevated: var(--app-surface-bg);
+  --tv-hover: #e9ecf2;
+  --tv-active: #dfe3ec;
+  --tv-border: var(--app-border);
+  --tv-text: var(--app-text);
+  --tv-text-strong: var(--app-text-strong);
+  --tv-muted: var(--app-muted);
+  --tv-accent: var(--app-accent);
+  --tv-accent-hover: #000000;
 }
 
 html,
@@ -292,3 +342,102 @@ body,
     scroll-behavior: auto !important;
   }
 }
+
+[data-trade-buttons="outline"] button { background: #16181f; border: 1px solid rgba(255,255,255,.15); }
+[data-trade-buttons="outline"] button:first-child { color: #ef8b8b; }
+[data-trade-buttons="outline"] button:last-child { color: #7fcbb1; }
+[data-trade-buttons="split"] button { background: #202126; color: #f4f4f5; }
+[data-trade-buttons="split"] button:first-child { border-left: 2px solid #e97777; }
+[data-trade-buttons="split"] button:last-child { border-right: 2px solid #6dbd9e; }
+[data-trade-buttons="filled"] button:first-child { background: #ad454b; color: white; }
+[data-trade-buttons="filled"] button:last-child { background: #28785f; color: white; }
+[data-trade-buttons] button:hover { filter: brightness(1.2); }
+
+[data-ticket-side="buy"] { background: #28785f; color: white; }
+[data-ticket-side="sell"] { background: #ad454b; color: white; }
+[data-ticket-side]:hover { filter: brightness(1.12); }
+
+/* Light appearance for shared chrome controls and settings surfaces. */
+:root[data-theme="light"] :is([data-slot="dialog-content"], [data-slot="select-content"]) {
+  background: var(--app-surface-bg);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+:root[data-theme="light"] :is([data-slot="dialog-title"], [data-slot="select-item"], [data-slot="select-trigger"]) {
+  color: var(--app-text-strong);
+}
+:root[data-theme="light"] :is([data-slot="select-trigger"], input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea) {
+  background-color: #ffffff;
+  border-color: #d4d4d8;
+  color: #18181b;
+}
+:root[data-theme="light"] [data-slot="select-item"][data-highlighted],
+:root[data-theme="light"] [data-slot="select-item"][data-selected],
+:root[data-theme="light"] [data-slot="tabs-tab"][data-selected] {
+  background-color: #e4e4e7;
+  color: #18181b;
+}
+:root[data-theme="light"] [data-slot="switch"] { background: #a1a1aa; }
+:root[data-theme="light"] [data-slot="switch"][data-checked] { background: #27272a; }
+:root[data-theme="light"] [data-slot="switch-thumb"],
+:root[data-theme="light"] [data-slot="switch-thumb"][data-checked] { background: #fff; }
+:root[data-theme="light"] [data-slot="dialog-content"] :is(label, p, span, div) {
+  color: inherit;
+}
+:root[data-theme="light"] [data-slot="dialog-content"] :is(label, p) { color: #52525b; }
+:root[data-theme="light"] [data-slot="dialog-content"] [data-slot="tabs-tab"] { color: #52525b; }
+:root[data-theme="light"] [data-slot="dialog-content"] [data-slot="tabs-tab"][data-selected] { color: #18181b; }
+
+:root[data-theme="light"] [data-ui-variant="default"] { background: #27272a; color: #fff; }
+:root[data-theme="light"] [data-ui-variant="default"]:hover { background: #3f3f46; }
+:root[data-theme="light"] :is([data-ui-variant="secondary"], [data-ui-variant="outline"]) { background: #fff; border-color: #d4d4d8; color: #27272a; }
+:root[data-theme="light"] [data-ui-variant="ghost"] { color: #52525b; }
+:root[data-theme="light"] :is([data-ui-variant="secondary"], [data-ui-variant="outline"], [data-ui-variant="ghost"]):hover { background: #e4e4e7; color: #18181b; }
+
+/* Legacy chrome labels use fixed dark-theme colors; map them to light-theme text. */
+:root[data-theme="light"] :is(header, aside, section[aria-label="Watchlist"], section[aria-label="Alerts manager"], section[aria-label="Object tree and data window"], section[aria-label="Paper execution, studies, provenance, and settings"]) :is([class*="text-[#f0f3fa]"], [class*="text-[#f4f4f5]"], [class*="text-[#e1e4eb]"], [class*="text-[#d1d4dc]"], [class*="text-[#d4d8e2]"], [class*="text-white"]) {
+  color: #27272a;
+}
+:root[data-theme="light"] :is(header, aside, section[aria-label="Watchlist"], section[aria-label="Alerts manager"], section[aria-label="Object tree and data window"], section[aria-label="Paper execution, studies, provenance, and settings"]) :is([class*="text-[#787b86]"], [class*="text-[#868c9b]"], [class*="text-[#9598a1]"], [class*="text-[#8b8f9c]"], [class*="text-[#6b7280]"], [class*="text-[#9aa1b2]"], [class*="text-[#868993]"], [class*="text-[#b2b5be]"]) {
+  color: #52525b;
+}
+:root[data-theme="light"] :is(header, aside, section[aria-label="Watchlist"], section[aria-label="Alerts manager"], section[aria-label="Object tree and data window"], section[aria-label="Paper execution, studies, provenance, and settings"]) :is(button:hover, button[aria-pressed="true"], [role="tab"][aria-selected="true"]) {
+  color: #18181b;
+}
+:root[data-theme="light"] [data-ticket-side] { color: #fff !important; }
+
+:root[data-theme="light"] :is(section[aria-label="Watchlist"], section[aria-label="Alerts manager"], section[aria-label="Object tree and data window"], section[aria-label="Paper execution, studies, provenance, and settings"]) [class*="bg-[#2a2e39]"] {
+  background-color: #e4e4e7;
+}
+:root[data-theme="light"] section[aria-label="Paper execution, studies, provenance, and settings"] [data-slot="tabs-tab"] { color: #52525b; }
+:root[data-theme="light"] section[aria-label="Paper execution, studies, provenance, and settings"] [data-slot="tabs-tab"][data-selected] { color: #18181b; }
+:root[data-theme="light"] :is(section[aria-label="Watchlist"], section[aria-label="Paper execution, studies, provenance, and settings"]) [class*="text-[#089981]"] { color: #08705f; }
+:root[data-theme="light"] :is(section[aria-label="Watchlist"], section[aria-label="Paper execution, studies, provenance, and settings"]) [class*="text-[#f23645]"] { color: #bb2433; }
+
+:root[data-theme="light"] [data-order-book-panel] { background: var(--app-panel-bg); color: #27272a; }
+:root[data-theme="light"] [data-order-book-panel] :is(span, button) { color: #52525b; }
+:root[data-theme="light"] [data-order-book-panel] button:hover { background: #e4e4e7; color: #18181b; }
+:root[data-theme="light"] [data-order-book-panel] button[class*="bg-white/[0.10]"] { background: #e4e4e7; color: #18181b; }
+
+:root[data-theme="light"] [data-quote-side="sell"][aria-pressed="true"] { background: #fae8e8; box-shadow: inset 0 0 0 1px #b65b60; }
+:root[data-theme="light"] [data-quote-side="buy"][aria-pressed="true"] { background: #e1f2eb; box-shadow: inset 0 0 0 1px #438b72; }
+:root[data-theme="light"] [data-quote-side="sell"][aria-pressed="true"] span:first-child { color: #922e35; }
+:root[data-theme="light"] [data-quote-side="buy"][aria-pressed="true"] span:first-child { color: #17634e; }
+
+:root[data-theme="light"] section[aria-label="Paper execution, studies, provenance, and settings"] :is(input[aria-label="Take profit ticks"], input[aria-label="Stop loss ticks"]) {
+  background-color: transparent !important;
+  color: #27272a;
+}
+:root[data-theme="light"] section[aria-label="Paper execution, studies, provenance, and settings"] :is(input[aria-label="Take profit ticks"], input[aria-label="Stop loss ticks"]):disabled { color: #71717a; opacity: 1; }
+:root[data-theme="light"] header [data-slot="toolbar-button"][aria-pressed="true"] { background: #e4e4e7; color: #18181b; }
+:root[data-theme="light"] header [aria-label^="Symbol search"] span[class*="bg-[#252a36]"] { background: #e4e4e7; color: #52525b; }
+:root[data-theme="light"] footer[aria-label="Chart range and scale bar"] { color: #52525b; }
+:root[data-theme="light"] footer[aria-label="Chart range and scale bar"] button { color: #3f3f46; }
+:root[data-theme="light"] footer[aria-label="Chart range and scale bar"] button:hover { background: #e4e4e7; color: #18181b; }
+
+:root[data-theme="light"] [data-exit-field] { background: #fff; border-color: #d4d4d8; color: #27272a; }
+:root[data-theme="light"] [data-exit-field="disabled"] { background: #f4f4f5; border-color: #e4e4e7; color: #71717a; }
+:root[data-theme="light"] [data-exit-field] span { color: inherit; }
+
+:root[data-theme="light"] header button:hover { background-color: #e4e4e7; color: #18181b; }
+:root[data-theme="light"] header button:focus-visible { outline-color: #52525b; }

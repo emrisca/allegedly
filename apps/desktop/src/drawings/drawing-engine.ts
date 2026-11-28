@@ -1,6 +1,10 @@
+import type { TimeframeVisibility } from "../components/indicator-settings-dialog";
+import { DEFAULT_POSITION_SETTINGS, loadPositionTemplate, resolvePositionStatsFields, type PositionSettings } from "./position-settings";
 import {
   cloneVpConfig,
   DEFAULT_VOLUME_PROFILE_CONFIG,
+  cloneAvpConfig,
+  loadStoredAvpDefaults,
   loadStoredVpDefaults,
   saveStoredVpDefaults,
   type VolumeProfileConfig,
@@ -141,20 +145,9 @@ export interface AnchorPoint {
 
 export type DrawingLineStyle = "solid" | "dashed" | "dotted";
 
-export interface DrawingVisibility {
-  minutes: boolean;
-  hours: boolean;
-  days: boolean;
-  weeks: boolean;
-  months: boolean;
-}
-
+export type DrawingVisibility = TimeframeVisibility;
 export const DEFAULT_DRAWING_VISIBILITY: DrawingVisibility = {
-  minutes: true,
-  hours: true,
-  days: true,
-  weeks: true,
-  months: true,
+  ticks: true, seconds: true, minutes: true, hours: true, days: true, weeks: true, months: true, ranges: true,
 };
 
 export interface DrawingObject {
@@ -178,17 +171,56 @@ export interface DrawingObject {
   fontSize?: number;
   textColor?: string;
   locked?: boolean;
+  hidden?: boolean;
+  groupId?: string | null;
   visibility?: DrawingVisibility;
   vpConfig?: VolumeProfileConfig;
   avwapShowBands?: boolean;
   avwapBandMult?: number;
   rrRatio?: number;
+  position?: PositionSettings;
+}
+
+export interface RectangleHandle {
+  timeAnchor?: 0 | 1;
+  priceAnchor?: 0 | 1;
+}
+
+export function rectangleHandles(
+  first?: { x: number | null; y: number | null },
+  second?: { x: number | null; y: number | null },
+): Array<RectangleHandle & { x: number; y: number }> {
+  if (!first || !second || first.x === null || first.y === null || second.x === null || second.y === null) return [];
+  const midX = (first.x + second.x) / 2;
+  const midY = (first.y + second.y) / 2;
+  return [
+    { x: first.x, y: first.y, timeAnchor: 0, priceAnchor: 0 },
+    { x: second.x, y: second.y, timeAnchor: 1, priceAnchor: 1 },
+    { x: first.x, y: second.y, timeAnchor: 0, priceAnchor: 1 },
+    { x: second.x, y: first.y, timeAnchor: 1, priceAnchor: 0 },
+    { x: first.x, y: midY, timeAnchor: 0 },
+    { x: second.x, y: midY, timeAnchor: 1 },
+    { x: midX, y: first.y, priceAnchor: 0 },
+    { x: midX, y: second.y, priceAnchor: 1 },
+  ];
+}
+
+export function resizeRectangle(
+  anchors: readonly AnchorPoint[],
+  handle: RectangleHandle,
+  next: AnchorPoint,
+): AnchorPoint[] {
+  return anchors.map((anchor, index) => ({
+    timeSec: index === handle.timeAnchor ? next.timeSec : anchor.timeSec,
+    priceTick: index === handle.priceAnchor ? next.priceTick : anchor.priceTick,
+  }));
 }
 
 export interface DrawingHitResult {
   drawing: DrawingObject;
   hitKind: "anchor" | "body";
   anchorIndex: number;
+  rectangleHandle?: RectangleHandle;
 }
 
 export interface MagnetTarget {
@@ -552,6 +584,7 @@ function cloneDrawing(d: DrawingObject): DrawingObject {
     ...d,
     anchors: d.anchors.map((a) => ({ ...a })),
     visibility: d.visibility ? { ...d.visibility } : undefined,
+    position: d.position ? { ...d.position } : undefined,
   };
 }
 
@@ -585,16 +618,21 @@ export class DrawingEngine {
     label?: string,
   ): DrawingObject {
     const meta = getDrawingToolMeta(kind);
+    const isPosition = kind === "long_position" || kind === "short_position";
+    const template = isPosition ? loadPositionTemplate(kind) : null;
     const drawing: DrawingObject = {
+      ...template,
       id: `drw-${++this.idCounter}`,
       kind,
       symbol,
       anchors: anchors.map((a) => ({ ...a })),
-      color: color ?? meta.defaultColor ?? "#38bdf8",
+      color: color ?? template?.color ?? (isPosition ? "#808080" : meta.defaultColor ?? "#38bdf8"),
       label,
-      ...(kind === "fixed_range_vp" || kind === "anchored_vp"
+      ...(kind === "fixed_range_vp"
         ? { vpConfig: loadStoredVpDefaults() }
-        : {}),
+        : kind === "anchored_vp"
+          ? { vpConfig: loadStoredAvpDefaults(), extendRight: true }
+          : {}),
       ...(kind === "long_position" || kind === "short_position" ? { rrRatio: 2 } : {}),
     };
     this.drawings.push(drawing);
@@ -657,6 +695,22 @@ export class DrawingEngine {
     this.undoStack.push({ type: "update", id, before, after: cloneDrawing(next) });
     this.redoStack.length = 0;
     return next;
+  }
+
+  public reorder(id: string, targetId: string, position: "before" | "after" = "before"): boolean {
+    if (id === targetId) return false;
+    const fromIdx = this.drawings.findIndex((d) => d.id === id);
+    const toIdx = this.drawings.findIndex((d) => d.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return false;
+    const [item] = this.drawings.splice(fromIdx, 1);
+    const adjustedTo = this.drawings.findIndex((d) => d.id === targetId);
+    if (adjustedTo === -1) {
+      this.drawings.splice(fromIdx, 0, item);
+      return false;
+    }
+    const insertAt = position === "after" ? adjustedTo + 1 : adjustedTo;
+    this.drawings.splice(insertAt, 0, item);
+    return true;
   }
 
   public remove(id: string): boolean {
@@ -778,6 +832,7 @@ export class DrawingEngine {
       if (d.textColor !== undefined) lines.push(`text_color = "${escapeToml(d.textColor)}"`);
       if (d.avwapShowBands) lines.push("avwap_show_bands = true");
       if (d.avwapBandMult !== undefined) lines.push(`avwap_band_mult = ${d.avwapBandMult.toFixed(2)}`);
+      if (d.position) lines.push(`position_json = "${escapeToml(JSON.stringify(d.position))}"`);
       if (d.rrRatio !== undefined) lines.push(`rr_ratio = ${d.rrRatio.toFixed(2)}`);
       if (d.visibility) {
         lines.push(`visibility_json = "${escapeToml(JSON.stringify(d.visibility))}"`);
@@ -841,6 +896,16 @@ export class DrawingEngine {
       const avwapShowBands = matchTomlBool(block, "avwap_show_bands") ?? undefined;
       const avwapBandMult = matchTomlFloat(block, "avwap_band_mult") ?? undefined;
       const rrRatio = matchTomlFloat(block, "rr_ratio") ?? undefined;
+      let position: PositionSettings | undefined;
+      const positionJson = matchTomlStr(block, "position_json");
+      if (positionJson) {
+        try {
+          const saved = JSON.parse(positionJson) as Partial<PositionSettings>;
+          position = { ...DEFAULT_POSITION_SETTINGS, ...saved, statsFields: resolvePositionStatsFields(saved) };
+        } catch {
+          position = undefined;
+        }
+      }
       const visJson = matchTomlStr(block, "visibility_json");
       let visibility: DrawingVisibility | undefined;
       if (visJson) {
@@ -854,10 +919,13 @@ export class DrawingEngine {
       let vpConfig: VolumeProfileConfig | undefined;
       if (vpJson) {
         try {
-          vpConfig = cloneVpConfig(JSON.parse(vpJson) as Partial<VolumeProfileConfig>);
+          const parsedVp = JSON.parse(vpJson) as Partial<VolumeProfileConfig>;
+          vpConfig = kind === "anchored_vp" ? cloneAvpConfig(parsedVp) : cloneVpConfig(parsedVp);
         } catch {
           vpConfig = undefined;
         }
+      } else if (kind === "anchored_vp") {
+        vpConfig = cloneAvpConfig();
       }
       parsed.push({
         id,
@@ -878,6 +946,7 @@ export class DrawingEngine {
         ...(avwapShowBands ? { avwapShowBands } : {}),
         ...(avwapBandMult !== undefined ? { avwapBandMult } : {}),
         ...(rrRatio !== undefined ? { rrRatio } : {}),
+        ...(position ? { position } : {}),
         ...(visibility ? { visibility } : {}),
         ...(vpConfig ? { vpConfig } : {}),
       });
@@ -978,6 +1047,19 @@ export function hitTestDrawing(
     const d = drawings[i];
     const pts = d.anchors.map(toPixel);
 
+    if (d.kind === "box_zone") {
+      let best: RectangleHandle | undefined;
+      let distance = ANCHOR_TOL;
+      for (const handle of rectangleHandles(pts[0], pts[1])) {
+        const candidateDistance = Math.hypot(px - handle.x, py - handle.y);
+        if (candidateDistance <= ANCHOR_TOL && (!best || candidateDistance < distance)) {
+          best = handle;
+          distance = candidateDistance;
+        }
+      }
+      if (best) return { drawing: d, hitKind: "anchor", anchorIndex: -1, rectangleHandle: best };
+    }
+
     // 1. Anchor handles first
     for (let ai = 0; ai < pts.length; ai++) {
       const p = pts[ai];
@@ -1028,14 +1110,16 @@ export function hitTestDrawing(
       continue;
     }
     if (d.kind === "anchored_vp") {
+      const avpCfg = cloneAvpConfig(d.vpConfig);
       const anchorX = p0?.x !== null && p0?.x !== undefined ? p0.x : 0;
-      const clampedStart = Math.max(0, anchorX);
-      const histWidth = Math.max(180, Math.round((canvasWidth - clampedStart) * 0.35));
-      const inHistogram =
-        px >= clampedStart - BODY_TOL &&
-        px <= clampedStart + histWidth &&
-        py >= 0 &&
-        py <= canvasHeight;
+      const clampedStart = Math.max(0, Math.min(canvasWidth, anchorX));
+      const widthFrac = Math.max(0.05, Math.min(1, avpCfg.widthPercent / 100));
+      const spanW = Math.max(80, canvasWidth - clampedStart);
+      const histWidth = Math.max(24, Math.round(spanW * widthFrac));
+      const isRight = avpCfg.placement !== "left";
+      const inHistogram = isRight
+        ? px >= canvasWidth - histWidth - BODY_TOL && px <= canvasWidth && py >= 0 && py <= canvasHeight
+        : px >= clampedStart - BODY_TOL && px <= clampedStart + histWidth + BODY_TOL && py >= 0 && py <= canvasHeight;
       const onAnchorLine = p0?.x !== null && p0?.x !== undefined && Math.abs(px - p0.x) <= BODY_TOL;
       const onAnchorLevel = p0?.y !== null && p0?.y !== undefined && px >= clampedStart && Math.abs(py - p0.y) <= 14;
       if (inHistogram || onAnchorLine || onAnchorLevel) {

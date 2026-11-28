@@ -26,6 +26,10 @@ import {
 } from "./components/drawing-settings-dialog";
 import { ActiveIndicatorsLegend, ChartOverlayToolbar } from "./panels/chart-panel";
 import { PaperOmsPanel } from "./panels/paper-oms-panel";
+import { createDefaultAlertDraft } from "./alerts/alert-engine";
+import { AlertDialog } from "./components/alert-dialog";
+import { AlertsPanel } from "./components/alerts-panel";
+import { ObjectTreePanel } from "./components/object-tree-panel";
 
 const BOOT_CONFIG = {
   updates_check_on_startup: false,
@@ -740,4 +744,163 @@ describe("UV-01 @ui-sdk/react WCAG AA accessibility, SV-01 boot invariants & RTS
     expect(results.violations).toEqual([]);
     unmount();
   });
+
+  it("renders AlertDialog and AlertsPanel (Alerts/Log) with TradingView alert controls and passes axe-core", async () => {
+    const draft = createDefaultAlertDraft({
+      symbol: "NQ1!",
+      timeframe: "5m",
+      price: 27032.25,
+      decimals: 2,
+      nowMs: Date.parse("2026-11-27T14:43:00Z"),
+    });
+    const onSave = vi.fn();
+    const onDelete = vi.fn();
+    const onEdit = vi.fn();
+    const onTogglePause = vi.fn();
+
+    const { container, unmount } = render(
+      <div>
+        <AlertsPanel
+          activeSymbol="NQ1!"
+          alerts={[draft]}
+          logs={[
+            {
+              id: "log-1",
+              alertId: draft.id,
+              symbol: "NQ1!",
+              timeframe: "5m",
+              name: "NQ1! Crossing 27,032.25",
+              message: "NQ1! Crossing 27,032.25",
+              triggeredAt: Date.parse("2026-11-27T14:45:00Z"),
+              price: 27032.25,
+            },
+          ]}
+          onCreateAlert={vi.fn()}
+          onEditAlert={onEdit}
+          onTogglePauseAlert={onTogglePause}
+          onDeleteAlert={onDelete}
+          onClearLogs={vi.fn()}
+          onCollapse={vi.fn()}
+        />
+        <AlertDialog
+          open={true}
+          mode="edit"
+          initialAlert={draft}
+          availableSymbols={["NQ1!", "BTC/USD"]}
+          availableSources={["VWAP (Session)"]}
+          decimals={2}
+          onOpenChange={vi.fn()}
+          onSave={onSave}
+          onDelete={onDelete}
+        />
+      </div>,
+    );
+
+    expect(screen.getByText(/Edit alert on/i)).toBeTruthy();
+    expect(screen.getByText(/App, Toasts, Sound/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Add condition/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: /Log/i }));
+    expect(screen.getAllByText(/NQ1! Crossing 27,032\.25/i).length).toBeGreaterThan(0);
+
+    await expectZeroCriticalOrSeriousAxe(container);
+    unmount();
+  });
+
+  it("renders ObjectTreePanel (Object tree and Data window sub-tabs) and passes axe-core", async () => {
+    const onSubTabChange = vi.fn();
+    const onCreateGroup = vi.fn();
+    const onSelectDrawing = vi.fn();
+    const onToggleDrawingHidden = vi.fn();
+    const onToggleIndicatorHidden = vi.fn();
+
+    const sharedProps = {
+      symbol: "NQ1!",
+      providerTag: "CME",
+      timeframe: "5",
+      indicators: [
+        { id: "vwapKeyLevels", label: "VWAP Key Levels", kind: "orderflow" as const, hidden: false, color: "#f59e0b" },
+        { id: "volume", label: "Vol", kind: "volume" as const, hidden: false, color: "#26a69a" },
+      ],
+      drawings: [
+        {
+          id: "drw-tl-1",
+          kind: "trendline" as const,
+          symbol: "NQ1!",
+          anchors: [
+            { timeSec: 1700000000, priceTick: 27000n },
+            { timeSec: 1700003600, priceTick: 27050n },
+          ],
+          color: "#2962ff",
+          lineWidth: 2 as const,
+          lineStyle: "solid" as const,
+          label: "Trendline",
+        },
+      ],
+      groups: [
+        { id: "grp-1", name: "Session Levels", hidden: false, locked: false, collapsed: false },
+      ],
+      selectedDrawingId: "drw-tl-1",
+      allDrawingsHidden: false,
+      dataWindow: {
+        timeSec: 1764283500,
+        open: 27010.25,
+        high: 27045.5,
+        low: 27002.0,
+        close: 27032.25,
+        change: 22.0,
+        changePct: 0.08,
+        volume: 1450,
+        lastDayChange: 120.5,
+        lastDayChangePct: 0.45,
+        decimals: 2,
+        indicators: [
+          { id: "volume", label: "Vol", value: "1.45K", color: "#26a69a" },
+          { id: "vwap", label: "VWAP (Session)", value: "27,028.10", color: "#3b82f6" },
+        ],
+      },
+      onSubTabChange,
+      onToggleAllDrawingsHidden: vi.fn(),
+      onCreateGroup,
+      onRenameGroup: vi.fn(),
+      onToggleGroupCollapsed: vi.fn(),
+      onToggleGroupHidden: vi.fn(),
+      onToggleGroupLocked: vi.fn(),
+      onDeleteGroup: vi.fn(),
+      onToggleIndicatorHidden,
+      onOpenIndicatorSettings: vi.fn(),
+      onRemoveIndicator: vi.fn(),
+      onSelectDrawing,
+      onToggleDrawingHidden,
+      onToggleDrawingLocked: vi.fn(),
+      onOpenDrawingSettings: vi.fn(),
+      onRemoveDrawing: vi.fn(),
+      onAssignDrawingGroup: vi.fn(),
+      onReorderDrawing: vi.fn(),
+      onCollapse: vi.fn(),
+    };
+
+    const { container, rerender, unmount } = render(
+      <ObjectTreePanel {...sharedProps} activeSubTab="tree" />,
+    );
+
+    expect(screen.getByText("VWAP Key Levels")).toBeTruthy();
+    expect(screen.getByText("Trendline")).toBeTruthy();
+    expect(screen.getByText(/Session Levels/)).toBeTruthy();
+    await expectZeroCriticalOrSeriousAxe(container);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Data window" }));
+    expect(onSubTabChange).toHaveBeenCalledWith("data");
+
+    rerender(<ObjectTreePanel {...sharedProps} activeSubTab="data" />);
+    expect(screen.getByText("Open")).toBeTruthy();
+    expect(screen.getByText("27,032.25")).toBeTruthy();
+    expect(screen.getByText("VWAP (Session)")).toBeTruthy();
+    await expectZeroCriticalOrSeriousAxe(container);
+    unmount();
+  });
+
 });
