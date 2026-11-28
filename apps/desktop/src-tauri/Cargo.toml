@@ -19,6 +19,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["arbitrary_precision", "raw_value"] }
 tauri = { version = "2", features = [] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSWindow", "NSButton", "NSControl", "NSView", "NSResponder"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

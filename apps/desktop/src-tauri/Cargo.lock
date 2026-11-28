@@ -64,6 +64,7 @@ dependencies = [
  "allegedly-ipc",
  "allegedly-replay",
  "allegedly-studies",
+ "objc2-app-kit",
  "serde",
  "serde_json",
  "tauri",

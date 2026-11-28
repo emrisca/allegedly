@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use allegedly_app::{
@@ -50,6 +50,8 @@ struct DesktopState {
     runtime: Mutex<AllegedlyRuntime>,
     boot_instant: Instant,
     ready_logged: AtomicBool,
+    window_revealed: AtomicBool,
+    traffic_lights_visible: AtomicBool,
 }
 
 impl DesktopState {
@@ -59,9 +61,41 @@ impl DesktopState {
             runtime: Mutex::new(runtime),
             boot_instant: Instant::now(),
             ready_logged: AtomicBool::new(false),
+            window_revealed: AtomicBool::new(false),
+            traffic_lights_visible: AtomicBool::new(false),
         })
     }
 }
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn apply_macos_traffic_lights_visibility(window: &tauri::WebviewWindow, visible: bool) {
+    let win = window.clone();
+    let _ = window.run_on_main_thread(move || {
+        use objc2_app_kit::{NSWindow, NSWindowButton};
+
+        if let Ok(raw_ns_window) = win.ns_window() {
+            if raw_ns_window.is_null() {
+                return;
+            }
+            // SAFETY: Tauri's `ns_window()` returns a valid `NSWindow` pointer owned by the
+            // live `WebviewWindow`, and we are executing on the macOS AppKit main thread.
+            let ns_window = unsafe { &*(raw_ns_window as *const NSWindow) };
+            for button_kind in [
+                NSWindowButton::CloseButton,
+                NSWindowButton::MiniaturizeButton,
+                NSWindowButton::ZoomButton,
+            ] {
+                if let Some(button) = ns_window.standardWindowButton(button_kind) {
+                    button.setHidden(!visible);
+                }
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apply_macos_traffic_lights_visibility(_window: &tauri::WebviewWindow, _visible: bool) {}
 
 fn now_ns() -> u64 {
     SystemTime::now()
@@ -199,6 +233,41 @@ fn poll_binary_frames(state: State<'_, DesktopState>, stream_id: u32) -> tauri::
     tauri::ipc::Response::new(packed)
 }
 
+/// Reveal the initially hidden main window once the first launch intro frame has painted.
+#[tauri::command]
+fn reveal_launch_window(
+    window: tauri::WebviewWindow,
+    state: State<'_, DesktopState>,
+    light: Option<bool>,
+) {
+    let bg = if light.unwrap_or(false) {
+        tauri::window::Color(241, 243, 246, 255)
+    } else {
+        tauri::window::Color(7, 8, 10, 255)
+    };
+    let _ = window.set_background_color(Some(bg));
+    let show_lights = state.traffic_lights_visible.load(Ordering::SeqCst);
+    apply_macos_traffic_lights_visibility(&window, show_lights);
+    if !state.window_revealed.swap(true, Ordering::SeqCst) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        // Re-assert traffic light visibility after order-front on macOS.
+        let still_show = state.traffic_lights_visible.load(Ordering::SeqCst);
+        apply_macos_traffic_lights_visibility(&window, still_show);
+    }
+}
+
+/// Show or hide the native macOS traffic light buttons (Close / Miniaturize / Zoom).
+#[tauri::command]
+fn set_traffic_lights_visible(
+    window: tauri::WebviewWindow,
+    state: State<'_, DesktopState>,
+    visible: bool,
+) {
+    state.traffic_lights_visible.store(visible, Ordering::SeqCst);
+    apply_macos_traffic_lights_visibility(&window, visible);
+}
+
 /// Deterministic frontend paint-readiness sentinel for `UV-05` cold-start telemetry (RTSD-05).
 #[tauri::command]
 fn report_ui_ready(state: State<'_, DesktopState>, payload: Option<UiReadyPayload>) -> u64 {
@@ -232,6 +301,25 @@ fn main() {
                 assert!(rt.config.offline_mode);
             }
             app.manage(desktop_state);
+
+            if let Some(main_window) = app.get_webview_window("main") {
+                apply_macos_traffic_lights_visibility(&main_window, false);
+
+                // Safety fallback: ensure the window never remains hidden if the frontend fails to signal.
+                let fallback_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(2500));
+                    let state = fallback_handle.state::<DesktopState>();
+                    if !state.window_revealed.swap(true, Ordering::SeqCst) {
+                        if let Some(win) = fallback_handle.get_webview_window("main") {
+                            state.traffic_lights_visible.store(true, Ordering::SeqCst);
+                            apply_macos_traffic_lights_visibility(&win, true);
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -251,6 +339,8 @@ fn main() {
             set_market_data_source,
             get_market_data_status,
             poll_binary_frames,
+            reveal_launch_window,
+            set_traffic_lights_visible,
             report_ui_ready,
         ])
         .run(tauri::generate_context!())
