@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tauri::{Manager, State};
+use tauri::{Manager, PhysicalPosition, PhysicalSize, RunEvent, State, WindowEvent};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SettingOverridePayload {
@@ -46,24 +46,305 @@ struct MarketDataSourcePayload {
     symbol: String,
 }
 
+const WINDOW_STATE_FILE: &str = "window_state.json";
+const MIN_SAVED_WIDTH: u32 = 320;
+const MIN_SAVED_HEIGHT: u32 = 240;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct SavedWindowState {
+    width: u32,
+    height: u32,
+    x: i32,
+    y: i32,
+    #[serde(default)]
+    maximized: bool,
+    #[serde(default)]
+    fullscreen: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MonitorRect {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RestoredGeometry {
+    width: u32,
+    height: u32,
+    x: i32,
+    y: i32,
+}
+
+fn window_state_path(data_dir: &std::path::Path) -> PathBuf {
+    data_dir.join(WINDOW_STATE_FILE)
+}
+
+fn load_window_state(data_dir: &std::path::Path) -> Option<SavedWindowState> {
+    let raw = std::fs::read_to_string(window_state_path(data_dir)).ok()?;
+    let parsed: SavedWindowState = serde_json::from_str(&raw).ok()?;
+    if parsed.width < MIN_SAVED_WIDTH || parsed.height < MIN_SAVED_HEIGHT {
+        return None;
+    }
+    Some(parsed)
+}
+
+fn save_window_state(data_dir: &std::path::Path, state: SavedWindowState) -> std::io::Result<()> {
+    if state.width < MIN_SAVED_WIDTH || state.height < MIN_SAVED_HEIGHT {
+        return Ok(());
+    }
+    std::fs::create_dir_all(data_dir)?;
+    let path = window_state_path(data_dir);
+    let tmp = data_dir.join(format!("{WINDOW_STATE_FILE}.tmp"));
+    let json = serde_json::to_string_pretty(&state)
+        .map_err(|err| std::io::Error::other(err.to_string()))?;
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+fn overlap_extent(a_start: i64, a_len: u32, b_start: i64, b_len: u32) -> i64 {
+    let a_end = a_start + i64::from(a_len);
+    let b_end = b_start + i64::from(b_len);
+    (a_end.min(b_end) - a_start.max(b_start)).max(0)
+}
+
+fn resolve_restored_geometry(
+    saved: SavedWindowState,
+    monitors: &[MonitorRect],
+) -> RestoredGeometry {
+    if monitors.is_empty() {
+        return RestoredGeometry {
+            width: saved.width,
+            height: saved.height,
+            x: saved.x,
+            y: saved.y,
+        };
+    }
+
+    // Pick the monitor with the largest visible intersection with the saved window rect.
+    let mut best_monitor: Option<MonitorRect> = None;
+    let mut best_area: i64 = 0;
+    for &mon in monitors {
+        let ox = overlap_extent(i64::from(saved.x), saved.width, i64::from(mon.x), mon.width);
+        let oy = overlap_extent(
+            i64::from(saved.y),
+            saved.height,
+            i64::from(mon.y),
+            mon.height,
+        );
+        if ox >= 100 && oy >= 60 {
+            let area = ox.saturating_mul(oy);
+            if area > best_area {
+                best_area = area;
+                best_monitor = Some(mon);
+            }
+        }
+    }
+
+    if let Some(mon) = best_monitor {
+        let width = saved.width.min(mon.width).max(MIN_SAVED_WIDTH.min(mon.width));
+        let height = saved.height.min(mon.height).max(MIN_SAVED_HEIGHT.min(mon.height));
+        // Keep the top-left inside a reachable band on the matched monitor.
+        let max_x = mon.x.saturating_add(mon.width.saturating_sub(100) as i32);
+        let min_x = mon.x.saturating_sub(width.saturating_sub(100) as i32);
+        let max_y = mon.y.saturating_add(mon.height.saturating_sub(60) as i32);
+        let x = saved.x.clamp(min_x, max_x);
+        let y = saved.y.clamp(mon.y, max_y);
+        RestoredGeometry {
+            width,
+            height,
+            x,
+            y,
+        }
+    } else {
+        // Saved display was disconnected: preserve size (clamped to primary) and center on it.
+        let primary = monitors[0];
+        let width = saved
+            .width
+            .min(primary.width)
+            .max(MIN_SAVED_WIDTH.min(primary.width));
+        let height = saved
+            .height
+            .min(primary.height)
+            .max(MIN_SAVED_HEIGHT.min(primary.height));
+        let x = primary
+            .x
+            .saturating_add((primary.width.saturating_sub(width) / 2) as i32);
+        let y = primary
+            .y
+            .saturating_add((primary.height.saturating_sub(height) / 2) as i32);
+        RestoredGeometry {
+            width,
+            height,
+            x,
+            y,
+        }
+    }
+}
+
+fn capture_window_state(
+    window: &tauri::WebviewWindow,
+    previous: Option<SavedWindowState>,
+) -> Option<SavedWindowState> {
+    if window.is_minimized().unwrap_or(false) {
+        return previous;
+    }
+    let fullscreen = window.is_fullscreen().unwrap_or(false);
+    let maximized = window.is_maximized().unwrap_or(false);
+    let size = window.inner_size().ok()?;
+    let pos = window.outer_position().ok()?;
+
+    if size.width < MIN_SAVED_WIDTH || size.height < MIN_SAVED_HEIGHT {
+        return previous;
+    }
+
+    if fullscreen {
+        let base = previous.unwrap_or(SavedWindowState {
+            width: size.width,
+            height: size.height,
+            x: pos.x,
+            y: pos.y,
+            maximized: false,
+            fullscreen: true,
+        });
+        return Some(SavedWindowState {
+            fullscreen: true,
+            maximized: false,
+            ..base
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    if maximized {
+        let base = previous.unwrap_or(SavedWindowState {
+            width: size.width,
+            height: size.height,
+            x: pos.x,
+            y: pos.y,
+            maximized: true,
+            fullscreen: false,
+        });
+        return Some(SavedWindowState {
+            maximized: true,
+            fullscreen: false,
+            ..base
+        });
+    }
+
+    Some(SavedWindowState {
+        width: size.width,
+        height: size.height,
+        x: pos.x,
+        y: pos.y,
+        maximized,
+        fullscreen: false,
+    })
+}
+
+fn restore_saved_window_geometry(
+    window: &tauri::WebviewWindow,
+    saved: SavedWindowState,
+) {
+    let monitors: Vec<MonitorRect> = window
+        .available_monitors()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| {
+            let p = m.position();
+            let s = m.size();
+            MonitorRect {
+                x: p.x,
+                y: p.y,
+                width: s.width,
+                height: s.height,
+            }
+        })
+        .collect();
+    let geo = resolve_restored_geometry(saved, &monitors);
+    // Set size BEFORE position: on macOS `setContentSize` anchors bottom-left,
+    // so applying `set_position` second locks the exact saved top-left corner.
+    let _ = window.set_size(PhysicalSize::new(geo.width, geo.height));
+    let _ = window.set_position(PhysicalPosition::new(geo.x, geo.y));
+}
+
 struct DesktopState {
     runtime: Mutex<AllegedlyRuntime>,
+    data_dir: PathBuf,
     boot_instant: Instant,
     ready_logged: AtomicBool,
     window_revealed: AtomicBool,
     traffic_lights_visible: AtomicBool,
+    pending_fullscreen: AtomicBool,
+    pending_maximize: AtomicBool,
+    last_window_state: Mutex<Option<SavedWindowState>>,
+    last_saved_at: Mutex<Option<Instant>>,
 }
 
 impl DesktopState {
     fn new(data_dir: PathBuf) -> Result<Self, String> {
         let runtime = AllegedlyRuntime::boot_offline_with_data_dir(&data_dir)?;
+        let initial_window_state = load_window_state(&data_dir);
+        let pending_fullscreen = initial_window_state.is_some_and(|s| s.fullscreen);
+        #[cfg(not(target_os = "macos"))]
+        let pending_maximize = initial_window_state.is_some_and(|s| s.maximized && !s.fullscreen);
+        #[cfg(target_os = "macos")]
+        let pending_maximize = false;
+
         Ok(Self {
             runtime: Mutex::new(runtime),
+            data_dir,
             boot_instant: Instant::now(),
             ready_logged: AtomicBool::new(false),
             window_revealed: AtomicBool::new(false),
             traffic_lights_visible: AtomicBool::new(false),
+            pending_fullscreen: AtomicBool::new(pending_fullscreen),
+            pending_maximize: AtomicBool::new(pending_maximize),
+            last_window_state: Mutex::new(initial_window_state),
+            last_saved_at: Mutex::new(None),
         })
+    }
+
+    fn record_window_state(&self, window: &tauri::WebviewWindow, flush_now: bool) {
+        if !self.window_revealed.load(Ordering::SeqCst) {
+            return;
+        }
+        let next = {
+            let mut guard = self.last_window_state.lock().expect("window state lock");
+            let captured = capture_window_state(window, *guard);
+            if let Some(s) = captured {
+                *guard = Some(s);
+            }
+            *guard
+        };
+        if let Some(state_to_save) = next {
+            self.maybe_persist_window_state(state_to_save, flush_now);
+        }
+    }
+
+    fn flush_cached_window_state(&self) {
+        let cached = *self.last_window_state.lock().expect("window state lock");
+        if let Some(state_to_save) = cached {
+            let _ = save_window_state(&self.data_dir, state_to_save);
+        }
+    }
+
+    fn maybe_persist_window_state(&self, state: SavedWindowState, force: bool) {
+        if !force {
+            let mut last = self.last_saved_at.lock().expect("last_saved_at lock");
+            if let Some(prev) = *last {
+                if prev.elapsed() < std::time::Duration::from_millis(250) {
+                    return;
+                }
+            }
+            *last = Some(Instant::now());
+        } else {
+            let mut last = self.last_saved_at.lock().expect("last_saved_at lock");
+            *last = Some(Instant::now());
+        }
+        let _ = save_window_state(&self.data_dir, state);
     }
 }
 
@@ -250,6 +531,12 @@ fn reveal_launch_window(
     apply_macos_traffic_lights_visibility(&window, show_lights);
     if !state.window_revealed.swap(true, Ordering::SeqCst) {
         let _ = window.show();
+        if state.pending_maximize.swap(false, Ordering::SeqCst) {
+            let _ = window.maximize();
+        }
+        if state.pending_fullscreen.swap(false, Ordering::SeqCst) {
+            let _ = window.set_fullscreen(true);
+        }
         let _ = window.set_focus();
         // Re-assert traffic light visibility after order-front on macOS.
         let still_show = state.traffic_lights_visible.load(Ordering::SeqCst);
@@ -303,7 +590,36 @@ fn main() {
             app.manage(desktop_state);
 
             if let Some(main_window) = app.get_webview_window("main") {
+                // Restore last closed window size & position while the window is still hidden
+                // so the launch intro paints immediately at the saved dimensions.
+                let initial_saved = *app
+                    .state::<DesktopState>()
+                    .last_window_state
+                    .lock()
+                    .expect("window state lock");
+                if let Some(saved) = initial_saved {
+                    restore_saved_window_geometry(&main_window, saved);
+                }
+
                 apply_macos_traffic_lights_visibility(&main_window, false);
+
+                let win_for_events = main_window.clone();
+                let handle_for_events = app.handle().clone();
+                main_window.on_window_event(move |event| {
+                    let state = handle_for_events.state::<DesktopState>();
+                    match event {
+                        WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                            state.record_window_state(&win_for_events, false);
+                        }
+                        WindowEvent::Focused(false) | WindowEvent::CloseRequested { .. } => {
+                            state.record_window_state(&win_for_events, true);
+                        }
+                        WindowEvent::Destroyed => {
+                            state.flush_cached_window_state();
+                        }
+                        _ => {}
+                    }
+                });
 
                 // Safety fallback: ensure the window never remains hidden if the frontend fails to signal.
                 let fallback_handle = app.handle().clone();
@@ -315,6 +631,12 @@ fn main() {
                             state.traffic_lights_visible.store(true, Ordering::SeqCst);
                             apply_macos_traffic_lights_visibility(&win, true);
                             let _ = win.show();
+                            if state.pending_maximize.swap(false, Ordering::SeqCst) {
+                                let _ = win.maximize();
+                            }
+                            if state.pending_fullscreen.swap(false, Ordering::SeqCst) {
+                                let _ = win.set_fullscreen(true);
+                            }
                             let _ = win.set_focus();
                         }
                     }
@@ -343,8 +665,19 @@ fn main() {
             set_traffic_lights_visible,
             report_ui_ready,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Allegedly desktop shell");
+        .build(tauri::generate_context!())
+        .expect("error while building Allegedly desktop shell")
+        .run(|app_handle, event| match event {
+            RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                let state = app_handle.state::<DesktopState>();
+                if let Some(win) = app_handle.get_webview_window("main") {
+                    state.record_window_state(&win, true);
+                } else {
+                    state.flush_cached_window_state();
+                }
+            }
+            _ => {}
+        });
 }
 
 #[cfg(test)]
@@ -370,5 +703,84 @@ mod tests {
             assert!(!packed.is_empty());
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn window_state_round_trips_and_rejects_invalid_sizes() {
+        let dir =
+            std::env::temp_dir().join(format!("allegedly-winstate-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let saved = SavedWindowState {
+            width: 2200,
+            height: 1400,
+            x: 180,
+            y: 96,
+            maximized: false,
+            fullscreen: false,
+        };
+        save_window_state(&dir, saved).unwrap();
+        assert_eq!(load_window_state(&dir), Some(saved));
+
+        // Tiny bogus sizes should never overwrite a valid saved state.
+        let bogus = SavedWindowState {
+            width: 0,
+            height: 0,
+            x: -32000,
+            y: -32000,
+            maximized: false,
+            fullscreen: false,
+        };
+        save_window_state(&dir, bogus).unwrap();
+        assert_eq!(load_window_state(&dir), Some(saved));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_restored_geometry_clamps_disconnected_monitor_to_primary() {
+        let primary = MonitorRect {
+            x: 0,
+            y: 0,
+            width: 2880,
+            height: 1800,
+        };
+        // Window still visible on primary keeps exact size & position.
+        let on_primary = SavedWindowState {
+            width: 2100,
+            height: 1300,
+            x: 240,
+            y: 140,
+            maximized: false,
+            fullscreen: false,
+        };
+        assert_eq!(
+            resolve_restored_geometry(on_primary, &[primary]),
+            RestoredGeometry {
+                width: 2100,
+                height: 1300,
+                x: 240,
+                y: 140,
+            }
+        );
+
+        // Window from a disconnected display centers on primary and clamps oversized dimensions.
+        let off_screen = SavedWindowState {
+            width: 3400,
+            height: 2000,
+            x: 4000,
+            y: 100,
+            maximized: false,
+            fullscreen: false,
+        };
+        assert_eq!(
+            resolve_restored_geometry(off_screen, &[primary]),
+            RestoredGeometry {
+                width: 2880,
+                height: 1800,
+                x: 0,
+                y: 0,
+            }
+        );
     }
 }
